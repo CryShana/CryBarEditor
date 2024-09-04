@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using System.Xml;
 using CommunityToolkit.HighPerformance.Buffers;
 using K4os.Compression.LZ4;
 
@@ -127,10 +128,10 @@ public class BarFileEntry
     }
 
     /// <summary>
-    /// Parse XMB data
+    /// Convert XMB to XML data format
     /// </summary>
     /// <param name="xmb_data">XMB data (must be already decompressed)</param>
-    public static string? ParseXMB(Span<byte> xmb_data)
+    public static XmlDocument? ConvertXMBtoXML(Span<byte> xmb_data)
     {
         if (xmb_data is not [88, 49, ..])
         {
@@ -153,7 +154,7 @@ public class BarFileEntry
 
         if (xmb_data.Slice(offset, 2) is not [88, 82])
         {
-            // XR not found
+            // XR not found (marks the root node)
             return null;
         }
         offset += 2;
@@ -176,31 +177,31 @@ public class BarFileEntry
             return null;
         }
 
-        var item_count = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4));
+        var element_count = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4));
         offset += 4;
 
-        if (item_count <= 0 || item_count > BarFile.MAX_ENTRY_COUNT)
+        if (element_count <= 0 || element_count > BarFile.MAX_ENTRY_COUNT)
         {
             // too many items, value probably invalid
             return null;
         }
 
-        List<string> items = new(item_count);
-        for (int i = 0; i < item_count; i++)
+        // READ ELEMENTS
+        List<string> elements = new(element_count);
+        for (int i = 0; i < element_count; i++)
         {
-            var item_name_length = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4)) * 2;
+            var name_length = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4)) * 2;
             offset += 4;
 
-            if (item_name_length > BarFile.MAX_TEXT_LENGTH)
+            if (name_length <= 0 || name_length > BarFile.MAX_TEXT_LENGTH)
             {
                 // invalid item name length
                 return null;
             }
 
-            var item_name = Encoding.Unicode.GetString(xmb_data.Slice(offset, item_name_length));
-            offset += item_name_length;
-
-            items.Add(item_name);
+            var name = Encoding.Unicode.GetString(xmb_data.Slice(offset, name_length));
+            offset += name_length;
+            elements.Add(name);
         }
 
         var attrib_count = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4));
@@ -212,25 +213,124 @@ public class BarFileEntry
             return null;
         }
 
-        List<string> attributes = new(item_count);
+        List<string> attributes = new(element_count);
         for (int i = 0; i < attrib_count; i++)
         {
-            var attrib_name_length = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4)) * 2;
+            var name_length = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4)) * 2;
             offset += 4;
 
-            if (attrib_name_length > BarFile.MAX_TEXT_LENGTH)
+            if (name_length <= 0 || name_length > BarFile.MAX_TEXT_LENGTH)
             {
                 // invalid attribute name length
                 return null;
             }
 
-            var attrib_name = Encoding.Unicode.GetString(xmb_data.Slice(offset, attrib_name_length));
-            offset += attrib_name_length;
-
-            attributes.Add(attrib_name);
+            var name =  Encoding.Unicode.GetString(xmb_data.Slice(offset, name_length));
+            offset += name_length;
+            attributes.Add(name);
         }
 
-        return "";
+        // PROCESS NODES
+        var document = new XmlDocument();
+
+        var node_offset = 0;
+        var root = GetNextNode(document, xmb_data.Slice(offset), ref node_offset, elements, attributes);
+        if (root == null)
+        {
+            // no root node found
+            return null;
+        }
+
+        document.AppendChild(root);
+
+        static XmlElement? GetNextNode(XmlDocument doc, Span<byte> data, ref int offset, List<string> elements, List<string> attributes)
+        {
+            // node is marked by XN header
+            if (data is not [88, 78, ..])
+            {
+                // XN not found, invalid XMB format
+                return null;
+            }
+
+            offset += 2;
+            //var node_length = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
+            offset += 4;
+
+            var text_length = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
+            offset += 4;
+
+            if (text_length < 0 || text_length > BarFile.MAX_TEXT_LENGTH)
+            {
+                return null;
+            }
+
+            var text = text_length == 0 ? "" : Encoding.Unicode.GetString(data.Slice(offset, text_length));
+            offset += text_length;
+
+            var element_idx = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
+            offset += 4;
+
+            if (element_idx < 0 || element_idx >= elements.Count)
+            {
+                return null;
+            }
+
+            var node = doc.CreateElement(elements[element_idx]);
+            node.InnerText = text;
+
+            //int line_number = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
+            offset += 4;
+
+            // ATTRIBUTES
+            int attrib_count = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
+            offset += 4; 
+            
+            for (int i = 0; i < attrib_count; i++)
+            {
+                int attrib_idx = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
+                offset += 4; 
+
+                if (attrib_idx < 0 || attrib_idx >= attributes.Count)
+                {
+                    return null;
+                }
+
+                var attrib = doc.CreateAttribute(attributes[attrib_idx]);
+                
+                var attrib_text_length = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)) * 2;
+                offset += 4;
+
+                if (attrib_text_length < 0 || attrib_text_length > BarFile.MAX_TEXT_LENGTH)
+                {
+                    return null;
+                }
+
+                var attrib_text = attrib_text_length == 0 ? "" : Encoding.Unicode.GetString(data.Slice(offset, attrib_text_length));
+                offset += attrib_text_length;
+
+                attrib.InnerText = attrib_text;
+                node.Attributes.Append(attrib);
+            }
+
+            // CHILD NODES
+            int child_count = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
+            offset += 4; 
+
+            for (int i = 0; i < child_count; i++)
+            {
+                var child = GetNextNode(doc, data, ref offset, elements, attributes);
+                if (child == null)
+                {
+                    return null;
+                }
+
+                node.AppendChild(child);
+            }
+
+            return node;
+        }
+
+        return document;
     }
 
     public override string ToString() => $"{RelativePath ?? "Unset path"} ({SizeInArchive} bytes)";
