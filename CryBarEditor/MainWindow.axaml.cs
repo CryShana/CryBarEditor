@@ -1,6 +1,8 @@
 using CryBar;
 using System.IO;
 using Avalonia.Controls;
+using System.Collections.Generic;
+using System.Text;
 
 namespace CryBarEditor;
 
@@ -15,9 +17,19 @@ public partial class MainWindow : Window
 
         if (bar.Load())
         {
-            var e = bar.Entries[0];
-            var data = e.ReadDataDecompressed(file);
-            var document = BarFileEntry.ConvertXMBtoXML(data.Span);
+            foreach (var e in bar.Entries)
+            {
+                var data = e.ReadDataDecompressed(file);
+                if (e.IsXMB)
+                {
+                    var document = BarFileEntry.ConvertXMBtoXML(data.Span)!.InnerXml;
+                }
+                else if (e.IsTextFile)
+                {
+                    var text = Encoding.UTF8.GetString(data.Span);
+                    // ...
+                }
+            }
         }
     }
 }

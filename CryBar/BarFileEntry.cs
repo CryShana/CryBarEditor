@@ -1,8 +1,8 @@
-using System.Buffers.Binary;
-using System.Text;
 using System.Xml;
-using CommunityToolkit.HighPerformance.Buffers;
+using System.Text;
+using System.Buffers.Binary;
 using K4os.Compression.LZ4;
+using CommunityToolkit.HighPerformance.Buffers;
 
 namespace CryBar;
 
@@ -13,6 +13,23 @@ public class BarFileEntry
     public int SizeInArchive { get; set; }
     public string? RelativePath { get; set; }
     public bool IsCompressed { get; set; }
+    public bool IsXMB => RelativePath?.EndsWith(".XMB", StringComparison.OrdinalIgnoreCase) == true;
+    public bool IsImage => RelativePath?.EndsWith(".PNG", StringComparison.OrdinalIgnoreCase) == true ||
+        RelativePath?.EndsWith(".TGA", StringComparison.OrdinalIgnoreCase) == true ||
+        RelativePath?.EndsWith(".JPG", StringComparison.OrdinalIgnoreCase) == true ||
+        RelativePath?.EndsWith(".JPEG", StringComparison.OrdinalIgnoreCase) == true ||
+        RelativePath?.EndsWith(".WEBM", StringComparison.OrdinalIgnoreCase) == true ||
+        RelativePath?.EndsWith(".AVIF", StringComparison.OrdinalIgnoreCase) == true ||
+        RelativePath?.EndsWith(".GIF", StringComparison.OrdinalIgnoreCase) == true ||
+        RelativePath?.EndsWith(".JPX", StringComparison.OrdinalIgnoreCase) == true ||
+        RelativePath?.EndsWith(".BMP", StringComparison.OrdinalIgnoreCase) == true;
+
+    public bool IsFontFile => RelativePath?.EndsWith(".TTF", StringComparison.OrdinalIgnoreCase) == true;   
+    public bool IsCacheFile => RelativePath?.EndsWith(".CACHE", StringComparison.OrdinalIgnoreCase) == true; 
+    public bool IsTextFile => 
+        RelativePath?.EndsWith(".TXT", StringComparison.OrdinalIgnoreCase) == true ||
+        RelativePath?.EndsWith(".XS", StringComparison.OrdinalIgnoreCase) == true ||
+        RelativePath?.EndsWith(".XAML", StringComparison.OrdinalIgnoreCase) == true;
 
     /// <summary>
     /// Copies file data (not header) from [from] BAR stream to [to] stream.
@@ -207,7 +224,7 @@ public class BarFileEntry
         var attrib_count = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4));
         offset += 4;
 
-        if (attrib_count <= 0 || attrib_count > BarFile.MAX_ENTRY_COUNT)
+        if (attrib_count < 0 || attrib_count > BarFile.MAX_ENTRY_COUNT)
         {
             // too many attributes, value probably invalid
             return null;
@@ -256,7 +273,7 @@ public class BarFileEntry
             //var node_length = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
             offset += 4;
 
-            var text_length = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
+            var text_length = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)) * 2;
             offset += 4;
 
             if (text_length < 0 || text_length > BarFile.MAX_TEXT_LENGTH)
