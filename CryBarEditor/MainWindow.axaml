@@ -12,6 +12,7 @@
 			<StackPanel DockPanel.Dock="Top"
 						Orientation="Horizontal">
 				<Button Content="Load" Click="Load_Click" />
+				<TextBox Text="{Binding EntryQuery, Mode=TwoWay}" />
 			</StackPanel>
 			<Grid>
 				<ListBox ItemsSource="{Binding Entries}">

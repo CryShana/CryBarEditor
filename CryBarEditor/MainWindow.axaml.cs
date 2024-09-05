@@ -1,12 +1,14 @@
 using CryBar;
 using System.IO;
 using Avalonia.Controls;
-using System.ComponentModel;
-using System.Threading.Tasks;
 using Avalonia.Platform.Storage;
+
 using System;
-using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Collections.Generic;
+
 using CryBarEditor.Classes;
+
 
 namespace CryBarEditor;
 
@@ -14,8 +16,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 {
     BarFile? _barFile = null;
     FileStream? _barStream = null;
+    string _entryQuery = "";
 
     public ObservableCollectionExtended<BarFileEntry> Entries { get; } = new();
+    public string EntryQuery { get => _entryQuery; set {  _entryQuery = value; OnPropertyChanged(nameof(EntryQuery)); Refresh(); } }
 
     public MainWindow()
     {
@@ -76,7 +80,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (_barFile?.Entries == null)
             return;
 
-        Entries.AddItems(_barFile.Entries);
+        Entries.AddItems(Filter(_barFile.Entries));
+    }
+
+    IEnumerable<BarFileEntry> Filter(IEnumerable<BarFileEntry> entries)
+    {
+        var q = EntryQuery;
+        foreach (var e in entries)
+        {
+            // filter by query
+            if (q.Length > 0 && !e.RelativePath.Contains(q, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            yield return e;
+        }
     }
 
     public new event PropertyChangedEventHandler? PropertyChanged;
