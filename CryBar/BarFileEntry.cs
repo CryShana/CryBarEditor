@@ -11,25 +11,51 @@ public class BarFileEntry
     public long ContentOffset { get; set; }
     public int SizeUncompressed { get; set; }
     public int SizeInArchive { get; set; }
-    public string? RelativePath { get; set; }
+    public string RelativePath { get; set; }
     public bool IsCompressed { get; set; }
-    public bool IsXMB => RelativePath?.EndsWith(".XMB", StringComparison.OrdinalIgnoreCase) == true;
-    public bool IsImage => RelativePath?.EndsWith(".PNG", StringComparison.OrdinalIgnoreCase) == true ||
-        RelativePath?.EndsWith(".TGA", StringComparison.OrdinalIgnoreCase) == true ||
-        RelativePath?.EndsWith(".JPG", StringComparison.OrdinalIgnoreCase) == true ||
-        RelativePath?.EndsWith(".JPEG", StringComparison.OrdinalIgnoreCase) == true ||
-        RelativePath?.EndsWith(".WEBM", StringComparison.OrdinalIgnoreCase) == true ||
-        RelativePath?.EndsWith(".AVIF", StringComparison.OrdinalIgnoreCase) == true ||
-        RelativePath?.EndsWith(".GIF", StringComparison.OrdinalIgnoreCase) == true ||
-        RelativePath?.EndsWith(".JPX", StringComparison.OrdinalIgnoreCase) == true ||
-        RelativePath?.EndsWith(".BMP", StringComparison.OrdinalIgnoreCase) == true;
 
-    public bool IsFontFile => RelativePath?.EndsWith(".TTF", StringComparison.OrdinalIgnoreCase) == true;   
-    public bool IsCacheFile => RelativePath?.EndsWith(".CACHE", StringComparison.OrdinalIgnoreCase) == true; 
-    public bool IsTextFile => 
-        RelativePath?.EndsWith(".TXT", StringComparison.OrdinalIgnoreCase) == true ||
-        RelativePath?.EndsWith(".XS", StringComparison.OrdinalIgnoreCase) == true ||
-        RelativePath?.EndsWith(".XAML", StringComparison.OrdinalIgnoreCase) == true;
+    public BarFileEntry(string relative_path)
+    {
+        RelativePath = relative_path;
+    }
+
+    /// <summary>
+    /// Is file a XMB file? This needs to be converted to be viewed.
+    /// </summary>
+    public bool IsXMB => RelativePath.EndsWith(".XMB", StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// Is file a special DDT image file? This has to be converted to be viewed.
+    /// </summary>
+    public bool IsDDT => RelativePath.EndsWith(".DDT", StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// Is file a special DATA file? This has to be converted to be viewed.
+    /// </summary>
+    public bool IsData => RelativePath.EndsWith(".DATA", StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// Is file a regular image file?
+    /// </summary>
+    public bool IsImage => 
+        RelativePath.EndsWith(".PNG", StringComparison.OrdinalIgnoreCase) ||
+        RelativePath.EndsWith(".DDT", StringComparison.OrdinalIgnoreCase) ||
+        RelativePath.EndsWith(".TGA", StringComparison.OrdinalIgnoreCase) ||
+        RelativePath.EndsWith(".JPG", StringComparison.OrdinalIgnoreCase) ||
+        RelativePath.EndsWith(".JPEG", StringComparison.OrdinalIgnoreCase) ||
+        RelativePath.EndsWith(".WEBM", StringComparison.OrdinalIgnoreCase) ||
+        RelativePath.EndsWith(".AVIF", StringComparison.OrdinalIgnoreCase) ||
+        RelativePath.EndsWith(".GIF", StringComparison.OrdinalIgnoreCase) ||
+        RelativePath.EndsWith(".JPX", StringComparison.OrdinalIgnoreCase) ||
+        RelativePath.EndsWith(".BMP", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsFont => RelativePath.EndsWith(".TTF", StringComparison.OrdinalIgnoreCase);
+    public bool IsCache => RelativePath.EndsWith(".CACHE", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Is file a human readable text file? (There could be other extensions too)
+    /// </summary>
+    public bool IsText =>
+        RelativePath.EndsWith(".TXT", StringComparison.OrdinalIgnoreCase) ||
+        RelativePath.EndsWith(".XS", StringComparison.OrdinalIgnoreCase) ||
+        RelativePath.EndsWith(".XAML", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Copies file data (not header) from [from] BAR stream to [to] stream.
@@ -242,7 +268,7 @@ public class BarFileEntry
                 return null;
             }
 
-            var name =  Encoding.Unicode.GetString(xmb_data.Slice(offset, name_length));
+            var name = Encoding.Unicode.GetString(xmb_data.Slice(offset, name_length));
             offset += name_length;
             attributes.Add(name);
         }
@@ -300,12 +326,12 @@ public class BarFileEntry
 
             // ATTRIBUTES
             int attrib_count = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
-            offset += 4; 
-            
+            offset += 4;
+
             for (int i = 0; i < attrib_count; i++)
             {
                 int attrib_idx = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
-                offset += 4; 
+                offset += 4;
 
                 if (attrib_idx < 0 || attrib_idx >= attributes.Count)
                 {
@@ -313,7 +339,7 @@ public class BarFileEntry
                 }
 
                 var attrib = doc.CreateAttribute(attributes[attrib_idx]);
-                
+
                 var attrib_text_length = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)) * 2;
                 offset += 4;
 
@@ -331,7 +357,7 @@ public class BarFileEntry
 
             // CHILD NODES
             int child_count = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
-            offset += 4; 
+            offset += 4;
 
             for (int i = 0; i < child_count; i++)
             {

@@ -208,12 +208,11 @@ public class BarFile
             var file_path = Encoding.Unicode.GetString(temp_span.Slice(0, file_path_length));
             var file_compressed = BinaryPrimitives.ReadUInt32LittleEndian(temp_span.Slice(file_path_length)) == 1;
 
-            entries.Add(new BarFileEntry
+            entries.Add(new BarFileEntry(file_path)
             {
                 ContentOffset = file_offset,
                 SizeUncompressed = file_size1,
                 SizeInArchive = file_size2,
-                RelativePath = file_path,
                 IsCompressed = file_compressed
             });
         }
