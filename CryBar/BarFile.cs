@@ -60,6 +60,7 @@ public class BarFile
     [MemberNotNullWhen(true, nameof(_entries), nameof(Entries))]
     public bool Load()
     {
+        // TODO: replace exceptions with Result return type for better performance in case of errors
         if (Loaded)
         {
             throw new InvalidOperationException("Bar file already loaded");
@@ -75,7 +76,7 @@ public class BarFile
         if (file_length <= HEADER_SIZE)
         {
             // stream is too short
-            return false;
+            throw new InvalidDataException("BAR file too small");
         }
 
         using var buffer = SpanOwner<byte>.Allocate(HEADER_SIZE);
@@ -86,7 +87,7 @@ public class BarFile
         if (span is not [0x45, 0x53, 0x50, 0x4E, ..])
         {
             // header not valid
-            return false;
+            throw new InvalidDataException("Invalid BAR format header");
         }
 
         int offset = 4;
@@ -97,7 +98,7 @@ public class BarFile
         if (version != 6)
         {
             // unsupported version
-            return false;
+            throw new InvalidDataException("BAR version " + version + " is not supported");
         }
 
         uint id1 = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(offset, 4));
@@ -106,7 +107,7 @@ public class BarFile
         if (id1 != 1144201745)
         {
             // unsupported id1
-            return false;
+            throw new InvalidDataException("Invalid BAR format");
         }
 
         // ignore the empty padding
@@ -121,7 +122,7 @@ public class BarFile
         if (file_count < 0 || file_count > MAX_ENTRY_COUNT)
         {
             // invalid file count
-            return false;
+            throw new InvalidDataException("Invalid BAR file count");
         }
 
         uint id2 = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(offset, 4));
@@ -130,7 +131,7 @@ public class BarFile
         if (id2 != 0)
         {
             // unsupported id2
-            return false;
+            throw new InvalidDataException("Invalid BAR format");
         }
 
         long file_table_offset = BinaryPrimitives.ReadInt64LittleEndian(span.Slice(264 + 24, 8));
@@ -139,7 +140,7 @@ public class BarFile
         if (file_table_offset < HEADER_SIZE || file_table_offset >= file_length)
         {
             // file table offset out of bounds
-            return false;
+            throw new InvalidDataException("Invalid BAR format, table offset out of bounds");
         }
 
         // PROCESS ENTRIES
@@ -153,7 +154,7 @@ public class BarFile
         if (root_name_length <= 0 || root_name_length > MAX_TEXT_LENGTH)
         {
             // invalid root name length
-            return false;
+            throw new InvalidDataException("Invalid BAR root name");
         }
 
         temp_span = span.Slice(0, root_name_length + 4);
@@ -171,7 +172,7 @@ public class BarFile
         if (root_files_count < 0 || root_files_count > MAX_ENTRY_COUNT)
         {
             // invalid root file count
-            return false;
+            throw new InvalidDataException("BAR file count mismatch");
         }
 
         var entries = new List<BarFileEntry>(root_files_count);
