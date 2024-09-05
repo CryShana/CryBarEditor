@@ -10,6 +10,7 @@ public class BarFileEntry
 {
     public long ContentOffset { get; set; }
     public int SizeUncompressed { get; set; }
+    public int SizeCompressed { get; set; }
     public int SizeInArchive { get; set; }
     public string RelativePath { get; set; }
     public bool IsCompressed { get; set; }
@@ -34,7 +35,7 @@ public class BarFileEntry
     /// <summary>
     /// Is file a regular image file?
     /// </summary>
-    public bool IsImage => 
+    public bool IsImage =>
         RelativePath.EndsWith(".PNG", StringComparison.OrdinalIgnoreCase) ||
         RelativePath.EndsWith(".DDT", StringComparison.OrdinalIgnoreCase) ||
         RelativePath.EndsWith(".TGA", StringComparison.OrdinalIgnoreCase) ||
@@ -89,6 +90,18 @@ public class BarFileEntry
     }
 
     /// <summary>
+    /// Reads file content from BAR stream and allocates new array for the data.
+    /// <br />
+    /// This data is raw and may be compressed
+    /// </summary>
+    public byte[] ReadDataRaw(Stream stream)
+    {
+        var buffer = new byte[SizeInArchive];
+        ReadDataRaw(stream, buffer);
+        return buffer;
+    }
+
+    /// <summary>
     /// Reads file content from BAR stream and outputs it to given Span.
     /// Make sure the span is large enough to accomodate [SizeInArchive] bytes.
     /// <br />
@@ -104,6 +117,8 @@ public class BarFileEntry
     {
         var buffer = new byte[SizeUncompressed];
         var r = ReadDataDecompressed(stream, buffer);
+        if (r == -1) return Memory<byte>.Empty;
+
         return buffer.AsMemory(0, r);
     }
 

@@ -21,6 +21,8 @@ public partial class MainWindow : Window
         {
             foreach (var e in bar.Entries)
             {
+                //var d = e.ReadDataRaw(file);
+
                 var data = e.ReadDataDecompressed(file);
                 var text = "";
                 if (e.IsXMB)

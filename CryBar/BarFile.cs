@@ -188,17 +188,14 @@ public class BarFile
 
             // file offset
             long file_offset = BinaryPrimitives.ReadInt64LittleEndian(temp_span.Slice(0, 8));
-            int file_size1 = BinaryPrimitives.ReadInt32LittleEndian(temp_span.Slice(8, 4));             // Uncompressed size
-            int file_size2 = BinaryPrimitives.ReadInt32LittleEndian(temp_span.Slice(12, 4));            // Compressed size (or Size In Archive?)
-            int file_size3 = BinaryPrimitives.ReadInt32LittleEndian(temp_span.Slice(16, 4));            // same as above (one or the other, are they ever different?)
+            int file_size_uncompressed = BinaryPrimitives.ReadInt32LittleEndian(temp_span.Slice(8, 4));            
+            int file_size_compressed = BinaryPrimitives.ReadInt32LittleEndian(temp_span.Slice(12, 4));            
+            int file_size_archive = BinaryPrimitives.ReadInt32LittleEndian(temp_span.Slice(16, 4)); // this can be different from compressed size, often they are same
             int file_path_length = BinaryPrimitives.ReadInt32LittleEndian(temp_span.Slice(20, 4)) * 2;
             if (file_path_length > MAX_TEXT_LENGTH || file_path_length <= 0)
             {
                 throw new InvalidDataException("Invalid file name length specified: " + file_path_length);
             }
-
-            // CHECK: are these ever different?
-            Debug.Assert(file_size2 == file_size3);
 
             temp_span = span.Slice(0,
                 file_path_length +  // file name
@@ -211,8 +208,9 @@ public class BarFile
             entries.Add(new BarFileEntry(file_path)
             {
                 ContentOffset = file_offset,
-                SizeUncompressed = file_size1,
-                SizeInArchive = file_size2,
+                SizeUncompressed = file_size_uncompressed,
+                SizeCompressed = file_size_compressed,
+                SizeInArchive = file_size_archive,
                 IsCompressed = file_compressed
             });
         }
