@@ -143,43 +143,13 @@ public class BarFileEntry
         var raw = raw_data.Span;
         stream.ReadExactly(raw);
 
-        if (raw is [97, 108, 122, 52, ..])
+        if (raw.IsAlz4())
         {
-            // ALZ4 signature
-            int size_uncompressed = BinaryPrimitives.ReadInt32LittleEndian(raw.Slice(4, 4));
-            int size_compressed = BinaryPrimitives.ReadInt32LittleEndian(raw.Slice(8, 4));
-            int version = BinaryPrimitives.ReadInt32LittleEndian(raw.Slice(12, 4));
-
-            if (size_uncompressed > read_data.Length)
-            {
-                throw new InvalidDataException("Output buffer is too small for uncompressed data");
-            }
-
-            var output_data = read_data.Slice(0, size_uncompressed);
-
-            Span<byte> compressed_data = raw.Slice(16, size_compressed);
-            LZ4Codec.Decode(compressed_data, output_data);
-            return size_uncompressed;
+            return BarCompressionUtils.DecompressAlz4(raw, read_data);
         }
-        else if (raw is [108, 51, 51, 116, ..])
+        else if (raw.IsL33t() || raw.IsL66t())
         {
-            // L33T signature
-
-            // TODO
-            // -> int32     length
-            // -> 2 byte    deflate spec
-            // skips to 10 ?
-
-            // and then for both THIS and L66T use DEFLATE STREAM to decompress
-        }
-        else if (raw is [108, 54, 54, 116, ..])
-        {
-            // L66T signature
-
-            // TODO
-            // -> int64     length
-            // -> 2 byte    deflate spec
-            // skips to 14 ?
+            return BarCompressionUtils.DecompressL33tL66t(raw, read_data);      
         }
 
         return -1;
