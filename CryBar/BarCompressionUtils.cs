@@ -10,22 +10,38 @@ public static class BarCompressionUtils
     public static bool IsL33t(this Span<byte> data) => data is [108, 51, 51, 116, ..];
     public static bool IsL66t(this Span<byte> data) => data is [108, 54, 54, 116, ..];
 
+#region ALZ4
+    public static byte[]? DecompressAlz4(Span<byte> data)
+    {
+        int size_uncompressed = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(4, 4));
+        if (size_uncompressed > BarFile.MAX_BUFFER_SIZE || size_uncompressed <= 0)
+        {
+            throw new InvalidDataException("Length is invalid: " + size_uncompressed);
+        }
+
+        var buffer = new byte[size_uncompressed];
+        DecompressAlz4(data, buffer);
+        return buffer;
+    }
+
     public static int DecompressAlz4(Span<byte> data, Span<byte> output_data)
     {
         int size_uncompressed = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(4, 4));
         int size_compressed = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(8, 4));
         // int version = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(12, 4));
 
-        if (size_uncompressed > output_data.Length)
+        if (size_uncompressed > output_data.Length || size_uncompressed <= 0)
         {
-            throw new InvalidDataException("Output buffer is too small for uncompressed data");
+            throw new InvalidDataException("Size is invalid: " + size_uncompressed);
         }
 
         Span<byte> compressed_data = data.Slice(16, size_compressed);
         LZ4Codec.Decode(compressed_data, output_data);
         return size_uncompressed;
     }
+#endregion
 
+#region L33T / L66T
     public unsafe static byte[]? DecompressL33tL66t(Span<byte> data)
     {
         var l66 = data.IsL66t();
@@ -35,27 +51,13 @@ public static class BarCompressionUtils
             (int)BinaryPrimitives.ReadInt64LittleEndian(data.Slice(offset, 8)) : 
             BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
 
-        offset += l66 ? 8 : 4;
-        offset += 2; // skip deflate spec
-
-        if (size_uncompressed > 500_000_000)
+        if (size_uncompressed > BarFile.MAX_BUFFER_SIZE || size_uncompressed <= 0)
         {
-            throw new InvalidDataException("Length is larger than 500MB, may be invalid?");
-        }
-
-        if (offset >= data.Length)
-        {
-            return null;
+            throw new InvalidDataException("Size is invalid: " + size_uncompressed);
         }
 
         var buffer = new byte[size_uncompressed];
-        fixed (byte* d = data.Slice(offset))
-        {
-            using var memory = new UnmanagedMemoryStream(d, data.Length - offset);
-            using var deflate = new DeflateStream(memory, CompressionMode.Decompress);
-            deflate.ReadExactly(buffer);
-        }
-        
+        DecompressL33tL66t(data, buffer);
         return buffer;
     }
     
@@ -71,9 +73,9 @@ public static class BarCompressionUtils
         offset += l66 ? 8 : 4;
         offset += 2; // skip deflate spec
 
-        if (size_uncompressed > output_data.Length)
+        if (size_uncompressed > output_data.Length || size_uncompressed <= 0)
         {
-            throw new InvalidDataException("Output buffer is too small for uncompressed data");
+            throw new InvalidDataException("Size is invalid: " + size_uncompressed);  
         }
 
         if (offset >= data.Length)
@@ -90,4 +92,5 @@ public static class BarCompressionUtils
         
         return size_uncompressed;
     }
+#endregion
 }

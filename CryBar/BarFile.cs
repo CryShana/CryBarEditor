@@ -34,6 +34,7 @@ public class BarFile
     /// Max entries in a collection (NOTE: most collections I've seen have 1000-4000 entries at most)
     /// </summary>
     internal const int MAX_ENTRY_COUNT = 1_000_000;
+    internal const int MAX_BUFFER_SIZE = 500_000_000; // 500 MB
     internal const int HEADER_SIZE =
         4 +     // signature ESPN
         4 +     // version                      [uint32]
