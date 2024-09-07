@@ -664,7 +664,57 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (!Directory.Exists(_exportRootDirectory))
             return;
 
-        // TODO ...
+        var item = (MenuItem)sender!;
+        var list = item.Parent?.Parent?.Parent as ListBox;
+        if (list == null)
+        {
+            // TODO: show error
+            return;
+        }
+
+        try
+        {
+            if (list.ItemsSource == Entries)
+            {
+                // BAR entry list
+                var to_export = SelectedBarFileEntries.ToArray();
+                foreach (var entry in to_export)
+                {
+                    var relative_path = GetBARFullRelativePath(entry);
+                    var exported_path = Path.Combine(_exportRootDirectory, relative_path);
+
+                    var dirs = Path.GetDirectoryName(exported_path);
+                    if (dirs != null) Directory.CreateDirectory(dirs);
+
+                    using var file = File.Create(exported_path);
+                    entry.CopyData(_barStream!, file);
+                }
+            }
+            else
+            {
+                // file entry list
+
+                var to_export = SelectedFileEntries.ToArray();
+                foreach (var entry in to_export)
+                {
+                    var absolute_path = Path.Combine(_rootDirectory, entry.RelativePath);
+                    var relative_path = GetRootFullRelativePath(entry);
+                    var exported_path = Path.Combine(_exportRootDirectory, relative_path);
+
+                    var dirs = Path.GetDirectoryName(exported_path);
+                    if (dirs != null) Directory.CreateDirectory(dirs);
+
+                    File.Copy(absolute_path, exported_path, true);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // access may be denied
+            // TODO: show
+        }
+
+        // TODO: show when it's done
     }
 
     void MenuItem_ExportSelectedConverted(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
@@ -672,7 +722,24 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (!Directory.Exists(_exportRootDirectory))
             return;
 
-        // TODO ...
+        var item = (MenuItem)sender!;
+        var list = item.Parent?.Parent?.Parent as ListBox;
+        if (list == null)
+        {
+            // TODO: show error
+            return;
+        }
+
+        if (list.ItemsSource == Entries)
+        {
+            // BAR entry list
+        }
+        else
+        {
+            // file entry list
+        }
+
+        // TODO: show when it's done
     }
 
     void MenuItem_ExportSelectedRawConverted(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
@@ -680,7 +747,24 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (!Directory.Exists(_exportRootDirectory))
             return;
 
-        // TODO ...
+        var item = (MenuItem)sender!;
+        var list = item.Parent?.Parent?.Parent as ListBox;
+        if (list == null)
+        {
+            // TODO: show error
+            return;
+        }
+
+        if (list.ItemsSource == Entries)
+        {
+            // BAR entry list
+        }
+        else
+        {
+            // file entry list
+        }
+
+        // TODO: show when it's done
     }
     #endregion
 
@@ -729,6 +813,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return entry.RelativePath;
 
         return Path.Combine(GetRootRelevantPath(), entry.RelativePath);
-    } 
+    }
     #endregion
 }
