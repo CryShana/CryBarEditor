@@ -40,6 +40,7 @@
 				<ColumnDefinition Width="*" MinWidth="150" />
 			</Grid.ColumnDefinitions>
 
+			<!-- ROOT DIRECTORY FILE ENTRIES -->
 			<DockPanel Grid.Column="0">
 				<Label DockPanel.Dock="Top" Content="Root Directory" FontWeight="Bold"  FontSize="16"/>
 				<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
@@ -48,8 +49,13 @@
 				</DockPanel>
 				
 				<TextBox DockPanel.Dock="Top" Text="{Binding FilesQuery, Mode=TwoWay}" Watermark="Filter files" />
-				
+				<TextBlock DockPanel.Dock="Top" Margin="0,6,0,0">
+					<Run Text="Guessed Root: " FontWeight="Bold"/>
+					<Run Text="{Binding RootFileRootPath}"/>
+				</TextBlock>
 				<ListBox ItemsSource="{Binding FileEntries}" Margin="0,10,0,0"
+						 SelectionMode="Multiple"
+						 SelectedItems="{Binding SelectedFileEntries, Mode=TwoWay}"
 						 SelectedItem="{Binding SelectedFileEntry, Mode=TwoWay}">
 					<ListBox.ItemTemplate>
 						<DataTemplate x:DataType="cc:FileEntry">
@@ -59,11 +65,31 @@
 							</TextBlock>
 						</DataTemplate>
 					</ListBox.ItemTemplate>
+					<ListBox.ContextMenu>
+						<ContextMenu>
+							<MenuItem Header="Copy file name" Click="MenuItem_CopyFileName" />
+							<MenuItem Header="Copy file path" Click="MenuItem_CopyFilePath" />
+							<Separator IsVisible="{Binding CanExport}" />
+							
+							<MenuItem Header="{Binding SelectedFileEntries.Count, StringFormat='Export {0} selected (copy)'}" 
+									  IsVisible="{Binding CanExport}" 
+									  Click="MenuItem_ExportSelectedRaw" />
+							
+							<MenuItem Header="{Binding SelectedFileEntries.Count, StringFormat='Export {0} selected (converted)'}"
+									  IsVisible="{Binding CanExport}" 
+									  Click="MenuItem_ExportSelectedConverted" />
+							
+							<MenuItem Header="{Binding SelectedFileEntries.Count, StringFormat='Export {0} selected (copy+converted)'}"
+									  IsVisible="{Binding CanExport}" 
+									  Click="MenuItem_ExportSelectedRawConverted" />
+						</ContextMenu>
+					</ListBox.ContextMenu>
 				</ListBox>
 			</DockPanel>
 			
 			<GridSplitter Grid.Column="1" Width="5" Margin="3" />
-
+			
+			<!-- BAR ARCHIVE FILE ENTRIES -->
 			<DockPanel Grid.Column="2">
 				<Label DockPanel.Dock="Top" Content="BAR File" FontWeight="Bold"  FontSize="16"/>
 				<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
@@ -76,6 +102,8 @@
 					<Run Text="{Binding BarFileRootPath}"/>
 				</TextBlock>
 				<ListBox ItemsSource="{Binding Entries}" Margin="0,10,0,0"
+						 SelectionMode="Multiple"
+						 SelectedItems="{Binding SelectedBarFileEntries, Mode=TwoWay}"
 						 SelectedItem="{Binding SelectedBarEntry, Mode=TwoWay}">
 					<ListBox.ItemTemplate>
 						<DataTemplate x:DataType="cb:BarFileEntry">
@@ -85,11 +113,31 @@
 							</TextBlock>
 						</DataTemplate>
 					</ListBox.ItemTemplate>
+					<ListBox.ContextMenu>
+						<ContextMenu>
+							<MenuItem Header="Copy file name" Click="MenuItem_CopyFileName" />
+							<MenuItem Header="Copy file path" Click="MenuItem_CopyFilePath" />
+							<Separator IsVisible="{Binding CanExport}" />
+
+							<MenuItem Header="{Binding SelectedBarFileEntries.Count, StringFormat='Export {0} selected (copy)'}"
+									  IsVisible="{Binding CanExport}"
+									  Click="MenuItem_ExportSelectedRaw" />
+
+							<MenuItem Header="{Binding SelectedBarFileEntries.Count, StringFormat='Export {0} selected (converted)'}"
+									  IsVisible="{Binding CanExport}"
+									  Click="MenuItem_ExportSelectedConverted" />
+
+							<MenuItem Header="{Binding SelectedBarFileEntries.Count, StringFormat='Export {0} selected (copy+converted)'}"
+									  IsVisible="{Binding CanExport}"
+									  Click="MenuItem_ExportSelectedRawConverted" />
+						</ContextMenu>
+					</ListBox.ContextMenu>
 				</ListBox>
 			</DockPanel>
 
 			<GridSplitter Grid.Column="3" Width="5" Margin="3"  />
-
+			
+			<!-- EXPORT SETTINGS + PREVIEWER -->
 			<DockPanel Grid.Column="4">
 				<Label DockPanel.Dock="Top" Content="Export Root Directory" FontWeight="Bold" FontSize="16"/>
 				<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">

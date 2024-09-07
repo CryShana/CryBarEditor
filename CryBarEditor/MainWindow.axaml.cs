@@ -15,6 +15,7 @@ using AvaloniaEdit.TextMate;
 using TextMateSharp.Grammars;
 using SixLabors.ImageSharp.Formats.Png;
 using Avalonia.Media.Imaging;
+using System.Diagnostics.CodeAnalysis;
 
 namespace CryBarEditor;
 
@@ -32,21 +33,50 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     FileSystemWatcher? _watcher = null;
     BarFileEntry? _selectedBarEntry = null;
 
+    /// <summary>
+    /// This is used to find relative path for Root directory files
+    /// </summary>
+    const string ROOT_DIRECTORY_NAME = "game";
+
     readonly RegistryOptions _registryOptions;
     readonly TextMate.Installation _textMateInstallation;
 
+    #region Properties
     public ObservableCollectionExtended<FileEntry> FileEntries { get; } = new();
     public ObservableCollectionExtended<BarFileEntry> Entries { get; } = new();
+
+    public ObservableCollectionExtended<FileEntry> SelectedFileEntries { get; } = new();
+    public ObservableCollectionExtended<BarFileEntry> SelectedBarFileEntries { get; } = new();
 
     public string LoadedBARFilePathOrRelative => _barStream == null ? "No BAR file loaded" :
         (Directory.Exists(_rootDirectory) && _barStream.Name.StartsWith(_rootDirectory) ?
             Path.GetRelativePath(_rootDirectory, _barStream.Name) : _barStream.Name);
 
-    public string ExportRootDirectory { get => string.IsNullOrEmpty(_exportRootDirectory) ? "No export Root directory selected" : _exportRootDirectory; set { _exportRootDirectory = value; OnPropertyChanged(nameof(ExportRootDirectory)); } }
-    public string RootDirectory { get => string.IsNullOrEmpty(_rootDirectory) ? "No Root directory loaded" : _rootDirectory; set { _rootDirectory = value; OnPropertyChanged(nameof(RootDirectory)); } }
+    public string ExportRootDirectory
+    {
+        get => string.IsNullOrEmpty(_exportRootDirectory) ? "No export Root directory selected" : _exportRootDirectory; set
+        {
+            _exportRootDirectory = value;
+            OnPropertyChanged(nameof(ExportRootDirectory));
+            OnPropertyChanged(nameof(CanExport));
+        }
+    }
+    public bool CanExport => !string.IsNullOrEmpty(_exportRootDirectory);
+    public string RootDirectory
+    {
+        get => string.IsNullOrEmpty(_rootDirectory) ? "No Root directory loaded" : _rootDirectory; set
+        {
+            _rootDirectory = value;
+            _rootRelevantPathCached = null;
+            OnPropertyChanged(nameof(RootDirectory));
+            OnPropertyChanged(nameof(RootFileRootPath));
+        }
+    }
+
     public string EntryQuery { get => _entryQuery; set { _entryQuery = value; OnPropertyChanged(nameof(EntryQuery)); RefreshBAREntries(); } }
     public string FilesQuery { get => _filesQuery; set { _filesQuery = value; OnPropertyChanged(nameof(FilesQuery)); RefreshFileEntries(); } }
     public string BarFileRootPath => _barFile == null ? "-" : _barFile.RootPath;
+    public string RootFileRootPath => string.IsNullOrEmpty(_rootDirectory) ? "-" : GetRootRelevantPath();
     public string PreviewedFileName { get => string.IsNullOrEmpty(_previewedFileName) ? "No file selected" : _previewedFileName; set { _previewedFileName = value; OnPropertyChanged(nameof(PreviewedFileName)); } }
 
     public FileEntry? SelectedFileEntry
@@ -79,6 +109,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             LoadBarFileEntry(value);
         }
     }
+    #endregion
 
     public MainWindow()
     {
@@ -150,6 +181,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         if (folders.Count == 0)
             return;
+
+        if (ExportRootDirectory == RootDirectory)
+        {
+            // TODO: show error
+            return;
+        }
 
         ExportRootDirectory = folders[0].Path.LocalPath;
     }
@@ -354,7 +391,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         if (entry == null || !Directory.Exists(_rootDirectory))
             return;
-        
+
         var path = Path.Combine(_rootDirectory, entry.RelativePath);
         PreviewedFileName = Path.GetFileName(path);
 
@@ -380,7 +417,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (size < 300_000)
         {
             var text = File.ReadAllText(path);
-            textEditor.Text = text;  
+            textEditor.Text = text;
         }
         else
         {
@@ -394,7 +431,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         if (entry == null || _barStream == null)
             return;
-        
+
         var text = "";
         var ext = Path.GetExtension(entry.RelativePath).ToLower();
         PreviewedFileName = entry.Name;
@@ -419,7 +456,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     IndentChars = "\t",
                     OmitXmlDeclaration = true
                 };
-                
+
                 // for some reason I gotta read it first while ignoring whitespaces, to get proper formatting when writing it again... is there a better way?
                 using (var reader = XmlReader.Create(new StringReader(xml.InnerXml), rsettings))
                 using (var writer = XmlWriter.Create(sb, wsettings))
@@ -454,8 +491,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         textEditor.Text = text;
         textEditor.ScrollTo(0, 0);
     }
-
-    public bool IsImage(string extension) => extension is ".jpg" or ".jpeg" or ".png" or ".tga" or ".gif" or ".webp" or ".avif" or ".jpx" or ".bmp";
     #endregion
 
     #region UI functions
@@ -477,14 +512,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _previewImage = null;
         }
 
-        
+
         using (var image = SixLabors.ImageSharp.Image.Load(data.Value.Span))
         using (var stream = new MemoryStream())
         {
             image.Save(stream, new PngEncoder { TransparentColorMode = PngTransparentColorMode.Preserve });
             stream.Seek(0, SeekOrigin.Begin);
 
-            _previewImage = new Bitmap(stream);  
+            _previewImage = new Bitmap(stream);
         }
 
         textEditor.IsVisible = false;
@@ -497,7 +532,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (string.Equals(extension, ".xs", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(extension, ".con", StringComparison.OrdinalIgnoreCase))
             extension = ".cpp";
-        
+
         var lang = _registryOptions.GetLanguageByExtension(extension);
         if (lang == null)
         {
@@ -560,5 +595,140 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     public new event PropertyChangedEventHandler? PropertyChanged;
     void OnPropertyChanged(string propertyName) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    #endregion
+
+    #region ContextMenu events
+    void MenuItem_CopyFileName(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var item = (MenuItem)sender!;
+        var list = item.Parent?.Parent?.Parent as ListBox;
+        if (list == null)
+        {
+            // TODO: show error
+            return;
+        }
+
+        if (list.ItemsSource == Entries)
+        {
+            // BAR entry list
+            var entry = SelectedBarEntry;
+            if (entry != null)
+            {
+                Clipboard?.SetTextAsync(entry.Name);
+            }
+        }
+        else
+        {
+            // file entry list
+            var entry = SelectedFileEntry;
+            if (entry != null)
+            {
+                Clipboard?.SetTextAsync(entry.Name);
+            }
+        }
+    }
+
+    void MenuItem_CopyFilePath(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var item = (MenuItem)sender!;
+        var list = item.Parent?.Parent?.Parent as ListBox;
+        if (list == null)
+        {
+            // TODO: show error
+            return;
+        }
+
+        if (list.ItemsSource == Entries)
+        {
+            // BAR entry list
+            var entry = SelectedBarEntry;
+            if (entry != null && _barFile != null)
+            {
+                // we must consider BAR root path to get the correct relative path
+                Clipboard?.SetTextAsync(GetBARFullRelativePath(entry));
+            }
+        }
+        else
+        {
+            // file entry list
+            var entry = SelectedFileEntry;
+            if (entry != null)
+            {
+                Clipboard?.SetTextAsync(GetRootFullRelativePath(entry));
+            }
+        }
+    }
+
+    void MenuItem_ExportSelectedRaw(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (!Directory.Exists(_exportRootDirectory))
+            return;
+
+        // TODO ...
+    }
+
+    void MenuItem_ExportSelectedConverted(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (!Directory.Exists(_exportRootDirectory))
+            return;
+
+        // TODO ...
+    }
+
+    void MenuItem_ExportSelectedRawConverted(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (!Directory.Exists(_exportRootDirectory))
+            return;
+
+        // TODO ...
+    }
+    #endregion
+
+    #region Helpers
+    public bool IsImage(string extension) => extension is ".jpg" or ".jpeg" or ".png" or ".tga" or ".gif" or ".webp" or ".avif" or ".jpx" or ".bmp";
+
+    public string GetBARFullRelativePath(BarFileEntry entry)
+    {
+        if (_barFile == null)
+            return entry.RelativePath;
+
+        return Path.Combine(_barFile.RootPath, entry.RelativePath);
+    }
+
+    string? _rootRelevantPathCached = null;
+    string GetRootRelevantPath()
+    {
+        if (_rootRelevantPathCached != null)
+            return _rootRelevantPathCached;
+
+        // root directory could be "\game" or "\game\art" etc... let's find if there is a parent "game" directory anywhere in the chain
+        // then we cache this value for later use
+
+        var relevant_path = "";
+        var dirs = _rootDirectory.Split('\\');
+        foreach (var dir in dirs)
+        {
+            if (dir == ROOT_DIRECTORY_NAME)
+            {
+                relevant_path += ROOT_DIRECTORY_NAME + "\\";
+                continue;
+            }
+
+            if (relevant_path.Length > 0)
+            {
+                relevant_path += dir + "\\";
+            }
+        }
+        _rootRelevantPathCached = relevant_path;
+        return relevant_path;
+    }
+
+    public string GetRootFullRelativePath(FileEntry entry)
+    {
+        if (!Directory.Exists(_rootDirectory))
+            return entry.RelativePath;
+
+        return Path.Combine(GetRootRelevantPath(), entry.RelativePath);
+    } 
     #endregion
 }
