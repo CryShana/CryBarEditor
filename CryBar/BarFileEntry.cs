@@ -35,26 +35,6 @@ public class BarFileEntry
     /// Is file a special DDT image file? This has to be converted to be viewed.
     /// </summary>
     public bool IsDDT => RelativePath.EndsWith(".DDT", StringComparison.OrdinalIgnoreCase);
-    /// <summary>
-    /// Is file a special DATA file? This has to be converted to be viewed.
-    /// </summary>
-    public bool IsData => RelativePath.EndsWith(".DATA", StringComparison.OrdinalIgnoreCase);
-    /// <summary>
-    /// Is file a regular image file?
-    /// </summary>
-    public bool IsImage =>
-        RelativePath.EndsWith(".PNG", StringComparison.OrdinalIgnoreCase) ||
-        RelativePath.EndsWith(".DDT", StringComparison.OrdinalIgnoreCase) ||
-        RelativePath.EndsWith(".TGA", StringComparison.OrdinalIgnoreCase) ||
-        RelativePath.EndsWith(".JPG", StringComparison.OrdinalIgnoreCase) ||
-        RelativePath.EndsWith(".JPEG", StringComparison.OrdinalIgnoreCase) ||
-        RelativePath.EndsWith(".WEBM", StringComparison.OrdinalIgnoreCase) ||
-        RelativePath.EndsWith(".AVIF", StringComparison.OrdinalIgnoreCase) ||
-        RelativePath.EndsWith(".GIF", StringComparison.OrdinalIgnoreCase) ||
-        RelativePath.EndsWith(".JPX", StringComparison.OrdinalIgnoreCase) ||
-        RelativePath.EndsWith(".BMP", StringComparison.OrdinalIgnoreCase);
-
-    public bool IsFont => RelativePath.EndsWith(".TTF", StringComparison.OrdinalIgnoreCase);
     public bool IsCache => RelativePath.EndsWith(".CACHE", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>

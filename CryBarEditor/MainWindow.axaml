@@ -100,9 +100,14 @@
 					<Run Text="Content Preview: " FontWeight="Bold" />
 					<Run Text="{Binding PreviewedFileName}" />
 				</TextBlock>
-				<ae:TextEditor x:Name="textEditor" IsReadOnly="True" Text="Click on any file to preview it here" ShowLineNumbers="True" 
-							   FontFamily="Cascadia Code,Consolas,Menlo,Monospace" 
+
+				<Grid>
+					<Image x:Name="previewImage" ZIndex="1"/>
+					<ae:TextEditor x:Name="textEditor" IsReadOnly="True" Text="Click on any file to preview it here" ShowLineNumbers="True"
+							   FontFamily="Cascadia Code,Consolas,Menlo,Monospace"
 							   Background="#1c1c1c"/>
+				</Grid>
+
 			</DockPanel>
 		</Grid>
 	</Border>

@@ -13,6 +13,8 @@ using System.Collections.Generic;
 using CryBarEditor.Classes;
 using AvaloniaEdit.TextMate;
 using TextMateSharp.Grammars;
+using SixLabors.ImageSharp.Formats.Png;
+using Avalonia.Media.Imaging;
 
 namespace CryBarEditor;
 
@@ -357,6 +359,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         var path = Path.Combine(_rootDirectory, entry.RelativePath);
+        PreviewedFileName = Path.GetFileName(path);
 
         // BAR files have to first be opened in separate panel to view their contained files
         if (entry.Extension == ".BAR")
@@ -365,6 +368,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
+        if (IsImage(entry.Extension.ToLower()))
+        {
+            var data = File.ReadAllBytes(path);
+            SetImagePreview(data);
+            return;
+        }
+
+        SetImagePreview(null);
         SetTextEditorLanguage(entry.Extension);
 
         // other files we can try directly previewing
@@ -379,7 +390,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             textEditor.Text = "File too large to display in text editor";
         }
 
-        PreviewedFileName = Path.GetFileName(path);
         textEditor.ScrollTo(0, 0);
     }
 
@@ -392,6 +402,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         var text = "";
         var ext = Path.GetExtension(entry.RelativePath).ToLower();
+        PreviewedFileName = entry.Name;
 
         if (entry.IsXMB)
         {
@@ -427,16 +438,57 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             var data = entry.ReadDataDecompressed(_barStream);
             text = Encoding.UTF8.GetString(data.Span);
         }
+        else if (IsImage(ext))
+        {
+            var data = entry.ReadDataRaw(_barStream);
+            SetImagePreview(data);
+            return;
+        }
 
+        SetImagePreview(null);
         SetTextEditorLanguage(ext);
 
         textEditor.Text = text;
         textEditor.ScrollTo(0, 0);
-        PreviewedFileName = entry.Name;
     }
+
+    public bool IsImage(string extension) => extension is ".jpg" or ".jpeg" or ".png" or ".tga" or ".gif" or ".webp" or ".avif" or ".jpx" or ".bmp";
     #endregion
 
     #region UI functions
+    Bitmap? _previewImage = null;
+    public void SetImagePreview(Memory<byte>? data)
+    {
+        if (data == null)
+        {
+            textEditor.IsVisible = true;
+            previewImage.IsVisible = false;
+
+            previewImage.Source = null;
+            return;
+        }
+
+        if (_previewImage != null)
+        {
+            _previewImage.Dispose();
+            _previewImage = null;
+        }
+
+        
+        using (var image = SixLabors.ImageSharp.Image.Load(data.Value.Span))
+        using (var stream = new MemoryStream())
+        {
+            image.Save(stream, new PngEncoder { TransparentColorMode = PngTransparentColorMode.Preserve });
+            stream.Seek(0, SeekOrigin.Begin);
+
+            _previewImage = new Bitmap(stream);  
+        }
+
+        textEditor.IsVisible = false;
+        previewImage.IsVisible = true;
+        previewImage.Source = _previewImage;
+    }
+
     public void SetTextEditorLanguage(string extension)
     {
         if (string.Equals(extension, ".xs", StringComparison.OrdinalIgnoreCase) ||
