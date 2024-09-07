@@ -1,21 +1,21 @@
 using CryBar;
-using System.IO;
+using CryBarEditor.Classes;
+
 using Avalonia.Controls;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 
 using System;
+using System.IO;
 using System.Xml;
 using System.Linq;
 using System.Text;
 using System.ComponentModel;
 using System.Collections.Generic;
 
-using CryBarEditor.Classes;
 using AvaloniaEdit.TextMate;
 using TextMateSharp.Grammars;
 using SixLabors.ImageSharp.Formats.Png;
-using Avalonia.Media.Imaging;
-using System.Diagnostics.CodeAnalysis;
 
 namespace CryBarEditor;
 
@@ -111,6 +111,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
     #endregion
 
+    // export functions
+    readonly Func<FileEntry, string> F_GetFullRelativePathRoot;
+    readonly Func<BarFileEntry, string> F_GetFullRelativePathBAR;
+    readonly Action<FileEntry, FileStream> F_CopyRoot;
+    readonly Action<BarFileEntry, FileStream> F_CopyBAR;
+    readonly Func<FileEntry, Memory<byte>> F_ReadRoot;
+    readonly Func<BarFileEntry, Memory<byte>> F_ReadBAR;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -118,6 +126,30 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // set up editor
         _registryOptions = new RegistryOptions(ThemeName.DarkPlus);
         _textMateInstallation = textEditor.InstallTextMate(_registryOptions);
+
+        // prepare functions for exporting
+        F_GetFullRelativePathRoot = f => GetRootFullRelativePath(f);
+        F_GetFullRelativePathBAR = f => GetBARFullRelativePath(f);
+        F_CopyRoot = (f, stream) =>
+        {
+            using var from = File.OpenRead(Path.Combine(_rootDirectory, f.RelativePath));
+            from.CopyTo(stream);
+        };
+        F_CopyBAR = (f, stream) =>
+        {
+            // any BAR compressed data should automatically be decompressed, this only happens for BAR
+            // because external files are expected to be decompressed already with .XMB extension (and similar)
+            if (f.IsCompressed)
+            {
+                var data = f.ReadDataDecompressed(_barStream!);
+                stream.Write(data.Span);
+                return;
+            }
+            
+            f.CopyData(_barStream!, stream);
+        };
+        F_ReadRoot = f => File.ReadAllBytes(Path.Combine(_rootDirectory, f.RelativePath));
+        F_ReadBAR = f => f.ReadDataDecompressed(_barStream!);
     }
 
     #region Button events
@@ -444,27 +476,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             var xml = BarFileEntry.ConvertXMBtoXML(data.Span);
             if (xml != null)
             {
-                var sb = new StringBuilder();
-                var rsettings = new XmlReaderSettings
-                {
-                    IgnoreWhitespace = true
-                };
-
-                var wsettings = new XmlWriterSettings
-                {
-                    Indent = true,
-                    IndentChars = "\t",
-                    OmitXmlDeclaration = true
-                };
-
-                // for some reason I gotta read it first while ignoring whitespaces, to get proper formatting when writing it again... is there a better way?
-                using (var reader = XmlReader.Create(new StringReader(xml.InnerXml), rsettings))
-                using (var writer = XmlWriter.Create(sb, wsettings))
-                {
-                    writer.WriteNode(reader, true);
-                }
-
-                text = sb.ToString();
+                text = FormatXML(xml);
                 ext = ".xml";
             }
             else
@@ -667,54 +679,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var item = (MenuItem)sender!;
         var list = item.Parent?.Parent?.Parent as ListBox;
         if (list == null)
-        {
-            // TODO: show error
             return;
-        }
 
-        try
+        if (list.ItemsSource == Entries)
         {
-            if (list.ItemsSource == Entries)
-            {
-                // BAR entry list
-                var to_export = SelectedBarFileEntries.ToArray();
-                foreach (var entry in to_export)
-                {
-                    var relative_path = GetBARFullRelativePath(entry);
-                    var exported_path = Path.Combine(_exportRootDirectory, relative_path);
-
-                    var dirs = Path.GetDirectoryName(exported_path);
-                    if (dirs != null) Directory.CreateDirectory(dirs);
-
-                    using var file = File.Create(exported_path);
-                    entry.CopyData(_barStream!, file);
-                }
-            }
-            else
-            {
-                // file entry list
-
-                var to_export = SelectedFileEntries.ToArray();
-                foreach (var entry in to_export)
-                {
-                    var absolute_path = Path.Combine(_rootDirectory, entry.RelativePath);
-                    var relative_path = GetRootFullRelativePath(entry);
-                    var exported_path = Path.Combine(_exportRootDirectory, relative_path);
-
-                    var dirs = Path.GetDirectoryName(exported_path);
-                    if (dirs != null) Directory.CreateDirectory(dirs);
-
-                    File.Copy(absolute_path, exported_path, true);
-                }
-            }
+            var to_export = SelectedBarFileEntries.ToArray();
+            Export(to_export, false, F_GetFullRelativePathBAR, F_CopyBAR, F_ReadBAR);
         }
-        catch (Exception ex)
+        else
         {
-            // access may be denied
-            // TODO: show
+            var to_export = SelectedFileEntries.ToArray();
+            Export(to_export, false, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
         }
-
-        // TODO: show when it's done
     }
 
     void MenuItem_ExportSelectedConverted(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
@@ -725,21 +701,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var item = (MenuItem)sender!;
         var list = item.Parent?.Parent?.Parent as ListBox;
         if (list == null)
-        {
-            // TODO: show error
             return;
-        }
 
         if (list.ItemsSource == Entries)
         {
-            // BAR entry list
+            var to_export = SelectedBarFileEntries.ToArray();
+            Export(to_export, true, F_GetFullRelativePathBAR, F_CopyBAR, F_ReadBAR);
         }
         else
         {
-            // file entry list
+            var to_export = SelectedFileEntries.ToArray();
+            Export(to_export, true, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
         }
-
-        // TODO: show when it's done
     }
 
     void MenuItem_ExportSelectedRawConverted(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
@@ -750,25 +723,115 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var item = (MenuItem)sender!;
         var list = item.Parent?.Parent?.Parent as ListBox;
         if (list == null)
-        {
-            // TODO: show error
             return;
-        }
 
         if (list.ItemsSource == Entries)
         {
-            // BAR entry list
+            var to_export = SelectedBarFileEntries.ToArray();
+            Export(to_export, false, F_GetFullRelativePathBAR, F_CopyBAR, F_ReadBAR);
+            Export(to_export, true, F_GetFullRelativePathBAR, F_CopyBAR, F_ReadBAR);
         }
         else
         {
-            // file entry list
+            var to_export = SelectedFileEntries.ToArray();
+            Export(to_export, false, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
+            Export(to_export, true, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
+        }
+    }
+
+    void Export<T>(IList<T> files, bool should_convert,
+        Func<T, string> getFullRelativePath,
+        Action<T, FileStream> copy,
+        Func<T, Memory<byte>> read_decompressed)
+    {
+        List<string> failed = new();
+        foreach (var f in files)
+        {
+            var relative_path = getFullRelativePath(f);
+
+            try
+            {
+                // FINALIZE RELATIVE PATH
+                var ext = Path.GetExtension(relative_path).ToLower();
+                if (should_convert)
+                {
+                    if (ext == ".xmb")
+                    {
+                        relative_path = relative_path[..^4];    // remove .XMB extension
+                    }
+                    else if (ext == ".ddt")
+                    {
+                        relative_path = relative_path[..^4] + ".tga";    // change .DDT to .TGA
+                    }
+                }
+
+                // DETERMINE EXPORT PATH
+                var exported_path = Path.Combine(_exportRootDirectory, relative_path);
+
+                // CREATE MISSING DIRECTORIES
+                var dirs = Path.GetDirectoryName(exported_path);
+                if (dirs != null) Directory.CreateDirectory(dirs);
+
+                // CREATE FILE
+                using var file = File.Create(exported_path);
+
+                // EXPORT DATA
+                if (should_convert)
+                {
+                    if (ext == ".xmb")
+                    {
+                        var data = read_decompressed(f);
+                        var xml = BarFileEntry.ConvertXMBtoXML(data.Span)!;
+                        var xml_text = FormatXML(xml);
+                        var xml_bytes = Encoding.UTF8.GetBytes(xml_text);
+                        file.Write(xml_bytes);
+                        continue;
+                    }
+                    else if (ext == ".ddt")
+                    {
+                        // TODO: convert to TGA
+                    }
+                }
+
+                copy(f, file);
+            }
+            catch (Exception ex)
+            {
+                // TODO: handle error and show it somewhere
+                failed.Add(relative_path);
+            }
         }
 
-        // TODO: show when it's done
     }
     #endregion
 
     #region Helpers
+
+    public string FormatXML(XmlDocument xml)
+    {
+        var sb = new StringBuilder();
+        var rsettings = new XmlReaderSettings
+        {
+            IgnoreWhitespace = true
+        };
+
+        var wsettings = new XmlWriterSettings
+        {
+            Indent = true,
+            IndentChars = "\t",
+            OmitXmlDeclaration = true
+        };
+
+        // for some reason I gotta read it first while ignoring whitespaces, to get proper formatting when writing it again... is there a better way?
+        using (var reader = XmlReader.Create(new StringReader(xml.InnerXml), rsettings))
+        using (var writer = XmlWriter.Create(sb, wsettings))
+        {
+            writer.WriteNode(reader, true);
+        }
+
+        return sb.ToString();
+    }
+
     public bool IsImage(string extension) => extension is ".jpg" or ".jpeg" or ".png" or ".tga" or ".gif" or ".webp" or ".avif" or ".jpx" or ".bmp";
 
     public string GetBARFullRelativePath(BarFileEntry entry)
