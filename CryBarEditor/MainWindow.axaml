@@ -4,7 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 		xmlns:cb="using:CryBar"
 		xmlns:cc="using:CryBarEditor.Classes"
-		mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+		mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="450"
         x:Class="CryBarEditor.MainWindow"
 		DataContext="{Binding RelativeSource={RelativeSource Self}}"
         Title="CryBarEditor">
@@ -30,20 +30,22 @@
 	<Border Padding="10">
 		<Grid>
 			<Grid.ColumnDefinitions>
-				<ColumnDefinition Width="*" MinWidth="200" />
+				<ColumnDefinition Width="300" MinWidth="200" />
 				<ColumnDefinition Width="5" MinWidth="5" />
-				<ColumnDefinition Width="*" MinWidth="200" />
+				<ColumnDefinition Width="400" MinWidth="200" />
 				<ColumnDefinition Width="5" MinWidth="5" />
-				<ColumnDefinition Width="*" MinWidth="200" />
+				<ColumnDefinition Width="*" MinWidth="150" />
 			</Grid.ColumnDefinitions>
 
 			<DockPanel Grid.Column="0">
 				<Label DockPanel.Dock="Top" Content="Root Directory" FontWeight="Bold"/>
-				<Label  DockPanel.Dock="Top" Content="{Binding RootDirectory}" Foreground="Gray" />
 				<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
-					<Button Content="Load" Click="LoadDir_Click" Margin="0,0,8,0" />
-					<TextBox Text="{Binding FilesQuery, Mode=TwoWay}" Watermark="Filter files" />
+					<Button Content="Load" Click="LoadDir_Click" Margin="0,0,6,6" />
+					<Label DockPanel.Dock="Top" Content="{Binding RootDirectory}" Foreground="Gray" Margin="0,2,0,0"  />
 				</DockPanel>
+				
+				<TextBox DockPanel.Dock="Top" Text="{Binding FilesQuery, Mode=TwoWay}" Watermark="Filter files" />
+				
 				<ListBox ItemsSource="{Binding FileEntries}" Margin="0,10,0,0"
 						 SelectedItem="{Binding SelectedFileEntry, Mode=TwoWay}">
 					<ListBox.ItemTemplate>
@@ -58,11 +60,12 @@
 
 			<DockPanel Grid.Column="2">
 				<Label DockPanel.Dock="Top" Content="BAR File" FontWeight="Bold"/>
-				<Label  DockPanel.Dock="Top" Content="{Binding LoadedBARFilePath}" Foreground="Gray" />
 				<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
-					<Button Content="Load" Click="LoadBAR_Click" Margin="0,0,8,0"/>
-					<TextBox Text="{Binding EntryQuery, Mode=TwoWay}" Watermark="Filter entries" />
+					<Button Content="Load" Click="LoadBAR_Click" Margin="0,0,6,6"/>
+					<Label DockPanel.Dock="Top" Content="{Binding LoadedBARFilePathOrRelative}" Foreground="Gray" Margin="0,2,0,0" />
 				</DockPanel>
+				<TextBox DockPanel.Dock="Top" Text="{Binding EntryQuery, Mode=TwoWay}" Watermark="Filter entries" />
+				
 				<ListBox ItemsSource="{Binding Entries}" Margin="0,10,0,0">
 					<ListBox.ItemTemplate>
 						<DataTemplate x:DataType="cb:BarFileEntry">
@@ -74,9 +77,17 @@
 
 			<GridSplitter Grid.Column="3" Width="5" Margin="3"  />
 
-			<Grid Grid.Column="4" Background="Green"> 
-				
-			</Grid>
+			<DockPanel Grid.Column="4">
+				<Label DockPanel.Dock="Top" Content="Export Root Directory" FontWeight="Bold"/>
+				<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
+					<Button Content="Select" Click="SelectExportRootDir_Click" Margin="0,0,6,6"/>
+					<Label Content="{Binding ExportRootDirectory}" Foreground="Gray" Margin="0,2,0,0"  />			
+				</DockPanel>
+				<Label DockPanel.Dock="Top" Content="Content Preview" FontWeight="Bold" Margin="0,10,0,5"/>
+				<Grid Background="Green">
+					
+				</Grid>
+			</DockPanel>
 		</Grid>
 	</Border>
 </Window>

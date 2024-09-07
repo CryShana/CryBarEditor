@@ -17,6 +17,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     string _entryQuery = "";
     string _filesQuery = "";
     string _rootDirectory = "";
+    string _exportRootDirectory = "";
     BarFile? _barFile = null;
     FileStream? _barStream = null;
     FileEntry? _selectedFileEntry = null;
@@ -26,7 +27,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public ObservableCollectionExtended<FileEntry> FileEntries { get; } = new();
     public ObservableCollectionExtended<BarFileEntry> Entries { get; } = new();
 
-    public string LoadedBARFilePath => _barStream?.Name ?? "No BAR file loaded";
+    public string LoadedBARFilePathOrRelative => _barStream == null ? "No BAR file loaded" : 
+        (Directory.Exists(_rootDirectory) && _barStream.Name.StartsWith(_rootDirectory) ? 
+            Path.GetRelativePath(_rootDirectory, _barStream.Name) : _barStream.Name);
+
+    public string ExportRootDirectory { get => string.IsNullOrEmpty(_exportRootDirectory) ? "No export Root directory selected" : _exportRootDirectory; set { _exportRootDirectory = value; OnPropertyChanged(nameof(ExportRootDirectory)); } }
     public string RootDirectory { get => string.IsNullOrEmpty(_rootDirectory) ? "No Root directory loaded" : _rootDirectory; set { _rootDirectory = value; OnPropertyChanged(nameof(RootDirectory)); } }
     public string EntryQuery { get => _entryQuery; set { _entryQuery = value; OnPropertyChanged(nameof(EntryQuery)); RefreshBAREntries(); } }
     public string FilesQuery { get => _filesQuery; set { _filesQuery = value; OnPropertyChanged(nameof(FilesQuery)); RefreshFileEntries(); } }
@@ -53,6 +58,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         InitializeComponent();
     }
 
+    #region Button events
     async void LoadBAR_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         var btn = sender as Button;
@@ -83,7 +89,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = "Select root directory",
+            Title = "Select Root directory",
             AllowMultiple = false
         });
 
@@ -96,63 +102,30 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         LoadDir(folders[0].Path.LocalPath);
     }
 
-    public void LoadDir(string dir)
+    async void SelectExportRootDir_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
-        try
+        var btn = sender as Button;
+        if (btn != null)
+            btn.IsEnabled = false;
+
+        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            if (!Directory.Exists(dir))
-                throw new DirectoryNotFoundException("Directory not found");
+            Title = "Select export Root directory",
+            AllowMultiple = false
+        });
 
-            if (_watcher != null)
-            {
-                _watcher.Renamed -= RootDir_Renamed;
-                _watcher.Created -= RootDir_Created;
-                _watcher.Deleted -= RootDir_Deleted;
-                _watcher.Dispose();
-                _watcher = null;
-            }
+        if (btn != null)
+            btn.IsEnabled = true;
 
-            RootDirectory = dir;
-            LoadFilesFromRoot();
+        if (folders.Count == 0)
+            return;
 
-            _watcher = new FileSystemWatcher(RootDirectory);
-            _watcher.IncludeSubdirectories = true;
-            _watcher.EnableRaisingEvents = true;
-            _watcher.Renamed += RootDir_Renamed;
-            _watcher.Created += RootDir_Created;
-            _watcher.Deleted += RootDir_Deleted;
-        }
-        catch (Exception ex)
-        {
-            // TODO: show error
-        }
+        ExportRootDirectory = folders[0].Path.LocalPath;
     }
 
-    void LoadFilesFromRoot()
-    {
-        _loadedFiles = Directory.GetFiles(_rootDirectory, "*.*", SearchOption.AllDirectories)
-                .Select(x => new FileEntry(_rootDirectory, x))
-                .ToList();
-
-        SelectedFileEntry = null;
-
-        RefreshFileEntries();
-
-        // in case BAR file is loaded from before, if it's within root dir, select it here
-        if (_barFile != null && _barStream?.Name.StartsWith(_rootDirectory) == true)
-        {
-            var relative_path = Path.GetRelativePath(_rootDirectory, _barStream.Name);
-            foreach (var file in _loadedFiles)
-            {
-                if (file.RelativePath == relative_path)
-                {
-                    SelectedFileEntry = file;
-                    break;
-                }
-            }
-        }
-    }
-
+    #endregion
+    
+    #region File Watcher events
     void RootDir_Deleted(object sender, FileSystemEventArgs e)
     {
         if (_loadedFiles == null || !Directory.Exists(_rootDirectory))
@@ -180,7 +153,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             if (SelectedFileEntry == entry_removed)
                 SelectedFileEntry = null;
-            
+
             RefreshFileEntries();
         }
     }
@@ -243,8 +216,69 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         RefreshFileEntries();
     }
 
+    #endregion
+
+    #region Loading files
+    public void LoadDir(string dir)
+    {
+        try
+        {
+            if (!Directory.Exists(dir))
+                throw new DirectoryNotFoundException("Directory not found");
+
+            if (_watcher != null)
+            {
+                _watcher.Renamed -= RootDir_Renamed;
+                _watcher.Created -= RootDir_Created;
+                _watcher.Deleted -= RootDir_Deleted;
+                _watcher.Dispose();
+                _watcher = null;
+            }
+
+            RootDirectory = dir;
+            LoadFilesFromRoot();
+
+            _watcher = new FileSystemWatcher(RootDirectory);
+            _watcher.IncludeSubdirectories = true;
+            _watcher.EnableRaisingEvents = true;
+            _watcher.Renamed += RootDir_Renamed;
+            _watcher.Created += RootDir_Created;
+            _watcher.Deleted += RootDir_Deleted;
+        }
+        catch (Exception ex)
+        {
+            // TODO: show error
+        }
+    }
+
+    void LoadFilesFromRoot()
+    {
+        _loadedFiles = Directory.GetFiles(_rootDirectory, "*.*", SearchOption.AllDirectories)
+                .Select(x => new FileEntry(_rootDirectory, x))
+                .ToList();
+
+        SelectedFileEntry = null;
+
+        RefreshFileEntries();
+        OnPropertyChanged(nameof(LoadedBARFilePathOrRelative));
+
+        // in case BAR file is loaded from before, if it's within root dir, select it here
+        if (_barFile != null && _barStream?.Name.StartsWith(_rootDirectory) == true)
+        {
+            var relative_path = Path.GetRelativePath(_rootDirectory, _barStream.Name);
+            foreach (var file in _loadedFiles)
+            {
+                if (file.RelativePath == relative_path)
+                {
+                    SelectedFileEntry = file;
+                    break;
+                }
+            }
+        }
+    }
+
     public void LoadBAR(string bar_file)
-    {    
+    {
         _barStream?.Dispose();
         var stream = File.OpenRead(bar_file);
 
@@ -259,7 +293,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _barStream = stream;
             _barFile = file;
             RefreshBAREntries();
-            OnPropertyChanged(nameof(LoadedBARFilePath));
+            OnPropertyChanged(nameof(LoadedBARFilePathOrRelative));
 
             // if BAR file is contained within root dir, select it there for convenience
             if (Directory.Exists(_rootDirectory) && bar_file.StartsWith(_rootDirectory))
@@ -272,7 +306,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                         SelectedFileEntry = f;
                         break;
                     }
-                }    
+                }
             }
         }
         catch (Exception ex)
@@ -290,7 +324,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             // TODO: only clear BAR entries or preview if prev. file was unselected
             return;
         }
-        
+
         if (entry.Extension == ".BAR")
         {
             LoadBAR(Path.Combine(_rootDirectory, entry.RelativePath));
@@ -299,7 +333,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // TODO: handle other types
     }
 
+    #endregion
 
+    #region UI functions
     public void RefreshFileEntries()
     {
         FileEntries.Clear();
@@ -350,5 +386,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
 
     public new event PropertyChangedEventHandler? PropertyChanged;
-    void OnPropertyChanged(string propertyName) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    void OnPropertyChanged(string propertyName) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName)); 
+    #endregion
 }
