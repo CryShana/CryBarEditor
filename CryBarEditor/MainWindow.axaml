@@ -8,13 +8,32 @@
         x:Class="CryBarEditor.MainWindow"
 		DataContext="{Binding RelativeSource={RelativeSource Self}}"
         Title="CryBarEditor">
+	<Window.Styles>
+		<Style Selector="ListBox">
+			<Setter Property="Background" Value="#1c1c1c" />
+		</Style>
+		<Style Selector="TextBlock.BAR">
+			<Setter Property="Foreground" Value="#5292fa"/>
+		</Style>
+		<Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+			<Setter Property="Background" Value="#2b3c57" />
+		</Style>
+
+		<Style Selector="ListBoxItem:focus /template/ ContentPresenter">
+			<Setter Property="Background" Value="#2b3c57" />
+		</Style>
+
+		<Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+			<Setter Property="Background" Value="#1a2436" />
+		</Style>
+	</Window.Styles>
 	<Border Padding="10">
 		<Grid>
 			<Grid.ColumnDefinitions>
 				<ColumnDefinition Width="*" MinWidth="200" />
-				<ColumnDefinition Width="5" />
+				<ColumnDefinition Width="5" MinWidth="5" />
 				<ColumnDefinition Width="*" MinWidth="200" />
-				<ColumnDefinition Width="5" />
+				<ColumnDefinition Width="5" MinWidth="5" />
 				<ColumnDefinition Width="*" MinWidth="200" />
 			</Grid.ColumnDefinitions>
 
@@ -29,7 +48,7 @@
 						 SelectedItem="{Binding SelectedFileEntry, Mode=TwoWay}">
 					<ListBox.ItemTemplate>
 						<DataTemplate x:DataType="cc:FileEntry">
-							<TextBlock Text="{Binding RelativePath}" />
+							<TextBlock Classes.BAR="{Binding IsBAR}" Text="{Binding RelativePath}"/>
 						</DataTemplate>
 					</ListBox.ItemTemplate>
 				</ListBox>

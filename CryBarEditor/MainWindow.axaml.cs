@@ -40,7 +40,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _selectedFileEntry = value;
             OnPropertyChanged(nameof(SelectedFileEntry));
 
-            // check if BAR file already loaded
+            // ensure BAR file is not already loaded
             if (value != null && _barStream?.Name == Path.Combine(_rootDirectory, value.RelativePath))
                 return;
 
@@ -135,7 +135,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 .ToList();
 
         SelectedFileEntry = null;
+
         RefreshFileEntries();
+
+        // in case BAR file is loaded from before, if it's within root dir, select it here
+        if (_barFile != null && _barStream?.Name.StartsWith(_rootDirectory) == true)
+        {
+            var relative_path = Path.GetRelativePath(_rootDirectory, _barStream.Name);
+            foreach (var file in _loadedFiles)
+            {
+                if (file.RelativePath == relative_path)
+                {
+                    SelectedFileEntry = file;
+                    break;
+                }
+            }
+        }
     }
 
     void RootDir_Deleted(object sender, FileSystemEventArgs e)
@@ -229,9 +244,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
 
     public void LoadBAR(string bar_file)
-    {
+    {    
         _barStream?.Dispose();
-
         var stream = File.OpenRead(bar_file);
 
         try
@@ -245,8 +259,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _barStream = stream;
             _barFile = file;
             RefreshBAREntries();
+            OnPropertyChanged(nameof(LoadedBARFilePath));
 
-            // if this file exists within root directory, we can select it there]
+            // if BAR file is contained within root dir, select it there for convenience
             if (Directory.Exists(_rootDirectory) && bar_file.StartsWith(_rootDirectory))
             {
                 var relative_path = Path.GetRelativePath(_rootDirectory, bar_file);
@@ -257,10 +272,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                         SelectedFileEntry = f;
                         break;
                     }
-                }
+                }    
             }
-
-            OnPropertyChanged(nameof(LoadedBARFilePath));
         }
         catch (Exception ex)
         {
@@ -274,7 +287,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         if (entry == null || !Directory.Exists(_rootDirectory))
         {
-            // TODO: maybe clear preview or whatever it is
+            // TODO: only clear BAR entries or preview if prev. file was unselected
             return;
         }
         
@@ -286,11 +299,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // TODO: handle other types
     }
 
-    public void Refresh()
-    {
-        RefreshBAREntries();
-        RefreshFileEntries();
-    }
 
     public void RefreshFileEntries()
     {
@@ -308,6 +316,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
 
         Entries.AddItems(FilterBAR(_barFile.Entries));
+    }
+
+    public void RefreshPreview()
+    {
+
     }
 
     IEnumerable<BarFileEntry> FilterBAR(IEnumerable<BarFileEntry> entries)

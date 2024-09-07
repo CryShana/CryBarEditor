@@ -8,6 +8,7 @@ public class FileEntry
     public string RelativePath { get; }  
     public string Extension { get; }
     public List<FileEntry> Children { get; } = new();
+    public bool IsBAR => Extension == ".BAR";
 
     public FileEntry(string root_dir, string file_path)
     {
