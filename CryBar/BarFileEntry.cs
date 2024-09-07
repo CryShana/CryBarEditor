@@ -21,6 +21,14 @@ public class BarFileEntry
     }
 
     /// <summary>
+    /// Is this file an XS code file?
+    /// </summary>
+    public bool IsXS => RelativePath.EndsWith(".XS", StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// Is this file an XML file? Either in XMB or XAML form?
+    /// </summary>
+    public bool IsXML => IsXMB || RelativePath.EndsWith(".XML", StringComparison.OrdinalIgnoreCase) || RelativePath.EndsWith(".XAML", StringComparison.OrdinalIgnoreCase);
+    /// <summary>
     /// Is file a XMB file? This needs to be converted to be viewed.
     /// </summary>
     public bool IsXMB => RelativePath.EndsWith(".XMB", StringComparison.OrdinalIgnoreCase);
@@ -53,10 +61,7 @@ public class BarFileEntry
     /// <summary>
     /// Is file a human readable text file? (There could be other extensions too)
     /// </summary>
-    public bool IsText =>
-        RelativePath.EndsWith(".TXT", StringComparison.OrdinalIgnoreCase) ||
-        RelativePath.EndsWith(".XS", StringComparison.OrdinalIgnoreCase) ||
-        RelativePath.EndsWith(".XAML", StringComparison.OrdinalIgnoreCase);
+    public bool IsText => RelativePath.EndsWith(".TXT", StringComparison.OrdinalIgnoreCase) || IsXS || IsXML;
 
     /// <summary>
     /// Copies file data (not header) from [from] BAR stream to [to] stream.

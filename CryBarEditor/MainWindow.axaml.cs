@@ -4,11 +4,15 @@ using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 
 using System;
+using System.Xml;
 using System.Linq;
+using System.Text;
 using System.ComponentModel;
 using System.Collections.Generic;
 
 using CryBarEditor.Classes;
+using AvaloniaEdit.TextMate;
+using TextMateSharp.Grammars;
 
 namespace CryBarEditor;
 
@@ -23,18 +27,23 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     FileEntry? _selectedFileEntry = null;
     List<FileEntry>? _loadedFiles = null;
     FileSystemWatcher? _watcher = null;
+    BarFileEntry? _selectedBarEntry = null;
+
+    readonly RegistryOptions _registryOptions;
+    readonly TextMate.Installation _textMateInstallation;
 
     public ObservableCollectionExtended<FileEntry> FileEntries { get; } = new();
     public ObservableCollectionExtended<BarFileEntry> Entries { get; } = new();
 
-    public string LoadedBARFilePathOrRelative => _barStream == null ? "No BAR file loaded" : 
-        (Directory.Exists(_rootDirectory) && _barStream.Name.StartsWith(_rootDirectory) ? 
+    public string LoadedBARFilePathOrRelative => _barStream == null ? "No BAR file loaded" :
+        (Directory.Exists(_rootDirectory) && _barStream.Name.StartsWith(_rootDirectory) ?
             Path.GetRelativePath(_rootDirectory, _barStream.Name) : _barStream.Name);
 
     public string ExportRootDirectory { get => string.IsNullOrEmpty(_exportRootDirectory) ? "No export Root directory selected" : _exportRootDirectory; set { _exportRootDirectory = value; OnPropertyChanged(nameof(ExportRootDirectory)); } }
     public string RootDirectory { get => string.IsNullOrEmpty(_rootDirectory) ? "No Root directory loaded" : _rootDirectory; set { _rootDirectory = value; OnPropertyChanged(nameof(RootDirectory)); } }
     public string EntryQuery { get => _entryQuery; set { _entryQuery = value; OnPropertyChanged(nameof(EntryQuery)); RefreshBAREntries(); } }
     public string FilesQuery { get => _filesQuery; set { _filesQuery = value; OnPropertyChanged(nameof(FilesQuery)); RefreshFileEntries(); } }
+
     public FileEntry? SelectedFileEntry
     {
         get => _selectedFileEntry; set
@@ -53,9 +62,26 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
+    public BarFileEntry? SelectedBarEntry
+    {
+        get => _selectedBarEntry; set
+        {
+            if (value == _selectedBarEntry)
+                return;
+
+            _selectedBarEntry = value;
+            OnPropertyChanged(nameof(SelectedBarEntry));
+            LoadBarFileEntry(value);
+        }
+    }
+
     public MainWindow()
     {
         InitializeComponent();
+
+        // set up editor
+        _registryOptions = new RegistryOptions(ThemeName.DarkPlus);
+        _textMateInstallation = textEditor.InstallTextMate(_registryOptions);
     }
 
     #region Button events
@@ -124,7 +150,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
 
     #endregion
-    
+
     #region File Watcher events
     void RootDir_Deleted(object sender, FileSystemEventArgs e)
     {
@@ -325,17 +351,102 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
+        var path = Path.Combine(_rootDirectory, entry.RelativePath);
+
+        // BAR files have to first be opened in separate panel to view their contained files
         if (entry.Extension == ".BAR")
         {
-            LoadBAR(Path.Combine(_rootDirectory, entry.RelativePath));
+            LoadBAR(path);
+            return;
         }
 
-        // TODO: handle other types
+        SetTextEditorLanguage(entry.Extension);
+
+        // other files we can try directly previewing
+        var size = new FileInfo(path).Length;
+        if (size < 300_000)
+        {
+            var text = File.ReadAllText(path);
+            textEditor.Text = text;
+        }
+        else
+        {
+            textEditor.Text = "File too large to display in text editor";
+        }
+
+        textEditor.ScrollTo(0, 0);
     }
 
+    public void LoadBarFileEntry(BarFileEntry? entry)
+    {
+        if (entry == null || _barStream == null)
+        {
+            return;
+        }
+
+        var text = "";
+        var ext = Path.GetExtension(entry.RelativePath).ToLower();
+
+        if (entry.IsXMB)
+        {
+            // NOTE: both these methods execute under 50ms even for larger files like "proto.xml.XMB", if you notice any lag it's because of UI updates
+            // most likely on AvaloniaEdit side or incorrect Visual Tree layout that is destroying virtualization, idk yet
+            var data = entry.ReadDataDecompressed(_barStream);
+            var xml = BarFileEntry.ConvertXMBtoXML(data.Span);
+            if (xml != null)
+            {
+                var sb = new StringWriter();
+
+                var settings = new XmlWriterSettings
+                {
+                    Indent = true
+                };
+
+                using (var writer = XmlWriter.Create(sb, settings))
+                {
+                    xml.Save(writer);
+                }
+
+                text = sb.ToString();
+                ext = ".xml";
+            }
+            else
+            {
+                text = "Failed to parse XMB document";
+                ext = ".txt";
+            }
+        }
+        else if (entry.IsText)
+        {
+            var data = entry.ReadDataDecompressed(_barStream);
+            text = Encoding.UTF8.GetString(data.Span);
+        }
+
+        SetTextEditorLanguage(ext);
+
+        textEditor.Text = text;
+        textEditor.ScrollTo(0, 0);
+    }
     #endregion
 
     #region UI functions
+    public void SetTextEditorLanguage(string extension)
+    {
+        if (string.Equals(extension, ".xs", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(extension, ".con", StringComparison.OrdinalIgnoreCase))
+            extension = ".cpp";
+        
+        var lang = _registryOptions.GetLanguageByExtension(extension);
+        if (lang == null)
+        {
+            _textMateInstallation.SetGrammar("");
+            return;
+        }
+
+        var scope = _registryOptions.GetScopeByLanguageId(lang.Id);
+        _textMateInstallation.SetGrammar(scope);
+    }
+
     public void RefreshFileEntries()
     {
         FileEntries.Clear();
@@ -386,6 +497,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
 
     public new event PropertyChangedEventHandler? PropertyChanged;
-    void OnPropertyChanged(string propertyName) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName)); 
+    void OnPropertyChanged(string propertyName) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     #endregion
 }

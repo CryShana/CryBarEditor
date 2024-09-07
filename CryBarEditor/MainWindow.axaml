@@ -2,18 +2,21 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+		xmlns:ae="clr-namespace:AvaloniaEdit;assembly=AvaloniaEdit"
 		xmlns:cb="using:CryBar"
 		xmlns:cc="using:CryBarEditor.Classes"
 		mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="450"
         x:Class="CryBarEditor.MainWindow"
 		DataContext="{Binding RelativeSource={RelativeSource Self}}"
-        Title="CryBarEditor">
+        Title="CryBarEditor" 
+		Foreground="#d9d9d9"
+		Background="#141414">
 	<Window.Styles>
 		<Style Selector="ListBox">
 			<Setter Property="Background" Value="#1c1c1c" />
 		</Style>
 		<Style Selector="TextBlock.BAR">
-			<Setter Property="Foreground" Value="#5292fa"/>
+			<Setter Property="Foreground" Value="#6f96bf"/>
 		</Style>
 		<Style Selector="ListBoxItem:selected /template/ ContentPresenter">
 			<Setter Property="Background" Value="#2b3c57" />
@@ -50,7 +53,10 @@
 						 SelectedItem="{Binding SelectedFileEntry, Mode=TwoWay}">
 					<ListBox.ItemTemplate>
 						<DataTemplate x:DataType="cc:FileEntry">
-							<TextBlock Classes.BAR="{Binding IsBAR}" Text="{Binding RelativePath}"/>
+							<TextBlock Classes.BAR="{Binding IsBAR}" 
+									   Classes.XML="{Binding IsXML}"
+									   Classes.XS="{Binding IsXS}"
+									   Text="{Binding RelativePath}"/>
 						</DataTemplate>
 					</ListBox.ItemTemplate>
 				</ListBox>
@@ -64,12 +70,15 @@
 					<Button Content="Load" Click="LoadBAR_Click" Margin="0,0,6,6"/>
 					<Label DockPanel.Dock="Top" Content="{Binding LoadedBARFilePathOrRelative}" Foreground="Gray" Margin="0,2,0,0" />
 				</DockPanel>
-				<TextBox DockPanel.Dock="Top" Text="{Binding EntryQuery, Mode=TwoWay}" Watermark="Filter entries" />
+				<TextBox DockPanel.Dock="Top" Text="{Binding EntryQuery, Mode=TwoWay}" Watermark="Filter BAR entries" />
 				
-				<ListBox ItemsSource="{Binding Entries}" Margin="0,10,0,0">
+				<ListBox ItemsSource="{Binding Entries}" Margin="0,10,0,0"
+						 SelectedItem="{Binding SelectedBarEntry, Mode=TwoWay}">
 					<ListBox.ItemTemplate>
 						<DataTemplate x:DataType="cb:BarFileEntry">
-							<TextBlock Text="{Binding RelativePath}" />
+							<TextBlock Classes.XML="{Binding IsXML}"
+									   Classes.XS="{Binding IsXS}"
+									   Text="{Binding RelativePath}" />
 						</DataTemplate>
 					</ListBox.ItemTemplate>
 				</ListBox>
@@ -84,9 +93,9 @@
 					<Label Content="{Binding ExportRootDirectory}" Foreground="Gray" Margin="0,2,0,0"  />			
 				</DockPanel>
 				<Label DockPanel.Dock="Top" Content="Content Preview" FontWeight="Bold" Margin="0,10,0,5"/>
-				<Grid Background="Green">
-					
-				</Grid>
+				<ae:TextEditor x:Name="textEditor" IsReadOnly="True" Text="Click on any file to preview it here" ShowLineNumbers="True" 
+							   FontFamily="Cascadia Code,Consolas,Menlo,Monospace" 
+							   Background="#1c1c1c"/>
 			</DockPanel>
 		</Grid>
 	</Border>

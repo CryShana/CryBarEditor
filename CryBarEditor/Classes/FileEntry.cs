@@ -8,7 +8,9 @@ public class FileEntry
     public string RelativePath { get; }  
     public string Extension { get; }
     public List<FileEntry> Children { get; } = new();
-    public bool IsBAR => Extension == ".BAR";
+    public bool IsBAR => Extension is ".BAR";
+    public bool IsXML => Extension is ".XML" or ".XMB" or ".XAML";
+    public bool IsXS => Extension is ".XS";
 
     public FileEntry(string root_dir, string file_path)
     {
