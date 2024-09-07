@@ -41,7 +41,7 @@
 			</Grid.ColumnDefinitions>
 
 			<DockPanel Grid.Column="0">
-				<Label DockPanel.Dock="Top" Content="Root Directory" FontWeight="Bold"/>
+				<Label DockPanel.Dock="Top" Content="Root Directory" FontWeight="Bold"  FontSize="16"/>
 				<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
 					<Button Content="Load" Click="LoadDir_Click" Margin="0,0,6,6" />
 					<Label DockPanel.Dock="Top" Content="{Binding RootDirectory}" Foreground="Gray" Margin="0,2,0,0"  />
@@ -65,13 +65,16 @@
 			<GridSplitter Grid.Column="1" Width="5" Margin="3" />
 
 			<DockPanel Grid.Column="2">
-				<Label DockPanel.Dock="Top" Content="BAR File" FontWeight="Bold"/>
+				<Label DockPanel.Dock="Top" Content="BAR File" FontWeight="Bold"  FontSize="16"/>
 				<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
 					<Button Content="Load" Click="LoadBAR_Click" Margin="0,0,6,6"/>
 					<Label DockPanel.Dock="Top" Content="{Binding LoadedBARFilePathOrRelative}" Foreground="Gray" Margin="0,2,0,0" />
 				</DockPanel>
 				<TextBox DockPanel.Dock="Top" Text="{Binding EntryQuery, Mode=TwoWay}" Watermark="Filter BAR entries" />
-				
+				<TextBlock DockPanel.Dock="Top" Margin="0,6,0,0">
+					<Run Text="Root: " FontWeight="Bold"/>
+					<Run Text="{Binding BarFileRootPath}"/>
+				</TextBlock>
 				<ListBox ItemsSource="{Binding Entries}" Margin="0,10,0,0"
 						 SelectedItem="{Binding SelectedBarEntry, Mode=TwoWay}">
 					<ListBox.ItemTemplate>
@@ -88,12 +91,15 @@
 			<GridSplitter Grid.Column="3" Width="5" Margin="3"  />
 
 			<DockPanel Grid.Column="4">
-				<Label DockPanel.Dock="Top" Content="Export Root Directory" FontWeight="Bold"/>
+				<Label DockPanel.Dock="Top" Content="Export Root Directory" FontWeight="Bold" FontSize="16"/>
 				<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
 					<Button Content="Select" Click="SelectExportRootDir_Click" Margin="0,0,6,6"/>
 					<Label Content="{Binding ExportRootDirectory}" Foreground="Gray" Margin="0,2,0,0"  />			
 				</DockPanel>
-				<Label DockPanel.Dock="Top" Content="Content Preview" FontWeight="Bold" Margin="0,10,0,5"/>
+				<TextBlock DockPanel.Dock="Top" Margin="0,10,0,10" FontSize="16">
+					<Run Text="Content Preview: " FontWeight="Bold" />
+					<Run Text="{Binding PreviewedFileName}" />
+				</TextBlock>
 				<ae:TextEditor x:Name="textEditor" IsReadOnly="True" Text="Click on any file to preview it here" ShowLineNumbers="True" 
 							   FontFamily="Cascadia Code,Consolas,Menlo,Monospace" 
 							   Background="#1c1c1c"/>

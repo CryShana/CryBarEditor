@@ -18,6 +18,7 @@ public class BarFile
     /// Loaded BAR version
     /// </summary>
     public uint Version { get; private set; }
+    public string RootPath { get; private set; }
 
     /// <summary>
     /// Loaded BAR entries
@@ -219,6 +220,7 @@ public class BarFile
 
         _entries = entries;
         Version = version;
+        RootPath = root_path;
         Loaded = true;
 
 #pragma warning disable CS8775 // Member must have a non-null value when exiting in some condition.

@@ -23,7 +23,8 @@ public class BarFileEntry
     {
         Name = Path.GetFileName(relative_path);
         RelativePath = relative_path;
-        DirectoryPath = (Path.GetDirectoryName(relative_path) + "\\") ?? "";
+        DirectoryPath = Path.GetDirectoryName(relative_path) ?? "";
+        if (DirectoryPath.Length > 0) DirectoryPath += "\\";
     }
 
     /// <summary>

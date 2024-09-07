@@ -16,7 +16,10 @@ public class FileEntry
     {
         Name = Path.GetFileName(file_path);
         RelativePath = Path.GetRelativePath(root_dir, file_path);
-        DirectoryPath = (Path.GetDirectoryName(RelativePath) + "\\") ?? "";
+
+        DirectoryPath = Path.GetDirectoryName(RelativePath) ?? "";
+        if (DirectoryPath.Length > 0) DirectoryPath += "\\";
+
         Extension = Path.GetExtension(file_path).ToUpper();
     }
 

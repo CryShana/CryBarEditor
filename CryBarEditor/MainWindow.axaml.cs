@@ -22,6 +22,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     string _filesQuery = "";
     string _rootDirectory = "";
     string _exportRootDirectory = "";
+    string _previewedFileName = "";
     BarFile? _barFile = null;
     FileStream? _barStream = null;
     FileEntry? _selectedFileEntry = null;
@@ -43,6 +44,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public string RootDirectory { get => string.IsNullOrEmpty(_rootDirectory) ? "No Root directory loaded" : _rootDirectory; set { _rootDirectory = value; OnPropertyChanged(nameof(RootDirectory)); } }
     public string EntryQuery { get => _entryQuery; set { _entryQuery = value; OnPropertyChanged(nameof(EntryQuery)); RefreshBAREntries(); } }
     public string FilesQuery { get => _filesQuery; set { _filesQuery = value; OnPropertyChanged(nameof(FilesQuery)); RefreshFileEntries(); } }
+    public string BarFileRootPath => _barFile == null ? "-" : _barFile.RootPath;
+    public string PreviewedFileName { get => string.IsNullOrEmpty(_previewedFileName) ? "No file selected" : _previewedFileName; set { _previewedFileName = value; OnPropertyChanged(nameof(PreviewedFileName)); } }
 
     public FileEntry? SelectedFileEntry
     {
@@ -319,7 +322,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _barStream = stream;
             _barFile = file;
             RefreshBAREntries();
+
             OnPropertyChanged(nameof(LoadedBARFilePathOrRelative));
+            OnPropertyChanged(nameof(BarFileRootPath));
 
             // if BAR file is contained within root dir, select it there for convenience
             if (Directory.Exists(_rootDirectory) && bar_file.StartsWith(_rootDirectory))
@@ -367,13 +372,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (size < 300_000)
         {
             var text = File.ReadAllText(path);
-            textEditor.Text = text;
+            textEditor.Text = text;  
         }
         else
         {
             textEditor.Text = "File too large to display in text editor";
         }
 
+        PreviewedFileName = Path.GetFileName(path);
         textEditor.ScrollTo(0, 0);
     }
 
@@ -426,6 +432,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         textEditor.Text = text;
         textEditor.ScrollTo(0, 0);
+        PreviewedFileName = entry.Name;
     }
     #endregion
 
