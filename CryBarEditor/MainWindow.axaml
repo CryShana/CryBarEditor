@@ -15,7 +15,7 @@
 		<Style Selector="ListBox">
 			<Setter Property="Background" Value="#1c1c1c" />
 		</Style>
-		<Style Selector="TextBlock.BAR">
+		<Style Selector="TextBlock Run.BAR">
 			<Setter Property="Foreground" Value="#6f96bf"/>
 		</Style>
 		<Style Selector="ListBoxItem:selected /template/ ContentPresenter">
@@ -53,10 +53,10 @@
 						 SelectedItem="{Binding SelectedFileEntry, Mode=TwoWay}">
 					<ListBox.ItemTemplate>
 						<DataTemplate x:DataType="cc:FileEntry">
-							<TextBlock Classes.BAR="{Binding IsBAR}" 
-									   Classes.XML="{Binding IsXML}"
-									   Classes.XS="{Binding IsXS}"
-									   Text="{Binding RelativePath}"/>
+							<TextBlock>
+								<Run Text="{Binding DirectoryPath}" Foreground="#808080" />
+								<Run Text="{Binding Name}" Classes.BAR="{Binding IsBAR}" />								
+							</TextBlock>
 						</DataTemplate>
 					</ListBox.ItemTemplate>
 				</ListBox>
@@ -76,9 +76,10 @@
 						 SelectedItem="{Binding SelectedBarEntry, Mode=TwoWay}">
 					<ListBox.ItemTemplate>
 						<DataTemplate x:DataType="cb:BarFileEntry">
-							<TextBlock Classes.XML="{Binding IsXML}"
-									   Classes.XS="{Binding IsXS}"
-									   Text="{Binding RelativePath}" />
+							<TextBlock>
+								<Run Text="{Binding DirectoryPath}" Foreground="#808080" />
+								<Run Text="{Binding Name}" />
+							</TextBlock>
 						</DataTemplate>
 					</ListBox.ItemTemplate>
 				</ListBox>

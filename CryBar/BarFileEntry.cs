@@ -1,33 +1,31 @@
 using System.Xml;
 using System.Text;
 using System.Buffers.Binary;
-using K4os.Compression.LZ4;
 using CommunityToolkit.HighPerformance.Buffers;
 
 namespace CryBar;
 
 public class BarFileEntry
 {
+    #region Data in Archive
     public long ContentOffset { get; set; }
     public int SizeUncompressed { get; set; }
     public int SizeCompressed { get; set; }
     public int SizeInArchive { get; set; }
     public string RelativePath { get; set; }
-    public bool IsCompressed { get; set; }
+    public bool IsCompressed { get; set; } 
+    #endregion
+
+    public string Name { get; set; }
+    public string DirectoryPath { get; set; }
 
     public BarFileEntry(string relative_path)
     {
+        Name = Path.GetFileName(relative_path);
         RelativePath = relative_path;
+        DirectoryPath = (Path.GetDirectoryName(relative_path) + "\\") ?? "";
     }
 
-    /// <summary>
-    /// Is this file an XS code file?
-    /// </summary>
-    public bool IsXS => RelativePath.EndsWith(".XS", StringComparison.OrdinalIgnoreCase);
-    /// <summary>
-    /// Is this file an XML file? Either in XMB or XAML form?
-    /// </summary>
-    public bool IsXML => IsXMB || RelativePath.EndsWith(".XML", StringComparison.OrdinalIgnoreCase) || RelativePath.EndsWith(".XAML", StringComparison.OrdinalIgnoreCase);
     /// <summary>
     /// Is file a XMB file? This needs to be converted to be viewed.
     /// </summary>
@@ -61,7 +59,10 @@ public class BarFileEntry
     /// <summary>
     /// Is file a human readable text file? (There could be other extensions too)
     /// </summary>
-    public bool IsText => RelativePath.EndsWith(".TXT", StringComparison.OrdinalIgnoreCase) || IsXS || IsXML;
+    public bool IsText => RelativePath.EndsWith(".TXT", StringComparison.OrdinalIgnoreCase) ||
+        RelativePath.EndsWith(".XS", StringComparison.OrdinalIgnoreCase) ||
+        RelativePath.EndsWith(".XAML", StringComparison.OrdinalIgnoreCase) ||
+        RelativePath.EndsWith(".XML", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Copies file data (not header) from [from] BAR stream to [to] stream.
