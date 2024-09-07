@@ -353,11 +353,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public void LoadFileEntry(FileEntry? entry)
     {
         if (entry == null || !Directory.Exists(_rootDirectory))
-        {
-            // TODO: only clear BAR entries or preview if prev. file was unselected
             return;
-        }
-
+        
         var path = Path.Combine(_rootDirectory, entry.RelativePath);
         PreviewedFileName = Path.GetFileName(path);
 
@@ -396,10 +393,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public void LoadBarFileEntry(BarFileEntry? entry)
     {
         if (entry == null || _barStream == null)
-        {
             return;
-        }
-
+        
         var text = "";
         var ext = Path.GetExtension(entry.RelativePath).ToLower();
         PreviewedFileName = entry.Name;
@@ -412,16 +407,24 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             var xml = BarFileEntry.ConvertXMBtoXML(data.Span);
             if (xml != null)
             {
-                var sb = new StringWriter();
-
-                var settings = new XmlWriterSettings
+                var sb = new StringBuilder();
+                var rsettings = new XmlReaderSettings
                 {
-                    Indent = true
+                    IgnoreWhitespace = true
                 };
 
-                using (var writer = XmlWriter.Create(sb, settings))
+                var wsettings = new XmlWriterSettings
                 {
-                    xml.Save(writer);
+                    Indent = true,
+                    IndentChars = "\t",
+                    OmitXmlDeclaration = true
+                };
+                
+                // for some reason I gotta read it first while ignoring whitespaces, to get proper formatting when writing it again... is there a better way?
+                using (var reader = XmlReader.Create(new StringReader(xml.InnerXml), rsettings))
+                using (var writer = XmlWriter.Create(sb, wsettings))
+                {
+                    writer.WriteNode(reader, true);
                 }
 
                 text = sb.ToString();
