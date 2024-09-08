@@ -10,14 +10,14 @@ using System.IO;
 using System.Xml;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
+using System.Reflection;
 using System.ComponentModel;
 using System.Collections.Generic;
 
 using AvaloniaEdit.TextMate;
 using TextMateSharp.Grammars;
 using SixLabors.ImageSharp.Formats.Png;
-using System.Reflection;
-using System.Text.Json;
 
 namespace CryBarEditor;
 
@@ -28,6 +28,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     string _rootDirectory = "";
     string _exportRootDirectory = "";
     string _previewedFileName = "";
+    string _previewedFileNote = "";
     BarFile? _barFile = null;
     FileStream? _barStream = null;
     FileEntry? _selectedFileEntry = null;
@@ -79,9 +80,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     public string EntryQuery { get => _entryQuery; set { _entryQuery = value; OnPropertyChanged(nameof(EntryQuery)); RefreshBAREntries(); } }
     public string FilesQuery { get => _filesQuery; set { _filesQuery = value; OnPropertyChanged(nameof(FilesQuery)); RefreshFileEntries(); } }
-    public string BarFileRootPath => _barFile == null ? "-" : _barFile.RootPath;
+    public string BarFileRootPath => _barFile == null ? "-" : _barFile.RootPath!;
     public string RootFileRootPath => string.IsNullOrEmpty(_rootDirectory) ? "-" : GetRootRelevantPath();
     public string PreviewedFileName { get => string.IsNullOrEmpty(_previewedFileName) ? "No file selected" : _previewedFileName; set { _previewedFileName = value; OnPropertyChanged(nameof(PreviewedFileName)); } }
+    public string PreviewedFileNote { get => _previewedFileNote; set { _previewedFileNote = value; OnPropertyChanged(nameof(PreviewedFileNote)); } }
 
     public FileEntry? SelectedFileEntry
     {
@@ -97,7 +99,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (value != null && _barStream?.Name == Path.Combine(_rootDirectory, value.RelativePath))
                 return;
 
-            LoadFileEntry(value);
+            Preview(value);
         }
     }
 
@@ -110,7 +112,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             _selectedBarEntry = value;
             OnPropertyChanged(nameof(SelectedBarEntry));
-            LoadBarFileEntry(value);
+            Preview(value);
         }
     }
     #endregion
@@ -427,60 +429,44 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
-    public void LoadFileEntry(FileEntry? entry)
+    public void Preview(FileEntry? entry)
     {
         if (entry == null || !Directory.Exists(_rootDirectory))
             return;
 
         var path = Path.Combine(_rootDirectory, entry.RelativePath);
-        PreviewedFileName = Path.GetFileName(path);
-
-        // BAR files have to first be opened in separate panel to view their contained files
         if (entry.Extension == ".BAR")
         {
             LoadBAR(path);
             return;
         }
 
-        if (IsImage(entry.Extension.ToLower()))
-        {
-            var data = File.ReadAllBytes(path);
-            SetImagePreview(data);
-            return;
-        }
-
-        SetImagePreview(null);
-        SetTextEditorLanguage(entry.Extension);
-
-        // other files we can try directly previewing
-        var size = new FileInfo(path).Length;
-        if (size < 300_000)
-        {
-            var text = File.ReadAllText(path);
-            textEditor.Text = text;
-        }
-        else
-        {
-            textEditor.Text = "File too large to display in text editor";
-        }
-
-        textEditor.ScrollTo(0, 0);
+        Preview(entry, F_GetFullRelativePathRoot, F_ReadRoot);
     }
 
-    public void LoadBarFileEntry(BarFileEntry? entry)
+    public void Preview(BarFileEntry? entry)
     {
         if (entry == null || _barStream == null)
             return;
 
-        var text = "";
-        var ext = Path.GetExtension(entry.RelativePath).ToLower();
-        PreviewedFileName = entry.Name;
+        Preview(entry, F_GetFullRelativePathBAR, F_ReadBAR);
+    }
 
-        if (entry.IsXMB)
+    public void Preview<T>(T entry, Func<T, string> get_rel_path, Func<T, Memory<byte>> read_usable_data)
+    {
+        var relative_path = get_rel_path(entry);
+        var ext = Path.GetExtension(relative_path).ToLower();
+        
+        var text = "";
+        PreviewedFileName = Path.GetFileName(relative_path);
+        PreviewedFileNote = "";
+        
+
+        if (ext is ".xmb")
         {
             // NOTE: both these methods execute under 50ms even for larger files like "proto.xml.XMB", if you notice any lag it's because of UI updates
             // most likely on AvaloniaEdit side or incorrect Visual Tree layout that is destroying virtualization, idk yet
-            var data = entry.ReadDataDecompressed(_barStream);
+            var data = read_usable_data(entry);
             var xml = BarFileEntry.ConvertXMBtoXML(data.Span);
             if (xml != null)
             {
@@ -492,15 +478,23 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 text = "Failed to parse XMB document";
                 ext = ".txt";
             }
+
+            PreviewedFileNote = "(Converted to XML)";
         }
-        else if (entry.IsText)
+        else if (ext is ".txt" or ".xs" or ".xml" or ".xaml")
         {
-            var data = entry.ReadDataDecompressed(_barStream);
+            var data = read_usable_data(entry);
             text = Encoding.UTF8.GetString(data.Span);
+        }
+        else if (ext is ".ddt")
+        {
+            // TODO: implement conversion here
+
+            PreviewedFileNote = "(Converted to TGA)";
         }
         else if (IsImage(ext))
         {
-            var data = entry.ReadDataRaw(_barStream);
+            var data = read_usable_data(entry);
             SetImagePreview(data);
             return;
         }

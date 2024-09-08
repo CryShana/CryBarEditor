@@ -146,10 +146,13 @@
 				</DockPanel>
 				<TextBlock DockPanel.Dock="Top" Margin="0,10,0,10" FontSize="16">
 					<Run Text="Content Preview: " FontWeight="Bold" />
-					<Run Text="{Binding PreviewedFileName}" />
+					<Run Text="{Binding PreviewedFileName}" Foreground="#ffe6a1" />
+					<Run Text="{Binding PreviewedFileNote}" Foreground="#edc042" />
 				</TextBlock>
 				<Grid>
-					<Image x:Name="previewImage" ZIndex="1" HorizontalAlignment="Center" VerticalAlignment="Center" Stretch="None" />
+					<Image x:Name="previewImage" ZIndex="1"
+						   HorizontalAlignment="Center" VerticalAlignment="Center" 
+						   Stretch="None" />
 					<ae:TextEditor x:Name="textEditor" IsReadOnly="True" Text="Click on any file to preview it here" ShowLineNumbers="True"
 							   FontFamily="Cascadia Code,Consolas,Menlo,Monospace"
 							   Background="#1c1c1c"/>
