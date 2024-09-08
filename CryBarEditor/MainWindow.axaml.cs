@@ -481,11 +481,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             PreviewedFileNote = "(Converted to XML)";
         }
-        else if (ext is ".txt" or ".xs" or ".xml" or ".xaml")
-        {
-            var data = read_usable_data(entry);
-            text = Encoding.UTF8.GetString(data.Span);
-        }
         else if (ext is ".ddt")
         {
             // TODO: implement conversion here
@@ -497,6 +492,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             var data = read_usable_data(entry);
             SetImagePreview(data);
             return;
+        }
+        else
+        {
+            var data = read_usable_data(entry);
+            text = Encoding.UTF8.GetString(data.Span);
         }
 
         SetImagePreview(null);
