@@ -890,9 +890,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     /// <summary>
     /// Picks a new file name for output that doesn't exist yet. If extension null, original extension is used.
-    /// Suffix is optionally added before the extension. If new filename exists, a counter is added after suffix.
+    /// Suffix is optionally added before the extension. 
+    /// If new filename exists, a counter is added after suffix (unless overwrite is enabled)
     /// </summary>
-    string PickOutFile(string file, string suffix = "", string? new_extension = null)
+    string PickOutFile(string file, string suffix = "", string? new_extension = null, bool overwrite = false)
     {
         var ext = new_extension ?? Path.GetExtension(file);
         var dir = Path.GetDirectoryName(file);
@@ -905,6 +906,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (counter == 0)
             {
                 new_file = Path.Combine(dir ?? "", $"{name}{suffix}{ext}");
+                if (overwrite) break;
             }
             else
             {
@@ -922,7 +924,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var file = await PickFile(sender, "Convert XML to XMB");
         if (file == null) return;
 
-        var out_file = PickOutFile(file, suffix: Path.GetExtension(file), new_extension: ".XMB");
+        // when converting to XMB, the original extension is retained!
+        // so "something.xml" becomes "something.xml.XMB"
+
+        var out_file = PickOutFile(file, suffix: Path.GetExtension(file), new_extension: ".XMB", overwrite: true);
 
         try
         {
@@ -948,9 +953,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         var ext = Path.GetExtension(file).ToLower();
 
-        // if extension was .XMB, we wish to remove this in the output, otherwise we keep it (it was some custom extension probably)
-        // but at the same time we don't wish to add a new extension UNLESS it was not .XMB
-        var out_file = PickOutFile(file, suffix: (ext == ".xmb" ? "" : ext), new_extension: (ext == ".xmb" ? "" : ".xml"));
+        // when converting XMB to XML, the .XMB extension is removed! But this only happens if it was there in the first place!
+        var out_file = PickOutFile(file, suffix: (ext == ".xmb" ? "" : ext), new_extension: (ext == ".xmb" ? "" : ".xml"), overwrite: true);
         try
         {
             var xmb_data= File.ReadAllBytes(file);
