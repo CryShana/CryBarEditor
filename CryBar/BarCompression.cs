@@ -4,7 +4,7 @@ using K4os.Compression.LZ4;
 
 namespace CryBar;
 
-public static class BarCompressionUtils
+public static class BarCompression
 {
     public static bool IsAlz4(this Span<byte> data) => data is [97, 108, 122, 52, ..];
     public static bool IsL33t(this Span<byte> data) => data is [108, 51, 51, 116, ..];

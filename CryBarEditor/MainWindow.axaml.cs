@@ -471,7 +471,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             // NOTE: both these methods execute under 50ms even for larger files like "proto.xml.XMB", if you notice any lag it's because of UI updates
             // most likely on AvaloniaEdit side or incorrect Visual Tree layout that is destroying virtualization, idk yet
             var data = read_usable_data(entry);
-            var xml = BarFileEntry.ConvertXMBtoXML(data.Span);
+            var xml = BarFormatConverter.XMBtoXML(data.Span);
             if (xml != null)
             {
                 text = FormatXML(xml);
@@ -499,8 +499,26 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         else
         {
-            var data = read_usable_data(entry);
-            text = Encoding.UTF8.GetString(data.Span);
+            var data = read_usable_data(entry).Span;
+            var l33 = data.IsL33t();
+            var l66 = data.IsL66t();
+            if (l33 || l66)
+            {  
+                var ddata = BarCompression.DecompressL33tL66t(data);
+                if (ddata != null)
+                {
+                    PreviewedFileNote = $"(Decompressed {(l33 ? "L33t" : "L66t")})";
+                    text = Encoding.UTF8.GetString(ddata);
+                }
+                else
+                {
+                    text = Encoding.UTF8.GetString(data);
+                }
+            }
+            else
+            {
+                text = Encoding.UTF8.GetString(data);
+            }  
         }
 
         SetImagePreview(null);
@@ -787,7 +805,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     if (ext == ".xmb")
                     {
                         var data = read_decompressed(f);
-                        var xml = BarFileEntry.ConvertXMBtoXML(data.Span)!;
+                        var xml = BarFormatConverter.XMBtoXML(data.Span)!;
                         var xml_text = FormatXML(xml);
                         var xml_bytes = Encoding.UTF8.GetBytes(xml_text);
                         file.Write(xml_bytes);
