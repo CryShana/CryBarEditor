@@ -1053,9 +1053,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             // TODO: show error
         }
     }
-    
-    async void MenuItem_Search(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+
+    SearchWindow? _activeWindow;
+    void MenuItem_Search(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
+        if (_activeWindow != null)
+        {
+            _activeWindow.Focus();
+            return;
+        }
+
         if (_barFile == null && _barStream == null && string.IsNullOrEmpty(_rootDirectory) &&
             !Directory.Exists(_rootDirectory))
         {
@@ -1063,8 +1070,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        var dialogue = new SearchWindow(this);
-        await dialogue.ShowDialog(this);
+        _activeWindow = new SearchWindow(this);
+        _activeWindow.Closed += (a, b) =>
+        {
+            _activeWindow = null;
+        };
+
+        _activeWindow.Show(this);
     }
     #endregion
 

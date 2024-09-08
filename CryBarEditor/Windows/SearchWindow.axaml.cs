@@ -1,6 +1,5 @@
-using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 
 using CryBar;
 
@@ -15,7 +14,7 @@ using System.ComponentModel;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
-using Avalonia.Threading;
+
 
 namespace CryBarEditor;
 
@@ -215,13 +214,33 @@ public partial class SearchWindow : Window, INotifyPropertyChanged
             CurrentlySearching = false;
         }
 
+        static bool ValidForSearch(string ext)
+        {
+            if (ext is ".jpg" or ".jpeg" or ".tga" or ".ddt" or ".png" or ".gif" or ".jpx" or ".webp") 
+                return false;
+
+            if (ext is ".wav" or ".mp3" or ".wmv" or ".opus" or ".vorbis" or ".ogg" or ".m4a")
+                return false;
+
+            if (ext is ".mp4" or ".mov" or ".webm" or ".avi" or ".mkv")
+                return false;
+
+            // FOR NOW IGNORE SPECIAL FORMATS WE CAN'T READ (this may change)
+            if (ext is ".data" or ".hkt")
+                return false;
+
+            return true;
+        }
+
         static void SearchData(Memory<byte> decompressed_data, string file_path, string? bar_entry_path, IList<SearchResult> results, string query, CancellationToken token)
         {
             if (token.IsCancellationRequested) return;
-
+            
             var text = "";
 
             var ext = Path.GetExtension(bar_entry_path ?? file_path).ToLower();
+            if (!ValidForSearch(ext)) return;
+
             if (ext == ".xmb")
             {
                 // let's also parse XMB
@@ -299,7 +318,7 @@ public class SearchResult
     public SearchResult(string file, string? bar_entry, int index, string context_left, string context_main, string context_right)
     {
         RelevantFile = file;
-        EntryWithinBAR = bar_entry == null ? "-" : ("BAR: " + bar_entry);
+        EntryWithinBAR = bar_entry == null ? "" : ("BAR: " + bar_entry);
         IndexWithinContent = index;
         ContextLeft = context_left;
         ContextMain = context_main;
