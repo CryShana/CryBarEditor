@@ -55,7 +55,7 @@
 				<DataTemplate>
 					<StackPanel>
 						<SelectableTextBlock>
-							<Run Text="{Binding IndexWithinContent, StringFormat='[@{0}]: '}" Foreground="#d9d9d9" /><Run Text="{Binding ContextLeft}" Foreground="#4772b5" /><Run Text="{Binding ContextMain}" TextDecorations="Underline" Foreground="#63a0ff" /><Run Text="{Binding ContextRight}" Foreground="#4772b5" />
+							<Run Text="{Binding IndexWithinContent, StringFormat='[{0}] '}" Foreground="#d9d9d9" /><Run Text="{Binding ContextLeft}" Foreground="#4772b5" /><Run Text="{Binding ContextMain}" TextDecorations="Underline" Foreground="#63a0ff" /><Run Text="{Binding ContextRight}" Foreground="#4772b5" />
 						</SelectableTextBlock>
 						<SelectableTextBlock Text="{Binding ShortenedFilePath}" Foreground="Gray" />
 						<SelectableTextBlock Text="{Binding EntryWithinBAR}" Foreground="#874742" />

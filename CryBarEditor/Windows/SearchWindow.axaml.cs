@@ -15,6 +15,7 @@ using System.ComponentModel;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using Avalonia.Threading;
 
 namespace CryBarEditor;
 
@@ -112,66 +113,82 @@ public partial class SearchWindow : Window, INotifyPropertyChanged
                     }
                 }
 
-                // go through all root files
+                // go through all root files (in parallel)
                 if (_rootEntries != null && _rootDirectory != null)
                 {
                     var count = 0;
                     var total_count = _rootEntries.Count;
 
-                    foreach (var entry in _rootEntries)
-                    {
-                        if (token.IsCancellationRequested) break;
-
-                        count++;
-                        var file = Path.Combine(_rootDirectory, entry.RelativePath);
-                        if (!searched.Add(file)) continue;
-
-                        Status = $"[{count}/{total_count}] {Path.GetFileName(file)}";
-
-                        // check the filename itself
-                        var name_index = file.IndexOf(query);
-                        if (name_index >= 0)
+                    Parallel.ForEach(_rootEntries, new ParallelOptions { MaxDegreeOfParallelism = 4 },
+                        (entry, opt) =>
                         {
-                            var context = MakeContext(name_index, query, file);
-                            SearchResults.Add(new SearchResult(file, null, name_index, context.left, context.mid, context.right));
-                        }
-
-                        var ext = Path.GetExtension(file).ToLower();
-                        if (ext == ".bar")
-                        {
-                            // load bar
-                            using var stream = File.OpenRead(file);
-                            var bar_file = new BarFile(stream);
-                            if (bar_file.Load())
+                            if (token.IsCancellationRequested)
                             {
-                                foreach (var bar_entry in bar_file.Entries)
+                                opt.Break();
+                                return;
+                            }
+
+                            Interlocked.Increment(ref count);
+                            var file = Path.Combine(_rootDirectory, entry.RelativePath);
+
+                            lock (searched)
+                                if (!searched.Add(file)) 
+                                    return;
+                            
+                            // show latest file, don't need to show all
+                            Status = $"[{count}/{total_count}] {Path.GetFileName(file)}";
+
+                            // check the filename itself
+                            var name_index = file.IndexOf(query);
+                            if (name_index >= 0)
+                            {
+                                var context = MakeContext(name_index, query, file);
+
+                                Dispatcher.UIThread.Post(() =>
                                 {
-                                    if (token.IsCancellationRequested) break;
-                                    if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
+                                    SearchResults.Add(new SearchResult(file, null, name_index, context.left, context.mid, context.right));
+                                });
+                            }
 
-                                    // check the filename itself
-                                    name_index = bar_entry.RelativePath.IndexOf(query);
-                                    if (name_index >= 0)
+                            var ext = Path.GetExtension(file).ToLower();
+                            if (ext == ".bar")
+                            {
+                                // load bar
+                                using var stream = File.OpenRead(file);
+                                var bar_file = new BarFile(stream);
+                                if (bar_file.Load())
+                                {
+                                    foreach (var bar_entry in bar_file.Entries)
                                     {
-                                        var context = MakeContext(name_index, query, bar_entry.RelativePath);
-                                        SearchResults.Add(new SearchResult(file, bar_entry.RelativePath, name_index, context.left, context.mid, context.right));
-                                    }
+                                        if (token.IsCancellationRequested) break;
+                                        if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
 
-                                    var ddata = bar_entry.ReadDataDecompressed(stream);
-                                    SearchData(ddata, file, bar_entry.RelativePath, SearchResults, query, token);
+                                        // check the filename itself
+                                        name_index = bar_entry.RelativePath.IndexOf(query);
+                                        if (name_index >= 0)
+                                        {
+                                            var context = MakeContext(name_index, query, bar_entry.RelativePath);
+                                            Dispatcher.UIThread.Post(() =>
+                                            {
+                                                SearchResults.Add(new SearchResult(file, bar_entry.RelativePath, name_index, context.left, context.mid, context.right));
+                                            });
+                                        }
+
+                                        var ddata = bar_entry.ReadDataDecompressed(stream);
+                                        SearchData(ddata, file, bar_entry.RelativePath, SearchResults, query, token);
+                                    }
                                 }
                             }
-                        }
-                        else
-                        {
-                            if (new FileInfo(file).Length > MAX_FILE_SIZE) continue;
+                            else
+                            {
+                                if (new FileInfo(file).Length > MAX_FILE_SIZE) return;
 
-                            // process file directly
-                            var data = File.ReadAllBytes(file);
-                            var ddata = BarCompression.EnsureDecompressed(data, out _);
-                            SearchData(ddata, file, null, SearchResults, query, token);
-                        }
-                    }
+                                // process file directly
+                                var data = File.ReadAllBytes(file);
+                                var ddata = BarCompression.EnsureDecompressed(data, out _);
+                                SearchData(ddata, file, null, SearchResults, query, token);
+                            }
+                        });
                 }
 
                 Status = "Done";
@@ -204,7 +221,7 @@ public partial class SearchWindow : Window, INotifyPropertyChanged
 
             // now search
             var start_index = 0;
-            while (true) 
+            while (true)
             {
                 var found_index = text.IndexOf(query, start_index);
                 if (found_index == -1) break;
@@ -215,7 +232,10 @@ public partial class SearchWindow : Window, INotifyPropertyChanged
                 if (token.IsCancellationRequested) break;
 
                 var result = new SearchResult(file_path, bar_entry_path, found_index, context.left, context.mid, context.right);
-                results.Add(result);
+                Dispatcher.UIThread.Post(() =>
+                {
+                    results.Add(result);
+                });
             }
         }
 
@@ -228,7 +248,7 @@ public partial class SearchWindow : Window, INotifyPropertyChanged
             var match_end = index + query.Length;
 
             var from = Math.Max(0, match_begin - LEFT_CONTEXT_SIZE);
-            var to = Math.Min(text.Length - 1, match_end + RIGHT_CONTEXT_SIZE);
+            var to = Math.Min(text.Length, match_end + RIGHT_CONTEXT_SIZE);
             var full_context = text[from..to];
             var left_context = MakeItSafe(full_context[..(match_begin - from)]);
             var right_context = MakeItSafe(full_context[(match_begin - from + query.Length)..]);
@@ -263,7 +283,7 @@ public class SearchResult
     public SearchResult(string file, string? bar_entry, int index, string context_left, string context_main, string context_right)
     {
         RelevantFile = file;
-        EntryWithinBAR = bar_entry ?? "-";
+        EntryWithinBAR = bar_entry == null ? "-" : ("BAR: " + bar_entry);
         IndexWithinContent = index;
         ContextLeft = context_left;
         ContextMain = context_main;
