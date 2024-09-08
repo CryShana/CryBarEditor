@@ -134,13 +134,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         TryRestorePreviousConfiguration();
 
-        var path = @"C:\Users\adamv\Downloads\tna06.mythscn";
-        var path2 = @"C:\Users\adamv\Downloads\tna06-2.mythscn";
-        var data = File.ReadAllBytes(path);
-        var decompressed = BarCompression.DecompressL33tL66t(data);
-        var compressed = BarCompression.CompressL33tL66t(decompressed, false);
-        using (var f = File.Create(path2)) f.Write(compressed.Span);
-
         // set up editor
         _registryOptions = new RegistryOptions(ThemeName.DarkPlus);
         _textMateInstallation = textEditor.InstallTextMate(_registryOptions);
