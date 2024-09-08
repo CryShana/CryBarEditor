@@ -18,8 +18,6 @@ using System.Collections.Generic;
 using AvaloniaEdit.TextMate;
 using TextMateSharp.Grammars;
 using SixLabors.ImageSharp.Formats.Png;
-using static System.Net.Mime.MediaTypeNames;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace CryBarEditor;
 
@@ -135,6 +133,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         InitializeComponent();
 
         TryRestorePreviousConfiguration();
+
+        var path = @"C:\Users\adamv\Downloads\tna06.mythscn";
+        var path2 = @"C:\Users\adamv\Downloads\tna06-2.mythscn";
+        var data = File.ReadAllBytes(path);
+        var decompressed = BarCompression.DecompressL33tL66t(data);
+        var compressed = BarCompression.CompressL33tL66t(decompressed, false);
+        using (var f = File.Create(path2)) f.Write(compressed.Span);
 
         // set up editor
         _registryOptions = new RegistryOptions(ThemeName.DarkPlus);
