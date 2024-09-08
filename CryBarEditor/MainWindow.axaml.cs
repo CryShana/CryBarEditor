@@ -49,6 +49,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     readonly TextMate.Installation _textMateInstallation;
 
     #region Properties
+    public BarFile? BarFile => _barFile;
+    public FileStream? BarFileStream => _barStream;
+
     public ObservableCollectionExtended<FileEntry> FileEntries { get; } = new();
     public ObservableCollectionExtended<BarFileEntry> Entries { get; } = new();
 
@@ -461,7 +464,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (xml != null)
             {
                 PreviewedFileNote = "(Converted to XML)";
-                text = FormatXML(xml);
+                text = BarFormatConverter.FormatXML(xml);
                 ext = ".xml";
             }
             else
@@ -532,7 +535,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     if (ext == ".xmb")
                     {
                         var xml = BarFormatConverter.XMBtoXML(data.Span)!;
-                        var xml_text = FormatXML(xml);
+                        var xml_text = BarFormatConverter.FormatXML(xml);
                         var xml_bytes = Encoding.UTF8.GetBytes(xml_text);
                         file.Write(xml_bytes);
                         continue;
@@ -795,31 +798,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     #endregion
 
     #region Helpers
-    public string FormatXML(XmlDocument xml)
-    {
-        var sb = new StringBuilder();
-        var rsettings = new XmlReaderSettings
-        {
-            IgnoreWhitespace = true
-        };
-
-        var wsettings = new XmlWriterSettings
-        {
-            Indent = true,
-            IndentChars = "\t",
-            OmitXmlDeclaration = true
-        };
-
-        // for some reason I gotta read it first while ignoring whitespaces, to get proper formatting when writing it again... is there a better way?
-        using (var reader = XmlReader.Create(new StringReader(xml.InnerXml), rsettings))
-        using (var writer = XmlWriter.Create(sb, wsettings))
-        {
-            writer.WriteNode(reader, true);
-        }
-
-        return sb.ToString();
-    }
-
     public bool IsImage(string extension) => extension is ".jpg" or ".jpeg" or ".png" or ".tga" or ".gif" or ".webp" or ".avif" or ".jpx" or ".bmp";
 
     public string GetBARFullRelativePath(BarFileEntry entry)
@@ -962,7 +940,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             var xml = BarFormatConverter.XMBtoXML(xml_decompressed.Span);
             if (xml == null) throw new Exception("Failed to parse XMB file");
 
-            var formatted_xml = FormatXML(xml);
+            var formatted_xml = BarFormatConverter.FormatXML(xml);
             File.WriteAllText(out_file, formatted_xml);
 
             // TODO: show success message
@@ -1055,6 +1033,31 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             // TODO: show error
         }
+    }
+
+    async void MenuItem_XStoRM(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var file = await PickFile(sender, "Pick XS script to make RM friendly", [ new("XS script") { Patterns = [ "*.xs" ] }]);
+        if (file == null) return;
+
+        var out_file = PickOutFile(file, suffix: "_RMFriendly");
+        try
+        {
+            var class_name = XStoRM.GetSafeClassNameRgx().Replace(Path.GetFileNameWithoutExtension(file), "");
+            XStoRM.Convert(file, out_file, class_name);
+
+            // TODO: show success message
+        }
+        catch (Exception ex)
+        {
+            // TODO: show error
+        }
+    }
+    
+    async void MenuItem_Search(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var dialogue = new SearchWindow(this);
+        await dialogue.ShowDialog(this);
     }
     #endregion
 

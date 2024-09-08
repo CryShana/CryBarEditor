@@ -37,7 +37,7 @@
 
 	<DockPanel>
 		<StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Background="#1c1c1c">
-			<TextBlock Text="FILE TOOLS ->" VerticalAlignment="Center" Margin="10,0,0,0" Foreground="Gray" />
+			<TextBlock Text="TOOLS ->" VerticalAlignment="Center" Margin="10,0,0,0" Foreground="Gray" />
 			<Menu Margin="5,0,0,0">
 				<MenuItem Header="_Convert">
 					<MenuItem Header="XML to XMB" Click="MenuItem_ConvertXMLtoXMB" />
@@ -49,6 +49,10 @@
 					<MenuItem Header="L66t" Click="MenuItem_CompressL66t" />
 				</MenuItem>
 				<MenuItem Header="Decompress" Click="MenuItem_Decompress" />
+				<MenuItem Header="Script">
+					<MenuItem Header="Make RM friendly" Click="MenuItem_XStoRM" />
+				</MenuItem>
+				<MenuItem Header="Search" Click="MenuItem_Search" />
 			</Menu>
 		</StackPanel>
 		<Border Padding="10">

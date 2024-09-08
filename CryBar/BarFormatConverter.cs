@@ -209,6 +209,31 @@ public static class BarFormatConverter
         return document;
     }
 
+    public static string FormatXML(XmlDocument xml)
+    {
+        var sb = new StringBuilder();
+        var rsettings = new XmlReaderSettings
+        {
+            IgnoreWhitespace = true
+        };
+
+        var wsettings = new XmlWriterSettings
+        {
+            Indent = true,
+            IndentChars = "\t",
+            OmitXmlDeclaration = true
+        };
+
+        // for some reason I gotta read it first while ignoring whitespaces, to get proper formatting when writing it again... is there a better way?
+        using (var reader = XmlReader.Create(new StringReader(xml.InnerXml), rsettings))
+        using (var writer = XmlWriter.Create(sb, wsettings))
+        {
+            writer.WriteNode(reader, true);
+        }
+
+        return sb.ToString();
+    }
+
     public static Memory<byte> XMLtoXMB(XmlDocument xml, CompressionType compression = CompressionType.Alz4)
     {
         if (xml.DocumentElement == null || xml.FirstChild == null)

@@ -1,0 +1,68 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="500" d:DesignHeight="350"
+		Width="600" Height="450" MinWidth="100" MinHeight="100"
+		DataContext="{Binding RelativeSource={RelativeSource Self}}"
+		WindowStartupLocation="CenterOwner"
+        x:Class="CryBarEditor.SearchWindow"
+        Title="SearchWindow">
+	<Window.Styles>
+		<Style Selector="ListBox">
+			<Setter Property="Background" Value="#171717" />
+		</Style>
+		
+		<Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+			<Setter Property="Background" Value="#171717" />
+		</Style>
+
+		<Style Selector="ListBoxItem:focus /template/ ContentPresenter">
+			<Setter Property="Background" Value="#171717" />
+		</Style>
+
+		<Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+			<Setter Property="Background" Value="#171717" />
+		</Style>
+		
+		<Style Selector="ListBoxItem">
+			<Setter Property="Padding" Value="5" />
+		</Style>
+	</Window.Styles>
+	<DockPanel Margin="10">
+		<DockPanel DockPanel.Dock="Top" Margin="0,0,0,5">
+			<Button x:Name="btnSearch" IsEnabled="{Binding CanSearch}"
+					Classes.Searching="{Binding CurrentlySearching}"
+					IsDefault="True"
+					Margin="0,0,10,0" Click="Search_Click">
+				<Button.Styles>
+					<Style Selector="Button">
+						<Setter Property="Content" Value="Search" />
+					</Style>
+					<Style Selector="Button.Searching">
+						<Setter Property="Content" Value="Cancel" />
+					</Style>
+				</Button.Styles>
+			</Button>
+			<TextBox x:Name="txtQuery" HorizontalAlignment="Stretch" DockPanel.Dock="Left" Watermark="Query"
+					 Text="{Binding Query, Mode=TwoWay}" />
+		</DockPanel>
+		<TextBlock DockPanel.Dock="Top" Margin="0,0,0,10">
+			<Run Text="Status: " />
+			<Run Text="{Binding Status}" Foreground="Gray" />
+		</TextBlock>
+		<ListBox ItemsSource="{Binding SearchResults}">
+			<ListBox.ItemTemplate>
+				<DataTemplate>
+					<StackPanel>
+						<SelectableTextBlock>
+							<Run Text="{Binding IndexWithinContent, StringFormat='[{0}]: '}" Foreground="#d9d9d9" /><Run Text="{Binding ContextLeft}" Foreground="#4772b5" /><Run Text="{Binding ContextMain}" TextDecorations="Underline" Foreground="#63a0ff" /><Run Text="{Binding ContextRight}" Foreground="#4772b5" />
+						</SelectableTextBlock>
+						<SelectableTextBlock Text="{Binding ShortenedFilePath}" Foreground="Gray" />
+						<SelectableTextBlock Text="{Binding EntryWithinBAR}" Foreground="#874742" />
+					</StackPanel>
+				</DataTemplate>
+			</ListBox.ItemTemplate>
+		</ListBox>
+	</DockPanel>
+</Window>
