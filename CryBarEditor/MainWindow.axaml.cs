@@ -515,6 +515,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     text = Encoding.UTF8.GetString(data);
                 }
             }
+            else if (data.IsAlz4())
+            {
+                var ddata = BarCompression.DecompressAlz4(data);
+                if (ddata != null)
+                {
+                    PreviewedFileNote = $"(Decompressed Alz4)";
+                    text = Encoding.UTF8.GetString(ddata);
+                }
+                else
+                {
+                    text = Encoding.UTF8.GetString(data);
+                }
+            }
             else
             {
                 text = Encoding.UTF8.GetString(data);
