@@ -85,6 +85,7 @@ public partial class SearchWindow : Window, INotifyPropertyChanged
             await Task.Run(() =>
             {
                 var searched = new HashSet<string>();
+                var current_items = new List<string>();
 
                 // go through bar file if opened (it's not always included with root files)
                 if (_barFile?.Entries != null && _barFileStream != null)
@@ -134,59 +135,74 @@ public partial class SearchWindow : Window, INotifyPropertyChanged
                             lock (searched)
                                 if (!searched.Add(file)) 
                                     return;
-                            
-                            // show latest file, don't need to show all
-                            Status = $"[{count}/{total_count}] {Path.GetFileName(file)}";
 
-                            // check the filename itself
-                            var name_index = file.IndexOf(query);
-                            if (name_index >= 0)
+                            // status update
+                            var file_name = Path.GetFileName(file);
+                            lock (current_items)
                             {
-                                var context = MakeContext(name_index, query, file);
-
-                                Dispatcher.UIThread.Post(() =>
-                                {
-                                    SearchResults.Add(new SearchResult(file, null, name_index, context.left, context.mid, context.right));
-                                });
+                                current_items.Add(file_name);
+                                Status = $"[{count}/{total_count}] {string.Join(", ", current_items)}";
                             }
 
-                            var ext = Path.GetExtension(file).ToLower();
-                            if (ext == ".bar")
+                            try
                             {
-                                // load bar
-                                using var stream = File.OpenRead(file);
-                                var bar_file = new BarFile(stream);
-                                if (bar_file.Load())
+                                // check the filename itself
+                                var name_index = file.IndexOf(query);
+                                if (name_index >= 0)
                                 {
-                                    foreach (var bar_entry in bar_file.Entries)
+                                    var context = MakeContext(name_index, query, file);
+
+                                    Dispatcher.UIThread.Post(() =>
                                     {
-                                        if (token.IsCancellationRequested) break;
-                                        if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
+                                        SearchResults.Add(new SearchResult(file, null, name_index, context.left, context.mid, context.right));
+                                    });
+                                }
 
-                                        // check the filename itself
-                                        name_index = bar_entry.RelativePath.IndexOf(query);
-                                        if (name_index >= 0)
+                                var ext = Path.GetExtension(file).ToLower();
+                                if (ext == ".bar")
+                                {
+                                    // load bar
+                                    using var stream = File.OpenRead(file);
+                                    var bar_file = new BarFile(stream);
+                                    if (bar_file.Load())
+                                    {
+                                        foreach (var bar_entry in bar_file.Entries)
                                         {
-                                            var context = MakeContext(name_index, query, bar_entry.RelativePath);
-                                            Dispatcher.UIThread.Post(() =>
-                                            {
-                                                SearchResults.Add(new SearchResult(file, bar_entry.RelativePath, name_index, context.left, context.mid, context.right));
-                                            });
-                                        }
+                                            if (token.IsCancellationRequested) break;
+                                            if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
 
-                                        var ddata = bar_entry.ReadDataDecompressed(stream);
-                                        SearchData(ddata, file, bar_entry.RelativePath, SearchResults, query, token);
+                                            // check the filename itself
+                                            name_index = bar_entry.RelativePath.IndexOf(query);
+                                            if (name_index >= 0)
+                                            {
+                                                var context = MakeContext(name_index, query, bar_entry.RelativePath);
+                                                Dispatcher.UIThread.Post(() =>
+                                                {
+                                                    SearchResults.Add(new SearchResult(file, bar_entry.RelativePath, name_index, context.left, context.mid, context.right));
+                                                });
+                                            }
+
+                                            var ddata = bar_entry.ReadDataDecompressed(stream);
+                                            SearchData(ddata, file, bar_entry.RelativePath, SearchResults, query, token);
+                                        }
                                     }
                                 }
-                            }
-                            else
-                            {
-                                if (new FileInfo(file).Length > MAX_FILE_SIZE) return;
+                                else
+                                {
+                                    if (new FileInfo(file).Length > MAX_FILE_SIZE) return;
 
-                                // process file directly
-                                var data = File.ReadAllBytes(file);
-                                var ddata = BarCompression.EnsureDecompressed(data, out _);
-                                SearchData(ddata, file, null, SearchResults, query, token);
+                                    // process file directly
+                                    var data = File.ReadAllBytes(file);
+                                    var ddata = BarCompression.EnsureDecompressed(data, out _);
+                                    SearchData(ddata, file, null, SearchResults, query, token);
+                                }
+                            }
+                            finally
+                            {
+                                lock (current_items)
+                                {
+                                    current_items.Remove(file_name);
+                                }
                             }
                         });
                 }
