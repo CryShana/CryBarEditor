@@ -145,7 +145,7 @@
 					<Label Content="{Binding ExportRootDirectory}" Foreground="Gray" Margin="0,2,0,0"  />			
 				</DockPanel>
 				<TextBlock DockPanel.Dock="Top" Margin="0,10,0,0" FontSize="16">
-					<Run Text="Content Preview: " FontWeight="Bold" />
+					<Run Text="Previewing: " FontWeight="Bold" />
 					<Run Text="{Binding PreviewedFileName}" Foreground="#ffe6a1" />
 					<Run Text="{Binding PreviewedFileNote}" Foreground="#edc042" />
 				</TextBlock>
