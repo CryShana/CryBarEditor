@@ -50,6 +50,10 @@ public partial class SearchWindow : Window, INotifyPropertyChanged
 
         _barFile = owner.BarFile;
         _barFileStream = owner.BarFileStream;
+
+        var count = (_barFile != null ? 1 : 0) + (_rootEntries?.Count ?? 0);
+
+        Title = $"Search in [{count}] captured files";
     }
 
     protected override void OnClosing(WindowClosingEventArgs e)
