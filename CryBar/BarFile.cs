@@ -18,7 +18,7 @@ public class BarFile
     /// Loaded BAR version
     /// </summary>
     public uint Version { get; private set; }
-    public string RootPath { get; private set; }
+    public string? RootPath { get; private set; }
 
     /// <summary>
     /// Loaded BAR entries
@@ -59,7 +59,7 @@ public class BarFile
     /// Loads BAR content from stream
     /// </summary>
     /// <returns>True if successful</returns>
-    [MemberNotNullWhen(true, nameof(_entries), nameof(Entries))]
+    [MemberNotNullWhen(true, nameof(_entries), nameof(Entries), nameof(RootPath))]
     public bool Load()
     {
         // TODO: replace exceptions with Result return type for better performance in case of errors

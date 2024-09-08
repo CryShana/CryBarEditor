@@ -16,6 +16,8 @@ using System.Collections.Generic;
 using AvaloniaEdit.TextMate;
 using TextMateSharp.Grammars;
 using SixLabors.ImageSharp.Formats.Png;
+using System.Reflection;
+using System.Text.Json;
 
 namespace CryBarEditor;
 
@@ -32,11 +34,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     List<FileEntry>? _loadedFiles = null;
     FileSystemWatcher? _watcher = null;
     BarFileEntry? _selectedBarEntry = null;
+    
 
     /// <summary>
     /// This is used to find relative path for Root directory files
     /// </summary>
     const string ROOT_DIRECTORY_NAME = "game";
+    const string CONFIG_FILE = "config.json";
 
     readonly RegistryOptions _registryOptions;
     readonly TextMate.Installation _textMateInstallation;
@@ -122,6 +126,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public MainWindow()
     {
         InitializeComponent();
+
+        TryRestorePreviousConfiguration();
 
         // set up editor
         _registryOptions = new RegistryOptions(ThemeName.DarkPlus);
@@ -221,8 +227,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         ExportRootDirectory = folders[0].Path.LocalPath;
+        SaveConfiguration();
     }
-
     #endregion
 
     #region File Watcher events
@@ -319,7 +325,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     #endregion
 
     #region Loading files
-    public void LoadDir(string dir)
+    public void LoadDir(string dir, bool update_config = true)
     {
         try
         {
@@ -344,6 +350,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _watcher.Renamed += RootDir_Renamed;
             _watcher.Created += RootDir_Created;
             _watcher.Deleted += RootDir_Deleted;
+
+            if (update_config) SaveConfiguration();
         }
         catch (Exception ex)
         {
@@ -806,7 +814,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     #endregion
 
     #region Helpers
-
     public string FormatXML(XmlDocument xml)
     {
         var sb = new StringBuilder();
@@ -878,4 +885,48 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         return Path.Combine(GetRootRelevantPath(), entry.RelativePath);
     }
     #endregion
+
+    void TryRestorePreviousConfiguration()
+    {
+        var exe_dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+        var config_path = Path.Combine(exe_dir ?? "", CONFIG_FILE);
+        if (!File.Exists(config_path))
+            return;
+
+        try
+        {
+            var config = JsonSerializer.Deserialize(File.ReadAllText(config_path), CryBarJsonContext.Default.Configuration);
+            if (config == null)
+                return;
+
+            if (Directory.Exists(config.RootDirectory))
+                LoadDir(config.RootDirectory, false);
+            
+            if (Directory.Exists(config.ExportRootDirectory))
+                ExportRootDirectory = config.ExportRootDirectory;
+        }
+        catch
+        {
+
+        }
+    }
+
+    void SaveConfiguration()
+    {
+        var exe_dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+        var config_path = Path.Combine(exe_dir ?? "", CONFIG_FILE);
+        
+        try
+        {
+            File.WriteAllText(config_path, JsonSerializer.Serialize(new Configuration
+            {
+                RootDirectory = _rootDirectory,
+                ExportRootDirectory = _exportRootDirectory
+            }, CryBarJsonContext.Default.Configuration));
+        }
+        catch
+        {
+
+        }
+    }
 }
