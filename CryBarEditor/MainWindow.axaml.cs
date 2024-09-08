@@ -29,6 +29,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     string _exportRootDirectory = "";
     string _previewedFileName = "";
     string _previewedFileNote = "";
+    string _previewedFileData = "";
     BarFile? _barFile = null;
     FileStream? _barStream = null;
     FileEntry? _selectedFileEntry = null;
@@ -84,6 +85,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public string RootFileRootPath => string.IsNullOrEmpty(_rootDirectory) ? "-" : GetRootRelevantPath();
     public string PreviewedFileName { get => string.IsNullOrEmpty(_previewedFileName) ? "No file selected" : _previewedFileName; set { _previewedFileName = value; OnPropertyChanged(nameof(PreviewedFileName)); } }
     public string PreviewedFileNote { get => _previewedFileNote; set { _previewedFileNote = value; OnPropertyChanged(nameof(PreviewedFileNote)); } }
+    public string PreviewedFileData { get => _previewedFileData; set { _previewedFileData = value; OnPropertyChanged(nameof(PreviewedFileData)); } }
+    
 
     public FileEntry? SelectedFileEntry
     {
@@ -441,6 +444,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
+        PreviewedFileData = $"File Size: {new FileInfo(path).Length}";
         Preview(entry, F_GetFullRelativePathRoot, F_ReadRoot);
     }
 
@@ -449,6 +453,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (entry == null || _barStream == null)
             return;
 
+        PreviewedFileData = $"BAR Offset: {entry.ContentOffset},   BAR Size: {entry.SizeInArchive},   Actual Size: {entry.SizeUncompressed},   Compressed: {(entry.IsCompressed ? "true" : "false")}";
         Preview(entry, F_GetFullRelativePathBAR, F_ReadBAR);
     }
 
@@ -460,7 +465,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var text = "";
         PreviewedFileName = Path.GetFileName(relative_path);
         PreviewedFileNote = "";
-        
 
         if (ext is ".xmb")
         {
