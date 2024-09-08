@@ -2,14 +2,15 @@
 Tool for fast and easy resource management, focused on AOMR.
 
 ## Why?
-I wanted to make a tailor-made tool for myself, to make developing AOMR mods faster and more convenient.
+I wanted to make a tailor-made tool for myself to make developing AOMR mods faster and more convenient.
 
-Because other similar tools are too slow for iterating:
-- Most support opening BAR archives one by one
-- Opening BAR archives and searching through them is slow
-- On every re-open, requires to select BAR and export paths again
+Other similar tools are too slow for iterating quickly:
+- Most support only opening BAR archives one by one, which is slow
+- Searching through BAR entries sometimes slow and even hangs
+- On every re-open, requires to select BAR and export path again
 - Not all formats are supported by one tool
 - Can't easily search through all files/BAR entries
+- ...
 
 ## Features
 - **Read BAR archives**
@@ -29,12 +30,12 @@ Because other similar tools are too slow for iterating:
 - Remembering last selected Root directory and export Root directory, so you can **easily return to where you left off**
 
 ## Usage
-- Load the Root directory (usually `C:\Program Files (x86)\Steam\steamapps\common\Age of Mythology Retold\game`)
-- Select the export directory (usually your mod folder `C:\Users\adamv\Games\Age of Mythology Retold\[YOUR_ID]\mods\local\[MOD_NAME]`)
-- Files in root directory will appear in 1st column, select any file to preview it
+- **Load the Root directory** (usually `C:\Program Files (x86)\Steam\steamapps\common\Age of Mythology Retold\game`)
+- **Select the export directory** (usually your mod folder `C:\Users\adamv\Games\Age of Mythology Retold\[YOUR_ID]\mods\local\[MOD_NAME]`)
+- Files in root directory will appear in 1st column, **select any file to preview it**
   - if selected file is .BAR, it will immediately load in 2nd column
   - you can select entries from inside .BAR file too, they will be previewed the same
-- Any file/BAR entry you wish to modify, right click and export it, for most cases you will use `Export X selected (convert)`
+- Any file/BAR entry you wish to modify, **right click and export it**, for most cases you will use `Export X selected (convert)`
   - Relative paths are retained! This also works for exporting from Root directory as long as it contains `\game` in it's path
    
 ## Planned features
