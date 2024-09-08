@@ -209,9 +209,164 @@ public static class BarFormatConverter
         return document;
     }
 
-    public static Memory<byte> XMLtoXMB(XmlDocument xml)
+    public static Memory<byte> XMLtoXMB(XmlDocument xml, CompressionType compression = CompressionType.Alz4)
     {
-        throw new NotImplementedException();
+        if (xml.DocumentElement == null || xml.FirstChild == null)
+            throw new Exception("Invalid XML file, no root element found");
+
+        using var memory = new MemoryStream();
+        using var writer = new BinaryWriter(memory);
+
+        // X1
+        writer.Write((byte)88);
+        writer.Write((byte)49);
+
+        // Data length (int32)
+        writer.Write(0);
+
+        // XR = root node
+        writer.Write((byte)88);
+        writer.Write((byte)82);
+
+        // id1
+        writer.Write(4);
+
+        // version
+        writer.Write(8);
+
+        // get all elements and attributes (sorted by order of appearance)
+        var elements = new List<string>();
+        var attributes = new List<string>();
+        FindNames(xml.DocumentElement, elements, attributes);
+        
+        // elements
+        writer.Write(elements.Count);
+        for (int i = 0; i < elements.Count; ++i)
+        {
+            writer.Write(elements[i].Length);
+            writer.Write(Encoding.Unicode.GetBytes(elements[i]));
+        }
+
+        // attributes
+        writer.Write(attributes.Count);
+        for (int i = 0; i < attributes.Count; ++i)
+        {
+            writer.Write(attributes[i].Length);
+            writer.Write(Encoding.Unicode.GetBytes(attributes[i]));
+        }
+
+        // write all nodes
+        WriteNode(xml.FirstChild, writer, elements, attributes);
+        
+        // fill out the data length
+        int data_length = (int)(memory.Position - (2 + 4)); // (XR + data length) size is subtracted
+        writer.BaseStream.Seek(2, SeekOrigin.Begin);
+        writer.Write(data_length);
+
+        var underlying_memory = memory.GetBuffer().AsMemory(0, (int)memory.Length);
+
+        switch (compression)
+        {
+            default:
+                return memory.ToArray(); // make a copy because stream will be disposed after this
+
+            case CompressionType.Alz4:
+                return BarCompression.CompressAlz4(underlying_memory.Span);
+
+#pragma warning disable CS0618 // Type or member is obsolete
+            case CompressionType.L33t:
+                return BarCompression.CompressL33tL66t(underlying_memory.Span, false);
+
+            case CompressionType.L66t:
+                return BarCompression.CompressL33tL66t(underlying_memory.Span, true);
+#pragma warning restore CS0618 // Type or member is obsolete
+        }
+
+        static void FindNames(XmlNode node, List<string> elements, List<string> attributes)
+        {
+            // handle element
+            if (!elements.Contains(node.Name))
+                elements.Add(node.Name);
+
+            // handle attributes
+            if (node.Attributes != null)
+                foreach (XmlAttribute? attr in node.Attributes)
+                    if (attr != null && !attributes.Contains(attr.Name))
+                        attributes.Add(attr.Name);
+
+            // handle children
+            foreach (XmlNode? child in node.ChildNodes)
+                if (child?.NodeType == XmlNodeType.Element)
+                    FindNames(child, elements, attributes);
+        }
+
+        static void WriteNode(XmlNode node, BinaryWriter writer, List<string> elements, List<string> attributes)
+        {
+            // XN
+            writer.Write((byte)88);
+            writer.Write((byte)78);
+
+            // node length (will fill in later)
+            writer.Write(0);
+            var node_start_offset = writer.BaseStream.Position;
+
+            // inner text
+            if (node.HasChildNodes &&
+                node.FirstChild?.NodeType == XmlNodeType.Text &&
+                node.FirstChild.Value?.Length > 0)
+            {
+                var text = node.FirstChild.Value;
+                writer.Write(text.Length);
+                writer.Write(Encoding.Unicode.GetBytes(text));
+            }
+            else
+            {
+                writer.Write(0);
+            }
+
+            // name id
+            writer.Write(elements.IndexOf(node.Name));
+
+            // line num (original files don't use this, so we leave 0)
+            writer.Write(0);
+
+            // node attributes
+            var attribute_count = node.Attributes?.Count ?? 0;
+            writer.Write(attribute_count);
+            for (int i = 0; i < attribute_count; i++)
+            {
+                var attribute = node.Attributes![i];
+                writer.Write(attributes.IndexOf(attribute.Name));
+                writer.Write(attribute.InnerText.Length);
+                writer.Write(Encoding.Unicode.GetBytes(attribute.InnerText));
+            }
+
+            // node children
+            int element_count = 0;
+            int child_count = node.ChildNodes.Count;
+            for (int i = 0; i < child_count; i++)
+                if (node.ChildNodes[i]?.NodeType == XmlNodeType.Element)
+                    element_count++;
+
+            writer.Write(element_count);
+            for (int i = 0; i < child_count; i++)
+            {
+                var child = node.ChildNodes[i];
+                if (child?.NodeType == XmlNodeType.Element)
+                {
+                    WriteNode(child, writer, elements, attributes);
+                }
+            }
+
+            // fill in node-length from before
+            var node_end_offset = writer.BaseStream.Position;
+            int node_length = (int)(node_end_offset - node_start_offset);
+            writer.BaseStream.Seek(node_start_offset - 4, SeekOrigin.Begin);
+            writer.Write(node_length);
+
+            // continue from before
+            writer.BaseStream.Seek(node_end_offset, SeekOrigin.Begin);
+        }
     }
 
     public static Memory<byte> DDTtoTGA(Span<byte> ddt_data)

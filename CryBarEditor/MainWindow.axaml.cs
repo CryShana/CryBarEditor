@@ -132,7 +132,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         InitializeComponent();
 
-        TryRestorePreviousConfiguration();
+        TryRestorePreviousConfiguration(); 
 
         // set up editor
         _registryOptions = new RegistryOptions(ThemeName.DarkPlus);
