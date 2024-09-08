@@ -20,7 +20,7 @@ namespace CryBarEditor;
 
 public partial class SearchWindow : Window, INotifyPropertyChanged
 {
-    string _status = "Will search through all filtered files and/or opened BAR archives";
+    string _status = "This searches through all FILTERED files and opened BAR archives";
     string _query = "";
     bool _searching = false;
     CancellationTokenSource? _csc;
@@ -50,12 +50,6 @@ public partial class SearchWindow : Window, INotifyPropertyChanged
 
         _barFile = owner.BarFile;
         _barFileStream = owner.BarFileStream;
-
-        if (_rootEntries == null && _barFile == null)
-        {
-            // we can't search anything
-            Close();
-        }
     }
 
     protected override void OnClosing(WindowClosingEventArgs e)
@@ -90,6 +84,7 @@ public partial class SearchWindow : Window, INotifyPropertyChanged
             await Task.Run(() =>
             {
                 var searched = new HashSet<string>();
+
                 // go through bar file if opened (it's not always included with root files)
                 if (_barFile?.Entries != null && _barFileStream != null)
                 {

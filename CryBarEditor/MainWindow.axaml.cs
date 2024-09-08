@@ -1056,6 +1056,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     
     async void MenuItem_Search(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
+        if (_barFile == null && _barStream == null && string.IsNullOrEmpty(_rootDirectory) &&
+            !Directory.Exists(_rootDirectory))
+        {
+            // TODO: show error
+            return;
+        }
+
         var dialogue = new SearchWindow(this);
         await dialogue.ShowDialog(this);
     }
