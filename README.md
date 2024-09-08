@@ -28,6 +28,15 @@ Because other similar tools are too slow for iterating:
 - "**Search everything**" tool added that searches for query in all files and all BAR entries (useful for finding references)
 - Remembering last selected Root directory and export Root directory, so you can **easily return to where you left off**
 
+## Usage
+- Load the Root directory (usually `C:\Program Files (x86)\Steam\steamapps\common\Age of Mythology Retold\game`)
+- Select the export directory (usually your mod folder `C:\Users\adamv\Games\Age of Mythology Retold\[YOUR_ID]\mods\local\[MOD_NAME]`)
+- Files in root directory will appear in 1st column, select any file to preview it
+  - if selected file is .BAR, it will immediately load in 2nd column
+  - you can select entries from inside .BAR file too, they will be previewed the same
+- Any file/BAR entry you wish to modify, right click and export it, for most cases you will use `Export X selected (convert)`
+  - Relative paths are retained! This also works for exporting from Root directory as long as it contains `\game` in it's path
+   
 ## Planned features
 Currently planned:
 - Previewing DDT files
@@ -37,6 +46,8 @@ Currently planned:
 - Creating BAR archive from selected files
 - Creating modified BAR archive by only replacing selected entries in existing BAR archive
 - (Support for other useful formats...)
+
+
 
 ## Note
 This is a personal project made in span of few days. I work on it in my free time, don't expect much.
