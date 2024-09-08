@@ -18,6 +18,8 @@ using System.Collections.Generic;
 using AvaloniaEdit.TextMate;
 using TextMateSharp.Grammars;
 using SixLabors.ImageSharp.Formats.Png;
+using static System.Net.Mime.MediaTypeNames;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace CryBarEditor;
 
@@ -138,7 +140,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _registryOptions = new RegistryOptions(ThemeName.DarkPlus);
         _textMateInstallation = textEditor.InstallTextMate(_registryOptions);
 
-        // prepare functions for exporting
+        // prepare functions (to handle different types of entries - one from Root dir - others from BAR archives)
         F_GetFullRelativePathRoot = f => GetRootFullRelativePath(f);
         F_GetFullRelativePathBAR = f => GetBARFullRelativePath(f);
         F_CopyRoot = (f, stream) =>
@@ -146,21 +148,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             using var from = File.OpenRead(Path.Combine(_rootDirectory, f.RelativePath));
             from.CopyTo(stream);
         };
-        F_CopyBAR = (f, stream) =>
-        {
-            // any BAR compressed data should automatically be decompressed, this only happens for BAR
-            // because external files are expected to be decompressed already with .XMB extension (and similar)
-            if (f.IsCompressed)
-            {
-                var data = f.ReadDataDecompressed(_barStream!);
-                stream.Write(data.Span);
-                return;
-            }
-            
-            f.CopyData(_barStream!, stream);
-        };
+        F_CopyBAR = (f, stream) => f.CopyData(_barStream!, stream);
         F_ReadRoot = f => File.ReadAllBytes(Path.Combine(_rootDirectory, f.RelativePath));
-        F_ReadBAR = f => f.ReadDataDecompressed(_barStream!);
+        F_ReadBAR = f => f.ReadDataRaw(_barStream!);
     }
 
     #region Button events
@@ -457,23 +447,36 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         Preview(entry, F_GetFullRelativePathBAR, F_ReadBAR);
     }
 
-    public void Preview<T>(T entry, Func<T, string> get_rel_path, Func<T, Memory<byte>> read_usable_data)
+    public void Preview<T>(T entry, Func<T, string> get_rel_path, Func<T, Memory<byte>> read)
     {
         var relative_path = get_rel_path(entry);
         var ext = Path.GetExtension(relative_path).ToLower();
         
         var text = "";
         PreviewedFileName = Path.GetFileName(relative_path);
-        PreviewedFileNote = "";
 
-        if (ext is ".xmb")
+        var data = BarCompression.EnsureDecompressed(read(entry), out var type);
+        PreviewedFileNote = type switch
         {
-            // NOTE: both these methods execute under 50ms even for larger files like "proto.xml.XMB", if you notice any lag it's because of UI updates
-            // most likely on AvaloniaEdit side or incorrect Visual Tree layout that is destroying virtualization, idk yet
-            var data = read_usable_data(entry);
+            CompressionType.L33t => "(Decompressed L33t)",
+            CompressionType.L66t => "(Decompressed L66t)",
+            CompressionType.Alz4 => "(Decompressed Alz4)",
+            _ => ""
+        };
+
+        if (IsImage(ext))
+        {
+            SetImagePreview(data);
+            return;
+        }
+
+
+        if (ext == ".xmb")
+        {
             var xml = BarFormatConverter.XMBtoXML(data.Span);
             if (xml != null)
             {
+                PreviewedFileNote = "(Converted to XML)";
                 text = FormatXML(xml);
                 ext = ".xml";
             }
@@ -481,57 +484,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             {
                 text = "Failed to parse XMB document";
                 ext = ".txt";
-            }
-
-            PreviewedFileNote = "(Converted to XML)";
+            } 
         }
-        else if (ext is ".ddt")
+        else if (ext == ".ddt")
         {
             // TODO: implement conversion here
 
             PreviewedFileNote = "(Converted to TGA)";
         }
-        else if (IsImage(ext))
-        {
-            var data = read_usable_data(entry);
-            SetImagePreview(data);
-            return;
-        }
         else
         {
-            var data = read_usable_data(entry).Span;
-            var l33 = data.IsL33t();
-            var l66 = data.IsL66t();
-            if (l33 || l66)
-            {  
-                var ddata = BarCompression.DecompressL33tL66t(data);
-                if (ddata != null)
-                {
-                    PreviewedFileNote = $"(Decompressed {(l33 ? "L33t" : "L66t")})";
-                    text = Encoding.UTF8.GetString(ddata);
-                }
-                else
-                {
-                    text = Encoding.UTF8.GetString(data);
-                }
-            }
-            else if (data.IsAlz4())
-            {
-                var ddata = BarCompression.DecompressAlz4(data);
-                if (ddata != null)
-                {
-                    PreviewedFileNote = $"(Decompressed Alz4)";
-                    text = Encoding.UTF8.GetString(ddata);
-                }
-                else
-                {
-                    text = Encoding.UTF8.GetString(data);
-                }
-            }
-            else
-            {
-                text = Encoding.UTF8.GetString(data);
-            }  
+            text = Encoding.UTF8.GetString(data.Span);     
         }
 
         SetImagePreview(null);
@@ -539,6 +502,73 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         textEditor.Text = text;
         textEditor.ScrollTo(0, 0);
+    }
+
+    public void Export<T>(IList<T> files, bool should_convert, Func<T, string> getFullRelPath, Action<T, FileStream> copy, Func<T, Memory<byte>> read)
+    {
+        // TODO: show progress bar somewhere
+
+        List<string> failed = new();
+        foreach (var f in files)
+        {
+            var relative_path = getFullRelPath(f);
+
+            try
+            {
+                // FINALIZE RELATIVE PATH
+                var ext = Path.GetExtension(relative_path).ToLower();
+                if (should_convert)
+                {
+                    if (ext == ".xmb")
+                    {
+                        relative_path = relative_path[..^4];    // remove .XMB extension
+                    }
+                    else if (ext == ".ddt")
+                    {
+                        relative_path = relative_path[..^4] + ".tga";    // change .DDT to .TGA
+                    }
+                }
+
+                // DETERMINE EXPORT PATH
+                var exported_path = Path.Combine(_exportRootDirectory, relative_path);
+
+                // CREATE MISSING DIRECTORIES
+                var dirs = Path.GetDirectoryName(exported_path);
+                if (dirs != null) Directory.CreateDirectory(dirs);
+
+                // CREATE FILE
+                using var file = File.Create(exported_path);
+
+                // EXPORT DATA
+                if (should_convert)
+                {
+                    // optionally decompress first
+                    var data = BarCompression.EnsureDecompressed(read(f), out _);
+
+                    if (ext == ".xmb")
+                    {
+                        var xml = BarFormatConverter.XMBtoXML(data.Span)!;
+                        var xml_text = FormatXML(xml);
+                        var xml_bytes = Encoding.UTF8.GetBytes(xml_text);
+                        file.Write(xml_bytes);
+                        continue;
+                    }
+                    else if (ext == ".ddt")
+                    {
+                        // TODO: convert to TGA
+                    }
+                }
+
+                copy(f, file);
+            }
+            catch (Exception ex)
+            {
+                // TODO: handle error and show it somewhere
+                failed.Add(relative_path);
+            }
+        }
+
+        // TODO: maybe show faileda attempts
     }
     #endregion
 
@@ -777,71 +807,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             Export(to_export, false, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
             Export(to_export, true, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
         }
-    }
-
-    void Export<T>(IList<T> files, bool should_convert,
-        Func<T, string> getFullRelativePath,
-        Action<T, FileStream> copy,
-        Func<T, Memory<byte>> read_decompressed)
-    {
-        List<string> failed = new();
-        foreach (var f in files)
-        {
-            var relative_path = getFullRelativePath(f);
-
-            try
-            {
-                // FINALIZE RELATIVE PATH
-                var ext = Path.GetExtension(relative_path).ToLower();
-                if (should_convert)
-                {
-                    if (ext == ".xmb")
-                    {
-                        relative_path = relative_path[..^4];    // remove .XMB extension
-                    }
-                    else if (ext == ".ddt")
-                    {
-                        relative_path = relative_path[..^4] + ".tga";    // change .DDT to .TGA
-                    }
-                }
-
-                // DETERMINE EXPORT PATH
-                var exported_path = Path.Combine(_exportRootDirectory, relative_path);
-
-                // CREATE MISSING DIRECTORIES
-                var dirs = Path.GetDirectoryName(exported_path);
-                if (dirs != null) Directory.CreateDirectory(dirs);
-
-                // CREATE FILE
-                using var file = File.Create(exported_path);
-
-                // EXPORT DATA
-                if (should_convert)
-                {
-                    if (ext == ".xmb")
-                    {
-                        var data = read_decompressed(f);
-                        var xml = BarFormatConverter.XMBtoXML(data.Span)!;
-                        var xml_text = FormatXML(xml);
-                        var xml_bytes = Encoding.UTF8.GetBytes(xml_text);
-                        file.Write(xml_bytes);
-                        continue;
-                    }
-                    else if (ext == ".ddt")
-                    {
-                        // TODO: convert to TGA
-                    }
-                }
-
-                copy(f, file);
-            }
-            catch (Exception ex)
-            {
-                // TODO: handle error and show it somewhere
-                failed.Add(relative_path);
-            }
-        }
-
     }
     #endregion
 

@@ -1,6 +1,3 @@
-using System.Xml;
-using System.Text;
-using System.Buffers.Binary;
 using CommunityToolkit.HighPerformance.Buffers;
 
 namespace CryBar;
@@ -26,24 +23,6 @@ public class BarFileEntry
         DirectoryPath = Path.GetDirectoryName(relative_path) ?? "";
         if (DirectoryPath.Length > 0) DirectoryPath += "\\";
     }
-
-    /// <summary>
-    /// Is file a XMB file? This needs to be converted to be viewed.
-    /// </summary>
-    public bool IsXMB => RelativePath.EndsWith(".XMB", StringComparison.OrdinalIgnoreCase);
-    /// <summary>
-    /// Is file a special DDT image file? This has to be converted to be viewed.
-    /// </summary>
-    public bool IsDDT => RelativePath.EndsWith(".DDT", StringComparison.OrdinalIgnoreCase);
-    public bool IsCache => RelativePath.EndsWith(".CACHE", StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// Is file a human readable text file? (There could be other extensions too)
-    /// </summary>
-    public bool IsText => RelativePath.EndsWith(".TXT", StringComparison.OrdinalIgnoreCase) ||
-        RelativePath.EndsWith(".XS", StringComparison.OrdinalIgnoreCase) ||
-        RelativePath.EndsWith(".XAML", StringComparison.OrdinalIgnoreCase) ||
-        RelativePath.EndsWith(".XML", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Copies file data (not header) from [from] BAR stream to [to] stream.

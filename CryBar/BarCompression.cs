@@ -92,5 +92,41 @@ public static class BarCompression
         
         return size_uncompressed;
     }
-#endregion
+    #endregion
+
+    public static Memory<byte> EnsureDecompressed(Memory<byte> buffer, out CompressionType type)
+    {
+        var data = buffer.Span;
+        var l33 = data.IsL33t();
+        var l66 = data.IsL66t();
+        if (l33 || l66)
+        {
+            var ddata = DecompressL33tL66t(data);
+            if (ddata != null)
+            {
+                type = l33 ? CompressionType.L33t : CompressionType.L66t;
+                return ddata;
+            }
+        }
+        else if (data.IsAlz4())
+        {
+            var ddata = DecompressAlz4(data);
+            if (ddata != null)
+            {
+                type = CompressionType.Alz4;
+                return ddata;
+            }
+        }
+
+        type = CompressionType.None;
+        return buffer;   
+    }
+}
+
+public enum CompressionType
+{
+    None,
+    L33t,
+    L66t,
+    Alz4
 }

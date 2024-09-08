@@ -215,7 +215,7 @@ public static class BarFormatConverter
     }
 
     public static Memory<byte> DDTtoTGA(Span<byte> ddt_data)
-    {
+    { 
         throw new NotImplementedException();
     }
 
