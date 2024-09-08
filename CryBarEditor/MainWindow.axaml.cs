@@ -582,6 +582,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             string.Equals(extension, ".con", StringComparison.OrdinalIgnoreCase))
             extension = ".cpp";
 
+        if (string.Equals(extension, ".composite", StringComparison.OrdinalIgnoreCase))
+            extension = ".json";
+
         var lang = _registryOptions.GetLanguageByExtension(extension);
         if (lang == null)
         {

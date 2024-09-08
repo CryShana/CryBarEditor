@@ -102,7 +102,7 @@ public class BarFileEntry
 
     public Memory<byte> ReadDataDecompressed(Stream stream)
     {
-        var buffer = new byte[SizeUncompressed];
+        var buffer = new byte[Math.Max(SizeInArchive, SizeUncompressed)];
         var r = ReadDataDecompressed(stream, buffer);
         if (r == -1) return Memory<byte>.Empty;
 
