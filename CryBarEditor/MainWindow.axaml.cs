@@ -17,6 +17,7 @@ using System.Collections.Generic;
 
 using AvaloniaEdit.TextMate;
 using TextMateSharp.Grammars;
+using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Png;
 
 namespace CryBarEditor;
@@ -154,24 +155,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     #region Button events
     async void LoadBAR_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
-        var btn = sender as Button;
-        if (btn != null)
-            btn.IsEnabled = false;
-
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "Open BAR file",
-            AllowMultiple = false,
-            FileTypeFilter = [new("BAR file") { Patterns = ["*.bar"] }]
-        });
-
-        if (btn != null)
-            btn.IsEnabled = true;
-
-        if (files.Count == 0)
-            return;
-
-        LoadBAR(files[0].Path.LocalPath);
+        var file = await PickFile(sender, "Open BAR file", [new("BAR file") { Patterns = ["*.bar"] }]);
+        if (file == null) return;
+        LoadBAR(file);
     }
 
     async void LoadDir_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
@@ -841,7 +827,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (_barFile == null)
             return entry.RelativePath;
 
-        return Path.Combine(_barFile.RootPath, entry.RelativePath);
+        return Path.Combine(_barFile.RootPath ?? "", entry.RelativePath);
     }
 
     string? _rootRelevantPathCached = null;
@@ -878,6 +864,193 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return entry.RelativePath;
 
         return Path.Combine(GetRootRelevantPath(), entry.RelativePath);
+    }
+
+    async Task<string?> PickFile(object? sender, string title, IReadOnlyList<FilePickerFileType>? filter = null)
+    {
+        var btn = sender as Button;
+        if (btn != null)
+            btn.IsEnabled = false;
+
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = title,
+            AllowMultiple = false,
+            FileTypeFilter = filter
+        });
+
+        if (btn != null)
+            btn.IsEnabled = true;
+
+        if (files.Count == 0)
+            return null;
+
+        return files[0].Path.LocalPath;
+    }
+
+    /// <summary>
+    /// Picks a new file name for output that doesn't exist yet. If extension null, original extension is used.
+    /// Suffix is optionally added before the extension. If new filename exists, a counter is added after suffix.
+    /// </summary>
+    string PickOutFile(string file, string suffix = "", string? new_extension = null)
+    {
+        var ext = new_extension ?? Path.GetExtension(file);
+        var dir = Path.GetDirectoryName(file);
+        var name = Path.GetFileNameWithoutExtension(file);
+
+        var counter = 0;
+        var new_file = "";
+        do
+        {
+            if (counter == 0)
+            {
+                new_file = Path.Combine(dir ?? "", $"{name}{suffix}{ext}");
+            }
+            else
+            {
+                new_file = Path.Combine(dir ?? "", $"{name}{suffix}_{counter}{ext}");
+            }
+            counter++;
+        } while (File.Exists(new_file));
+        return new_file;
+    }
+    #endregion
+
+    #region Menu events
+    async void MenuItem_ConvertXMLtoXMB(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var file = await PickFile(sender, "Convert XML to XMB");
+        if (file == null) return;
+
+        var out_file = PickOutFile(file, suffix: Path.GetExtension(file), new_extension: ".XMB");
+
+        try
+        {
+            var xml_text = File.ReadAllText(file);
+            var xml = new XmlDocument();
+            xml.LoadXml(xml_text);
+
+            var data = BarFormatConverter.XMLtoXMB(xml, CompressionType.Alz4);
+            using (var f = File.Create(out_file)) f.Write(data.Span);
+
+            // TODO: show success message
+        }
+        catch (Exception ex)
+        {
+            // TODO: show error
+        }
+    }
+
+    async void MenuItem_ConvertXMBtoXML(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var file = await PickFile(sender, "Convert XMB to XML");
+        if (file == null) return;
+
+        var ext = Path.GetExtension(file).ToLower();
+
+        // if extension was .XMB, we wish to remove this in the output, otherwise we keep it (it was some custom extension probably)
+        // but at the same time we don't wish to add a new extension UNLESS it was not .XMB
+        var out_file = PickOutFile(file, suffix: (ext == ".xmb" ? "" : ext), new_extension: (ext == ".xmb" ? "" : ".xml"));
+        try
+        {
+            var xmb_data= File.ReadAllBytes(file);
+            var xml_decompressed = BarCompression.EnsureDecompressed(xmb_data, out _);
+            var xml = BarFormatConverter.XMBtoXML(xml_decompressed.Span);
+            if (xml == null) throw new Exception("Failed to parse XMB file");
+
+            var formatted_xml = FormatXML(xml);
+            File.WriteAllText(out_file, formatted_xml);
+
+            // TODO: show success message
+        }
+        catch (Exception ex)
+        {
+            // TODO: show error
+        }
+    }
+
+    async void MenuItem_CompressAlz4(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var file = await PickFile(sender, "Compress using Alz4");
+        if (file == null) return;
+
+        var out_file = PickOutFile(file, suffix: "_alz4");
+        try
+        {
+            var data = File.ReadAllBytes(file);
+            var compressed = BarCompression.CompressAlz4(data);
+            using (var f = File.Create(out_file)) f.Write(compressed.Span);
+
+            // TODO: show success message
+        }
+        catch (Exception ex)
+        {
+            // TODO: show error
+        }
+    }
+
+    async void MenuItem_CompressL33t(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var file = await PickFile(sender, "Compress using L33t");
+        if (file == null) return;
+
+        var out_file = PickOutFile(file, suffix: "_alz4");
+        try
+        {
+            var data = File.ReadAllBytes(file);
+#pragma warning disable CS0618 // Type or member is obsolete
+            var compressed = BarCompression.CompressL33tL66t(data, false);
+#pragma warning restore CS0618 // Type or member is obsolete
+            using (var f = File.Create(out_file)) f.Write(compressed.Span);
+
+            // TODO: show success message
+        }
+        catch (Exception ex)
+        {
+            // TODO: show error
+        }
+    }
+
+    async void MenuItem_CompressL66t(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var file = await PickFile(sender, "Compress using L66t");
+        if (file == null) return;
+
+        var out_file = PickOutFile(file, suffix: "_alz4");
+        try
+        {
+            var data = File.ReadAllBytes(file);
+#pragma warning disable CS0618 // Type or member is obsolete
+            var compressed = BarCompression.CompressL33tL66t(data, true);
+#pragma warning restore CS0618 // Type or member is obsolete
+            using (var f = File.Create(out_file)) f.Write(compressed.Span);
+
+            // TODO: show success message
+        }
+        catch (Exception ex)
+        {
+            // TODO: show error
+        }
+    }
+
+    async void MenuItem_Decompress(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var file = await PickFile(sender, "Decompress (Alz4, L33t L66t)");
+        if (file == null) return;
+
+        var out_file = PickOutFile(file, suffix: "_decompressed");
+        try
+        {
+            var data = File.ReadAllBytes(file);
+            var decompressed = BarCompression.EnsureDecompressed(data, out var type);
+            using (var f = File.Create(out_file)) f.Write(decompressed.Span);
+
+            // TODO: show success message
+        }
+        catch (Exception ex)
+        {
+            // TODO: show error
+        }
     }
     #endregion
 

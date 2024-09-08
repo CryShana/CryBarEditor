@@ -29,139 +29,161 @@
 		<Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
 			<Setter Property="Background" Value="#1a2436" />
 		</Style>
+
+		<Style Selector="Menu MenuItem">
+			<Setter Property="Foreground" Value="#ebebeb" />
+		</Style>
 	</Window.Styles>
-	<Border Padding="10">
-		<Grid>
-			<Grid.ColumnDefinitions>
-				<ColumnDefinition Width="300" MinWidth="200" />
-				<ColumnDefinition Width="5" MinWidth="5" />
-				<ColumnDefinition Width="400" MinWidth="200" />
-				<ColumnDefinition Width="5" MinWidth="5" />
-				<ColumnDefinition Width="*" MinWidth="150" />
-			</Grid.ColumnDefinitions>
 
-			<!-- ROOT DIRECTORY FILE ENTRIES -->
-			<DockPanel Grid.Column="0">
-				<Label DockPanel.Dock="Top" Content="Root Directory" FontWeight="Bold"  FontSize="16"/>
-				<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
-					<Button Content="Load" Click="LoadDir_Click" Margin="0,0,6,6" />
-					<Label DockPanel.Dock="Top" Content="{Binding RootDirectory}" Foreground="Gray" Margin="0,2,0,0"  />
+	<DockPanel>
+		<StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Background="#1c1c1c">
+			<TextBlock Text="FILE TOOLS ->" VerticalAlignment="Center" Margin="10,0,0,0" Foreground="Gray" />
+			<Menu Margin="5,0,0,0">
+				<MenuItem Header="_Convert">
+					<MenuItem Header="XML to XMB" Click="MenuItem_ConvertXMLtoXMB" />
+					<MenuItem Header="XMB to XML" Click="MenuItem_ConvertXMBtoXML" />
+				</MenuItem>
+				<MenuItem Header="Compress">
+					<MenuItem Header="Alz4" Click="MenuItem_CompressAlz4" />
+					<MenuItem Header="L33t" Click="MenuItem_CompressL33t" />
+					<MenuItem Header="L66t" Click="MenuItem_CompressL66t" />
+				</MenuItem>
+				<MenuItem Header="Decompress" Click="MenuItem_Decompress" />
+			</Menu>
+		</StackPanel>
+		<Border Padding="10">
+			<Grid>
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="300" MinWidth="200" />
+					<ColumnDefinition Width="5" MinWidth="5" />
+					<ColumnDefinition Width="400" MinWidth="200" />
+					<ColumnDefinition Width="5" MinWidth="5" />
+					<ColumnDefinition Width="*" MinWidth="150" />
+				</Grid.ColumnDefinitions>
+
+				<!-- ROOT DIRECTORY FILE ENTRIES -->
+				<DockPanel Grid.Row="1" Grid.Column="0">
+					<Label DockPanel.Dock="Top" Content="Root Directory" FontWeight="Bold"  FontSize="16"/>
+					<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
+						<Button Content="Load" Click="LoadDir_Click" Margin="0,0,6,6" />
+						<Label DockPanel.Dock="Top" Content="{Binding RootDirectory}" Foreground="Gray" Margin="0,2,0,0"  />
+					</DockPanel>
+
+					<TextBox DockPanel.Dock="Top" Text="{Binding FilesQuery, Mode=TwoWay}" Watermark="Filter files" />
+					<TextBlock DockPanel.Dock="Top" Margin="0,6,0,0">
+						<Run Text="Guessed Root: " FontWeight="Bold"/>
+						<Run Text="{Binding RootFileRootPath}"/>
+					</TextBlock>
+					<ListBox ItemsSource="{Binding FileEntries}" Margin="0,10,0,0"
+							 SelectionMode="Multiple"
+							 SelectedItems="{Binding SelectedFileEntries, Mode=TwoWay}"
+							 SelectedItem="{Binding SelectedFileEntry, Mode=TwoWay}">
+						<ListBox.ItemTemplate>
+							<DataTemplate x:DataType="cc:FileEntry">
+								<TextBlock>
+									<Run Text="{Binding DirectoryPath}" Foreground="#808080" />
+									<Run Text="{Binding Name}" Classes.BAR="{Binding IsBAR}" />
+								</TextBlock>
+							</DataTemplate>
+						</ListBox.ItemTemplate>
+						<ListBox.ContextMenu>
+							<ContextMenu>
+								<MenuItem Header="Copy file name" Click="MenuItem_CopyFileName" />
+								<MenuItem Header="Copy file path" Click="MenuItem_CopyFilePath" />
+								<Separator IsVisible="{Binding CanExport}" />
+
+								<MenuItem Header="{Binding SelectedFileEntries.Count, StringFormat='Export {0} selected (copy)'}"
+										  IsVisible="{Binding CanExport}"
+										  Click="MenuItem_ExportSelectedRaw" />
+
+								<MenuItem Header="{Binding SelectedFileEntries.Count, StringFormat='Export {0} selected (converted)'}"
+										  IsVisible="{Binding CanExport}"
+										  Click="MenuItem_ExportSelectedConverted" />
+
+								<MenuItem Header="{Binding SelectedFileEntries.Count, StringFormat='Export {0} selected (copy+converted)'}"
+										  IsVisible="{Binding CanExport}"
+										  Click="MenuItem_ExportSelectedRawConverted" />
+							</ContextMenu>
+						</ListBox.ContextMenu>
+					</ListBox>
 				</DockPanel>
-				
-				<TextBox DockPanel.Dock="Top" Text="{Binding FilesQuery, Mode=TwoWay}" Watermark="Filter files" />
-				<TextBlock DockPanel.Dock="Top" Margin="0,6,0,0">
-					<Run Text="Guessed Root: " FontWeight="Bold"/>
-					<Run Text="{Binding RootFileRootPath}"/>
-				</TextBlock>
-				<ListBox ItemsSource="{Binding FileEntries}" Margin="0,10,0,0"
-						 SelectionMode="Multiple"
-						 SelectedItems="{Binding SelectedFileEntries, Mode=TwoWay}"
-						 SelectedItem="{Binding SelectedFileEntry, Mode=TwoWay}">
-					<ListBox.ItemTemplate>
-						<DataTemplate x:DataType="cc:FileEntry">
-							<TextBlock>
-								<Run Text="{Binding DirectoryPath}" Foreground="#808080" />
-								<Run Text="{Binding Name}" Classes.BAR="{Binding IsBAR}" />								
-							</TextBlock>
-						</DataTemplate>
-					</ListBox.ItemTemplate>
-					<ListBox.ContextMenu>
-						<ContextMenu>
-							<MenuItem Header="Copy file name" Click="MenuItem_CopyFileName" />
-							<MenuItem Header="Copy file path" Click="MenuItem_CopyFilePath" />
-							<Separator IsVisible="{Binding CanExport}" />
-							
-							<MenuItem Header="{Binding SelectedFileEntries.Count, StringFormat='Export {0} selected (copy)'}" 
-									  IsVisible="{Binding CanExport}" 
-									  Click="MenuItem_ExportSelectedRaw" />
-							
-							<MenuItem Header="{Binding SelectedFileEntries.Count, StringFormat='Export {0} selected (converted)'}"
-									  IsVisible="{Binding CanExport}" 
-									  Click="MenuItem_ExportSelectedConverted" />
-							
-							<MenuItem Header="{Binding SelectedFileEntries.Count, StringFormat='Export {0} selected (copy+converted)'}"
-									  IsVisible="{Binding CanExport}" 
-									  Click="MenuItem_ExportSelectedRawConverted" />
-						</ContextMenu>
-					</ListBox.ContextMenu>
-				</ListBox>
-			</DockPanel>
-			
-			<GridSplitter Grid.Column="1" Width="5" Margin="3" />
-			
-			<!-- BAR ARCHIVE FILE ENTRIES -->
-			<DockPanel Grid.Column="2">
-				<Label DockPanel.Dock="Top" Content="BAR File" FontWeight="Bold"  FontSize="16"/>
-				<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
-					<Button Content="Load" Click="LoadBAR_Click" Margin="0,0,6,6"/>
-					<Label DockPanel.Dock="Top" Content="{Binding LoadedBARFilePathOrRelative}" Foreground="Gray" Margin="0,2,0,0" />
+
+				<GridSplitter Grid.Row="1" Grid.Column="1" Width="5" Margin="3" />
+
+				<!-- BAR ARCHIVE FILE ENTRIES -->
+				<DockPanel Grid.Row="1" Grid.Column="2">
+					<Label DockPanel.Dock="Top" Content="BAR File" FontWeight="Bold"  FontSize="16"/>
+					<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
+						<Button Content="Load" Click="LoadBAR_Click" Margin="0,0,6,6"/>
+						<Label DockPanel.Dock="Top" Content="{Binding LoadedBARFilePathOrRelative}" Foreground="Gray" Margin="0,2,0,0" />
+					</DockPanel>
+					<TextBox DockPanel.Dock="Top" Text="{Binding EntryQuery, Mode=TwoWay}" Watermark="Filter BAR entries" />
+					<TextBlock DockPanel.Dock="Top" Margin="0,6,0,0">
+						<Run Text="Root: " FontWeight="Bold"/>
+						<Run Text="{Binding BarFileRootPath}"/>
+					</TextBlock>
+					<ListBox ItemsSource="{Binding Entries}" Margin="0,10,0,0"
+							 SelectionMode="Multiple"
+							 SelectedItems="{Binding SelectedBarFileEntries, Mode=TwoWay}"
+							 SelectedItem="{Binding SelectedBarEntry, Mode=TwoWay}">
+						<ListBox.ItemTemplate>
+							<DataTemplate x:DataType="cb:BarFileEntry">
+								<TextBlock>
+									<Run Text="{Binding DirectoryPath}" Foreground="#808080" />
+									<Run Text="{Binding Name}" />
+								</TextBlock>
+							</DataTemplate>
+						</ListBox.ItemTemplate>
+						<ListBox.ContextMenu>
+							<ContextMenu>
+								<MenuItem Header="Copy file name" Click="MenuItem_CopyFileName" />
+								<MenuItem Header="Copy file path" Click="MenuItem_CopyFilePath" />
+								<Separator IsVisible="{Binding CanExport}" />
+
+								<MenuItem Header="{Binding SelectedBarFileEntries.Count, StringFormat='Export {0} selected (copy)'}"
+										  IsVisible="{Binding CanExport}"
+										  Click="MenuItem_ExportSelectedRaw" />
+
+								<MenuItem Header="{Binding SelectedBarFileEntries.Count, StringFormat='Export {0} selected (converted)'}"
+										  IsVisible="{Binding CanExport}"
+										  Click="MenuItem_ExportSelectedConverted" />
+
+								<MenuItem Header="{Binding SelectedBarFileEntries.Count, StringFormat='Export {0} selected (copy+converted)'}"
+										  IsVisible="{Binding CanExport}"
+										  Click="MenuItem_ExportSelectedRawConverted" />
+							</ContextMenu>
+						</ListBox.ContextMenu>
+					</ListBox>
 				</DockPanel>
-				<TextBox DockPanel.Dock="Top" Text="{Binding EntryQuery, Mode=TwoWay}" Watermark="Filter BAR entries" />
-				<TextBlock DockPanel.Dock="Top" Margin="0,6,0,0">
-					<Run Text="Root: " FontWeight="Bold"/>
-					<Run Text="{Binding BarFileRootPath}"/>
-				</TextBlock>
-				<ListBox ItemsSource="{Binding Entries}" Margin="0,10,0,0"
-						 SelectionMode="Multiple"
-						 SelectedItems="{Binding SelectedBarFileEntries, Mode=TwoWay}"
-						 SelectedItem="{Binding SelectedBarEntry, Mode=TwoWay}">
-					<ListBox.ItemTemplate>
-						<DataTemplate x:DataType="cb:BarFileEntry">
-							<TextBlock>
-								<Run Text="{Binding DirectoryPath}" Foreground="#808080" />
-								<Run Text="{Binding Name}" />
-							</TextBlock>
-						</DataTemplate>
-					</ListBox.ItemTemplate>
-					<ListBox.ContextMenu>
-						<ContextMenu>
-							<MenuItem Header="Copy file name" Click="MenuItem_CopyFileName" />
-							<MenuItem Header="Copy file path" Click="MenuItem_CopyFilePath" />
-							<Separator IsVisible="{Binding CanExport}" />
 
-							<MenuItem Header="{Binding SelectedBarFileEntries.Count, StringFormat='Export {0} selected (copy)'}"
-									  IsVisible="{Binding CanExport}"
-									  Click="MenuItem_ExportSelectedRaw" />
+				<GridSplitter Grid.Row="1" Grid.Column="3" Width="5" Margin="3"  />
 
-							<MenuItem Header="{Binding SelectedBarFileEntries.Count, StringFormat='Export {0} selected (converted)'}"
-									  IsVisible="{Binding CanExport}"
-									  Click="MenuItem_ExportSelectedConverted" />
+				<!-- EXPORT SETTINGS + PREVIEWER -->
+				<DockPanel Grid.Row="1" Grid.Column="4">
+					<Label DockPanel.Dock="Top" Content="Export Root Directory" FontWeight="Bold" FontSize="16"/>
+					<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
+						<Button Content="Select" Click="SelectExportRootDir_Click" Margin="0,0,6,6"/>
+						<Label Content="{Binding ExportRootDirectory}" Foreground="Gray" Margin="0,2,0,0"  />
+					</DockPanel>
+					<TextBlock DockPanel.Dock="Top" Margin="0,10,0,0" FontSize="16">
+						<Run Text="Previewing: " FontWeight="Bold" />
+						<Run Text="{Binding PreviewedFileName}" Foreground="#ffe6a1" />
+						<Run Text="{Binding PreviewedFileNote}" Foreground="#edc042" />
+					</TextBlock>
+					<SelectableTextBlock DockPanel.Dock="Top"
+							   Text="{Binding PreviewedFileData}"
+							   Margin="0,3,0,13" Foreground="Gray"  />
+					<Grid>
+						<Image x:Name="previewImage" ZIndex="1"
+							   HorizontalAlignment="Left" VerticalAlignment="Top"
+							   Stretch="Uniform" StretchDirection="DownOnly" />
+						<ae:TextEditor x:Name="textEditor" IsReadOnly="True" Text="Click on any file to preview it here" ShowLineNumbers="True"
+								   FontFamily="Cascadia Code,Consolas,Menlo,Monospace"
+								   Background="#1c1c1c"/>
+					</Grid>
 
-							<MenuItem Header="{Binding SelectedBarFileEntries.Count, StringFormat='Export {0} selected (copy+converted)'}"
-									  IsVisible="{Binding CanExport}"
-									  Click="MenuItem_ExportSelectedRawConverted" />
-						</ContextMenu>
-					</ListBox.ContextMenu>
-				</ListBox>
-			</DockPanel>
-
-			<GridSplitter Grid.Column="3" Width="5" Margin="3"  />
-			
-			<!-- EXPORT SETTINGS + PREVIEWER -->
-			<DockPanel Grid.Column="4">
-				<Label DockPanel.Dock="Top" Content="Export Root Directory" FontWeight="Bold" FontSize="16"/>
-				<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
-					<Button Content="Select" Click="SelectExportRootDir_Click" Margin="0,0,6,6"/>
-					<Label Content="{Binding ExportRootDirectory}" Foreground="Gray" Margin="0,2,0,0"  />			
 				</DockPanel>
-				<TextBlock DockPanel.Dock="Top" Margin="0,10,0,0" FontSize="16">
-					<Run Text="Previewing: " FontWeight="Bold" />
-					<Run Text="{Binding PreviewedFileName}" Foreground="#ffe6a1" />
-					<Run Text="{Binding PreviewedFileNote}" Foreground="#edc042" />
-				</TextBlock>
-				<SelectableTextBlock DockPanel.Dock="Top" 
-						   Text="{Binding PreviewedFileData}" 
-						   Margin="0,3,0,13" Foreground="Gray"  />
-				<Grid>
-					<Image x:Name="previewImage" ZIndex="1"
-						   HorizontalAlignment="Left" VerticalAlignment="Top"
-						   Stretch="Uniform" StretchDirection="DownOnly" />
-					<ae:TextEditor x:Name="textEditor" IsReadOnly="True" Text="Click on any file to preview it here" ShowLineNumbers="True"
-							   FontFamily="Cascadia Code,Consolas,Menlo,Monospace"
-							   Background="#1c1c1c"/>
-				</Grid>
-
-			</DockPanel>
-		</Grid>
-	</Border>
+			</Grid>
+		</Border>
+	</DockPanel>
 </Window>
