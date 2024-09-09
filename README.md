@@ -2,15 +2,9 @@
 Tool for fast and easy resource management, focused on AOMR.
 
 ## Why?
-I wanted to make a tailor-made tool for myself to make developing AOMR mods faster and more convenient.
+I wanted to make a tool for myself to make developing AOMR mods faster and more convenient.
 
-Other similar tools are too slow for iterating quickly:
-- Most support only opening BAR archives one by one, which is slow
-- Searching through BAR entries sometimes slow and even hangs
-- On every re-open, requires to select BAR and export path again
-- Not all formats are supported by one tool
-- Can't easily search through all files/BAR entries
-- ...
+I couldn't achieve that with similar tools available out there, so I made my own.
 
 ## Features
 - **Read BAR archives**
