@@ -1,11 +1,6 @@
 # CryBarEditor (for AOM Retold)
 Tool for fast and easy resource management, focused on AOMR.
 
-## Why?
-I wanted to make a tool for myself to make developing AOMR mods faster and more convenient.
-
-I couldn't achieve that with similar tools available out there, so I made my own.
-
 ## Features
 - **Read BAR archives**
 - Pick a **Root directory** (usually `\games` folder) for fast switching between BAR and other files
@@ -42,10 +37,9 @@ Currently planned:
 - Creating modified BAR archive by only replacing selected entries in existing BAR archive
 - (Support for other useful formats...)
 
-
-
 ## Note
 This is a personal project made in span of few days. I work on it in my free time, don't expect much.
+Format support is also focused on Age of Mythology Retold, so it mostly like won't work for other Age titles.
 
 ## Screenshots
 ### Previewing XMB content
