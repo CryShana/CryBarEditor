@@ -1,7 +1,8 @@
+using CryBar.Classes;
 using System.Buffers;
 using System.Buffers.Binary;
 using System.IO.Compression;
-using CryBar.Classes;
+
 using K4os.Compression.LZ4;
 
 namespace CryBar;
@@ -168,8 +169,8 @@ public static class BarCompression
         offset += 2;
 
         var memory = new ActualMemoryStream(compressed.AsMemory(offset));
-        using var deflate = new DeflateStream(memory, CompressionLevel.Optimal);
-        deflate.Write(data);
+        using (var deflate = new DeflateStream(memory, CompressionLevel.Optimal))
+            deflate.Write(data);
 
         return compressed.AsMemory(0, (int)memory.Position);  
     }

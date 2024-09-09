@@ -475,9 +475,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         else if (ext == ".ddt")
         {
-            // TODO: implement conversion here
-
             PreviewedFileNote = "(Converted to TGA)";
+
+            var image_data = BarFormatConverter.DDTtoTGA(data);
+            SetImagePreview(image_data);
+            return;
         }
         else
         {
@@ -542,7 +544,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     }
                     else if (ext == ".ddt")
                     {
-                        // TODO: convert to TGA
+                        var image_data = BarFormatConverter.DDTtoTGA(data);
+                        file.Write(image_data.Span);
+                        continue;
                     }
                 }
 
