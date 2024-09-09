@@ -19,6 +19,7 @@ using AvaloniaEdit.TextMate;
 using TextMateSharp.Grammars;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Png;
+using Avalonia.Threading;
 
 namespace CryBarEditor;
 
@@ -106,7 +107,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (value != null && _barStream?.Name == Path.Combine(_rootDirectory, value.RelativePath))
                 return;
 
-            Preview(value);
+            Dispatcher.UIThread.Post(() =>
+            {
+                Preview(value);
+            });     
         }
     }
 
@@ -980,13 +984,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var file = await PickFile(sender, "Compress using L33t");
         if (file == null) return;
 
-        var out_file = PickOutFile(file, suffix: "_alz4");
+        var out_file = PickOutFile(file, suffix: "_l33t");
         try
         {
             var data = File.ReadAllBytes(file);
-#pragma warning disable CS0618 // Type or member is obsolete
             var compressed = BarCompression.CompressL33tL66t(data, false);
-#pragma warning restore CS0618 // Type or member is obsolete
             using (var f = File.Create(out_file)) f.Write(compressed.Span);
 
             // TODO: show success message
@@ -1002,13 +1004,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var file = await PickFile(sender, "Compress using L66t");
         if (file == null) return;
 
-        var out_file = PickOutFile(file, suffix: "_alz4");
+        var out_file = PickOutFile(file, suffix: "_l66t");
         try
         {
             var data = File.ReadAllBytes(file);
-#pragma warning disable CS0618 // Type or member is obsolete
             var compressed = BarCompression.CompressL33tL66t(data, true);
-#pragma warning restore CS0618 // Type or member is obsolete
             using (var f = File.Create(out_file)) f.Write(compressed.Span);
 
             // TODO: show success message

@@ -128,7 +128,6 @@ public static class BarCompression
         return size_uncompressed;
     }
 
-    [Obsolete("Results of this method don't seem to be compatible with AOMR!")]
     public static Memory<byte> CompressL33tL66t(Span<byte> data, bool useL66t)
     {
         const int HEADER_SIZE_L33t = 4 + 4 + 2;
@@ -137,7 +136,7 @@ public static class BarCompression
 
         var compressed = new byte[HEADER_SIZE + data.Length];
         var cspan = compressed.AsSpan();
-        var offset = 4;
+        var offset = 0;
 
         if (useL66t)
         {
@@ -146,10 +145,10 @@ public static class BarCompression
             cspan[1] = 54;
             cspan[2] = 54;
             cspan[3] = 116;
+            offset = 4;
 
-            // size uncompressed
-            BinaryPrimitives.WriteInt64LittleEndian(cspan.Slice(4), data.Length);
-            offset += 8;
+            // size uncompressed (we fill in later)
+            BinaryPrimitives.WriteInt64LittleEndian(cspan.Slice(offset), data.Length); offset += 8;
         }
         else
         {
@@ -158,21 +157,20 @@ public static class BarCompression
             cspan[1] = 51;
             cspan[2] = 51;
             cspan[3] = 116;
+            offset = 4;
 
             // size uncompressed
-            BinaryPrimitives.WriteInt32LittleEndian(cspan.Slice(4), data.Length);
-            offset += 4;
+            BinaryPrimitives.WriteInt32LittleEndian(cspan.Slice(offset), data.Length); offset += 4;
         }
 
         // deflate spec
-        BinaryPrimitives.WriteUInt16LittleEndian(cspan.Slice(offset), 40056);
-        offset += 2;
+        BinaryPrimitives.WriteUInt16LittleEndian(cspan.Slice(offset), 40056); offset += 2;
 
         var memory = new ActualMemoryStream(compressed.AsMemory(offset));
         using (var deflate = new DeflateStream(memory, CompressionLevel.Optimal))
             deflate.Write(data);
 
-        return compressed.AsMemory(0, (int)memory.Position);  
+        return compressed.AsMemory(0, offset + (int)memory.Position);  
     }
     #endregion
 

@@ -2,13 +2,15 @@
 using System.Xml;
 using System.Text;
 using System.Buffers.Binary;
-using CommunityToolkit.HighPerformance;
+using System.Runtime.InteropServices;
+
 using CryBar.BCnEncoder.Decoder;
 using CryBar.BCnEncoder.Shared;
 
-using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp;
-using System.Runtime.InteropServices;
+using SixLabors.ImageSharp.PixelFormats;
+
+using CommunityToolkit.HighPerformance;
 
 namespace CryBar;
 
@@ -305,13 +307,11 @@ public static class BarFormatConverter
             case CompressionType.Alz4:
                 return BarCompression.CompressAlz4(underlying_memory.Span);
 
-#pragma warning disable CS0618 // Type or member is obsolete
             case CompressionType.L33t:
                 return BarCompression.CompressL33tL66t(underlying_memory.Span, false);
 
             case CompressionType.L66t:
                 return BarCompression.CompressL33tL66t(underlying_memory.Span, true);
-#pragma warning restore CS0618 // Type or member is obsolete
         }
 
         static void FindNames(XmlNode node, List<string> elements, List<string> attributes)
