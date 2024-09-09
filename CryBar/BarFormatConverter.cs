@@ -405,6 +405,9 @@ public static class BarFormatConverter
     {
         var data_span = ddt_data.Span;
 
+        // TODO: move this to separate class where we can just read mipmap level and then decide which mipmap to read
+        // TODO: optimize how we read and decode this data, right now it's quite slow
+
         // RTS4 header
         if (data_span is not [0x52, 0x54, 0x53, 0x34, ..])
             return null;
@@ -417,8 +420,8 @@ public static class BarFormatConverter
         var format = data_span[offset++];        // 1 = Bgra, 4 = Dxt1, 7 = Grey, 8 = Dxt3, 9 = Dxt5
         var mipmap_levels = data_span[offset++]; // 10,7,8
 
-        var width = BinaryPrimitives.ReadInt32LittleEndian(data_span.Slice(offset, 4)); offset += 4;
-        var height = BinaryPrimitives.ReadInt32LittleEndian(data_span.Slice(offset, 4)); offset += 4;
+        var width = (ushort)BinaryPrimitives.ReadInt32LittleEndian(data_span.Slice(offset, 4)); offset += 4;
+        var height = (ushort)BinaryPrimitives.ReadInt32LittleEndian(data_span.Slice(offset, 4)); offset += 4;
         
         // color table (for RTS4 only):
         int color_table_size = BinaryPrimitives.ReadInt32LittleEndian(data_span.Slice(offset, 4)); offset += 4;
@@ -427,19 +430,22 @@ public static class BarFormatConverter
         // mipmaps start here
         int images_per_level = (usage & 8) == 8 ? 6 : 1; // there's more images when usage is 8 = [Cube]
         var mipmap_image_count = mipmap_levels * images_per_level;
-        var mipmap_offsets = new List<(int, int)>(mipmap_image_count);
+        var mipmap_offsets = new List<(int, int, ushort, ushort)>(mipmap_image_count);
         for (int i = 0; i < mipmap_image_count; i++)
         {
+            var level = i / images_per_level;
+            var image_width = (ushort)Math.Max(1, width >> level);
+            var image_height = (ushort)Math.Max(1, height >> level);
             var image_offset = BinaryPrimitives.ReadInt32LittleEndian(data_span.Slice(offset, 4)); offset += 4;
             var image_length = BinaryPrimitives.ReadInt32LittleEndian(data_span.Slice(offset, 4)); offset += 4;
-            mipmap_offsets.Add((image_offset, image_length));
+            mipmap_offsets.Add((image_offset, image_length, image_width, image_height));
         }
 
         if (mipmap_index >= mipmap_offsets.Count)
             return null;
 
         // read the mipmap we are interested in (usually first)
-        var (main_offset, main_length) = mipmap_offsets[mipmap_index];
+        var (main_offset, main_length, main_width, main_height) = mipmap_offsets[mipmap_index];
         var image_data = ddt_data.Slice(main_offset, main_length);
 
         Memory2D<ColorRgba32> pixels;
@@ -447,27 +453,27 @@ public static class BarFormatConverter
         {
             case 4:
                 // DXT1 - CompressionFormat.Bc1
-                pixels = new BcDecoder().DecodeRaw2D(image_data, width, height, CompressionFormat.Bc1);
+                pixels = new BcDecoder().DecodeRaw2D(image_data, main_width, main_height, CompressionFormat.Bc1);
                 break;
             case 5:
                 // DXT1 with Transparency - CompressionFormat.Bc1WithAlpha
-                pixels = new BcDecoder().DecodeRaw2D(image_data, width, height, CompressionFormat.Bc1WithAlpha);
+                pixels = new BcDecoder().DecodeRaw2D(image_data, main_width, main_height, CompressionFormat.Bc1WithAlpha);
                 break;
             case 7:
                 // Grey - CompressionFormat.R
-                pixels = new BcDecoder().DecodeRaw2D(image_data, width, height, CompressionFormat.R);
+                pixels = new BcDecoder().DecodeRaw2D(image_data, main_width, main_height, CompressionFormat.R);
                 break;
             case 8:
                 // DXT3 - CompressionFormat.Bc2
-                pixels = new BcDecoder().DecodeRaw2D(image_data, width, height, CompressionFormat.Bc2);
+                pixels = new BcDecoder().DecodeRaw2D(image_data, main_width, main_height, CompressionFormat.Bc2);
                 break;
             case 9:
                 // DXT5 - CompressionFormat.Bc3
-                pixels = new BcDecoder().DecodeRaw2D(image_data, width, height, CompressionFormat.Bc3);
+                pixels = new BcDecoder().DecodeRaw2D(image_data, main_width, main_height, CompressionFormat.Bc3);
                 break;
             default:
                 // CompressionFormat.Bgra
-                pixels = new BcDecoder().DecodeRaw2D(image_data, width, height, CompressionFormat.Bgra);
+                pixels = new BcDecoder().DecodeRaw2D(image_data, main_width, main_height, CompressionFormat.Bgra);
                 break;
         }
 
