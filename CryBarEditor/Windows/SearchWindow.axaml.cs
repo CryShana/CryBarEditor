@@ -230,7 +230,7 @@ public partial class SearchWindow : Window, INotifyPropertyChanged
                 return false;
 
             // FOR NOW IGNORE SPECIAL FORMATS WE CAN'T READ (this may change)
-            if (ext is ".data" or ".hkt")
+            if (ext is ".data" or ".hkt" or ".tma" or ".tmm")
                 return false;
 
             return true;
