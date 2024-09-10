@@ -1,11 +1,23 @@
 ﻿using System.Text;
-using System.Diagnostics;
 using System.Buffers.Binary;
 using System.Diagnostics.CodeAnalysis;
 
 using CommunityToolkit.HighPerformance.Buffers;
 
 namespace CryBar;
+
+public enum BarFileLoadError
+{
+    None,
+    AlreadyLoaded,
+    StreamNotSeekable,
+    FileTooSmall,
+    InvalidBARHeader,
+    UnsupportedBARVersion,
+    InvalidBARFormat,
+    InvalidBAREntryCount,
+    InvalidBAREntryName
+}
 
 public class BarFile
 {
@@ -60,25 +72,30 @@ public class BarFile
     /// </summary>
     /// <returns>True if successful</returns>
     [MemberNotNullWhen(true, nameof(_entries), nameof(Entries), nameof(RootPath))]
-    public bool Load()
+    public bool Load(out BarFileLoadError error)
     {
+        error = BarFileLoadError.None;
+
         // TODO: replace exceptions with Result return type for better performance in case of errors
         if (Loaded)
         {
-            throw new InvalidOperationException("Bar file already loaded");
+            error = BarFileLoadError.AlreadyLoaded;
+            return false;
         }
 
         var str = _stream;
         if (!str.CanSeek)
         {
-            throw new NotSupportedException("Stream must support seeking");
+            error = BarFileLoadError.StreamNotSeekable;
+            return false;
         }
 
         var file_length = str.Length;
         if (file_length <= HEADER_SIZE)
         {
             // stream is too short
-            throw new InvalidDataException("BAR file too small");
+            error = BarFileLoadError.FileTooSmall;
+            return false;
         }
 
         using var buffer = SpanOwner<byte>.Allocate(HEADER_SIZE);
@@ -89,60 +106,54 @@ public class BarFile
         if (span is not [0x45, 0x53, 0x50, 0x4E, ..])
         {
             // header not valid
-            throw new InvalidDataException("Invalid BAR format header");
+            error = BarFileLoadError.InvalidBARHeader;
+            return false;
         }
 
         int offset = 4;
 
-        uint version = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(offset, 4));
-        offset += 4;
-
+        uint version = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(offset, 4)); offset += 4;
         if (version != 6)
         {
             // unsupported version
-            throw new InvalidDataException("BAR version " + version + " is not supported");
+            error = BarFileLoadError.UnsupportedBARVersion;
+            return false;
         }
 
-        uint id1 = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(offset, 4));
-        offset += 4;
-
+        uint id1 = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(offset, 4)); offset += 4;
         if (id1 != 1144201745)
         {
             // unsupported id1
-            throw new InvalidDataException("Invalid BAR format");
+            error = BarFileLoadError.InvalidBARFormat;
+            return false;
         }
 
         // ignore the empty padding
         offset += 264;
 
-        uint checksum = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(offset, 4));
-        offset += 4;
-
-        int file_count = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(offset, 4));
-        offset += 4;
-
+        uint checksum = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(offset, 4)); offset += 4;
+        int file_count = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(offset, 4)); offset += 4;
         if (file_count < 0 || file_count > MAX_ENTRY_COUNT)
         {
             // invalid file count
-            throw new InvalidDataException("Invalid BAR file count");
+            error = BarFileLoadError.InvalidBAREntryCount;
+            return false;
         }
 
-        uint id2 = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(offset, 4));
-        offset += 4;
-
+        uint id2 = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(offset, 4)); offset += 4;
         if (id2 != 0)
         {
             // unsupported id2
-            throw new InvalidDataException("Invalid BAR format");
+            error = BarFileLoadError.InvalidBARFormat;
+            return false;
         }
 
-        long file_table_offset = BinaryPrimitives.ReadInt64LittleEndian(span.Slice(264 + 24, 8));
-        offset += 8;
-
+        long file_table_offset = BinaryPrimitives.ReadInt64LittleEndian(span.Slice(264 + 24, 8)); offset += 8;
         if (file_table_offset < HEADER_SIZE || file_table_offset >= file_length)
         {
             // file table offset out of bounds
-            throw new InvalidDataException("Invalid BAR format, table offset out of bounds");
+            error = BarFileLoadError.InvalidBARFormat;
+            return false;
         }
 
         // PROCESS ENTRIES
@@ -156,7 +167,8 @@ public class BarFile
         if (root_name_length <= 0 || root_name_length > MAX_TEXT_LENGTH)
         {
             // invalid root name length
-            throw new InvalidDataException("Invalid BAR root name");
+            error = BarFileLoadError.InvalidBARFormat;
+            return false;
         }
 
         temp_span = span.Slice(0, root_name_length + 4);
@@ -168,13 +180,15 @@ public class BarFile
         if (root_files_count != file_count)
         {
             // I think this should not happen, need to check
-            throw new Exception("Root file count did not match global file count - should this happen?");
+            error = BarFileLoadError.InvalidBARFormat;
+            return false;
         }
 
         if (root_files_count < 0 || root_files_count > MAX_ENTRY_COUNT)
         {
             // invalid root file count
-            throw new InvalidDataException("BAR file count mismatch");
+            error = BarFileLoadError.InvalidBARFormat;
+            return false;
         }
 
         var entries = new List<BarFileEntry>(root_files_count);
@@ -197,7 +211,8 @@ public class BarFile
             int file_path_length = BinaryPrimitives.ReadInt32LittleEndian(temp_span.Slice(20, 4)) * 2;
             if (file_path_length > MAX_TEXT_LENGTH || file_path_length <= 0)
             {
-                throw new InvalidDataException("Invalid file name length specified: " + file_path_length);
+                error = BarFileLoadError.InvalidBAREntryName;
+                return false;
             }
 
             temp_span = span.Slice(0,

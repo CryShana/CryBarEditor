@@ -380,9 +380,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         try
         {
             var file = new BarFile(stream);
-            if (!file.Load())
+            if (!file.Load(out var error))
             {
-                throw new Exception("Failed to load BAR file, possibly invalid of unsupported format");
+                throw new Exception("Failed to load BAR file: " + error.ToString());
             }
 
             _barStream = stream;
@@ -549,7 +549,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     else if (ext == ".ddt")
                     {
                         var image_data = BarFormatConverter.DDTtoTGA(data);
-                        file.Write(image_data.Span);
+                        if (image_data == null) throw new InvalidDataException("Failed to convert DDT file");
+
+                        file.Write(image_data.Value.Span);
                         continue;
                     }
                 }

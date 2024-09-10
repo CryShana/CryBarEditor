@@ -343,7 +343,7 @@ namespace CryBar.BCnEncoder.Decoder
             return decoded.AsMemory().AsMemory2D(pixelHeight, pixelWidth);
         }
 
-        public Memory2D<ColorRgba32> DecodeRaw2D(Memory<byte> input, int pixelWidth, int pixelHeight, CompressionFormat format)
+        public Memory2D<ColorRgba32> DecodeRaw2D(ReadOnlyMemory<byte> input, int pixelWidth, int pixelHeight, CompressionFormat format)
         {
             var decoded = DecodeRawInternal(input, pixelWidth, pixelHeight, format, default);
             return decoded.AsMemory().AsMemory2D(pixelHeight, pixelWidth);

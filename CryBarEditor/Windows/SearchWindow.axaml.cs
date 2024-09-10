@@ -167,7 +167,7 @@ public partial class SearchWindow : Window, INotifyPropertyChanged
                                     // load bar
                                     using var stream = File.OpenRead(file);
                                     var bar_file = new BarFile(stream);
-                                    if (bar_file.Load())
+                                    if (bar_file.Load(out _))
                                     {
                                         foreach (var bar_entry in bar_file.Entries)
                                         {
