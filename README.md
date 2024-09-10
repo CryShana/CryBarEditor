@@ -6,12 +6,14 @@ Tool for fast and easy resource management, focused on AOMR.
 - Pick a **Root directory** (usually `\games` folder) for fast switching between BAR and other files
 - Editor supports previewing various formats:
   - XMB
-  - Preview images (including DDT)
+  - DDT
+  - Any text or common image type
 - Syntax highlighting for common formats (json,xml,ini,xs,...)
 - Pick an **export Root directory** for fast exporting either from BAR or from Root directory
 - Tools for direct file manipulation:
   - Convert XML -> XMB
   - Convert XMB -> XML
+  - Convert DDT -> TGA
   - Compress with Alz4/L33t
   - Decompress file with Alz4/L33t
 - Tool for converting XS trigger scripts to RM-friendly scripts for easy inclusion in random maps
@@ -29,17 +31,16 @@ Tool for fast and easy resource management, focused on AOMR.
    
 ## Planned features
 Currently planned:
-- Previewing DDT files
-- Converting DDT -> TGA and vice versa
+- Converting DDT -> TGA
 - Easier clearing of filter textboxes
 - Adding prompts for errors or success messages (right now many things fail and suceed silently)
 - Creating BAR archive from selected files
 - Creating modified BAR archive by only replacing selected entries in existing BAR archive
-- (Support for other useful formats...)
+- (Support for other relevant formats, such as .TMA, .TMM and .DATA)
 
 ## Note
 This is a personal project made in span of few days. I work on it in my free time, don't expect much.
-Format support is also focused on Age of Mythology Retold, so it mostly like won't work for other Age titles.
+Format support is focused on Age of Mythology Retold, so it may not work for other Age titles.
 
 ## Screenshots
 ### Previewing XMB content
