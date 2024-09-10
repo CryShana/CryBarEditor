@@ -108,7 +108,7 @@ public class DDTImage
         return image_data;
     }
 
-    public async Task<Memory<byte>?> ConvertMipmapToTGA(int mipmap_index = 0, CancellationToken token = default)
+    public async Task<Memory2D<ColorRgba32>?> DecodeMipmap(int mipmap_index = 0, CancellationToken token = default)
     {
         var mipmap_data = ReadMipmap(mipmap_index, out var width, out var height);
 
@@ -152,17 +152,19 @@ public class DDTImage
                     break;
             }
 
-            using var memory = new MemoryStream();
-            using (var image = PixelsToImage(decoded_pixels))
-                await image.SaveAsTgaAsync(memory, token);
-
-            return memory.GetBuffer().AsMemory(0, (int)memory.Position);
+            return decoded_pixels;
         }
         catch (OperationCanceledException) { return null; }
         catch
         {
             throw;
         }
+    }
+    public async Task<Image<Rgba32>?> DecodeMipmapToImage(int mipmap_index = 0, CancellationToken token = default)
+    {
+        var data = await DecodeMipmap(mipmap_index, token);
+        if (!data.HasValue) return null;
+        return PixelsToImage(data.Value);
     }
 
     public static Image<Rgba32> PixelsToImage(Memory2D<ColorRgba32> colors)

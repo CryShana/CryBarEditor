@@ -20,7 +20,9 @@ using System.Collections.Generic;
 
 using AvaloniaEdit.TextMate;
 using TextMateSharp.Grammars;
-using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp;
+using Configuration = CryBarEditor.Classes.Configuration;
+using CommunityToolkit.HighPerformance;
 
 
 namespace CryBarEditor;
@@ -447,7 +449,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         await Preview(entry, F_GetFullRelativePathBAR, F_ReadBAR, _previewCsc.Token);
     }
 
-    public async Task Preview<T>(T entry, Func<T, string> get_rel_path, 
+    public async Task Preview<T>(T entry, Func<T, string> get_rel_path,
         Func<T, Memory<byte>> read, CancellationToken token = default)
     {
         var relative_path = get_rel_path(entry);
@@ -466,7 +468,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         if (IsImage(ext))
         {
-            SetImagePreview(data);
+            using (var image = SixLabors.ImageSharp.Image.Load(data.Span))
+            {
+                await SetImagePreview(image, token);
+                PreviewedFileNote = $"[{image.Width}x{image.Height}]";
+            }
+
             return;
         }
 
@@ -488,10 +495,26 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         else if (ext == ".ddt")
         {
-            PreviewedFileNote = "(Converted to TGA)";
+            var ddt = new DDTImage(data);
+            if (!ddt.ParseHeader())
+            {
+                PreviewedFileNote = "(Failed to parse DDT)";
+                return;
+            }
 
-            var image_data = await BarFormatConverter.DDTtoTGA(data, token: token);
-            SetImagePreview(image_data);
+            using var image = await BarFormatConverter.ParseDDT(ddt, max_resolution: 1024, token: token);
+            if (image == null)
+            {
+                PreviewedFileNote = "(Failed to parse DDT)";
+                return;
+            }
+
+            var preview_note = $"(Converted to PNG) [{ddt.Version} {ddt.MipmapOffsets[0].Item3}x{ddt.MipmapOffsets[0].Item4}, {ddt.MipmapOffsets.Length} Mips] ";
+            if (image.Width < ddt.BaseWidth || image.Height < ddt.BaseHeight)
+                preview_note += $"- Downscaled to {image.Width}x{image.Height}";
+
+            PreviewedFileNote = preview_note;
+            await SetImagePreview(image, token);
             return;
         }
         else
@@ -499,7 +522,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             text = Encoding.UTF8.GetString(data.Span);
         }
 
-        SetImagePreview(null);
+        await SetImagePreview(null);
         SetTextEditorLanguage(ext);
 
         textEditor.Text = text;
@@ -560,10 +583,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     }
                     else if (ext == ".ddt")
                     {
-                        var image_data = await BarFormatConverter.DDTtoTGA(data);
-                        if (image_data == null) throw new InvalidDataException("Failed to convert DDT file");
+                        var ddt = new DDTImage(data);
+                        var image = await BarFormatConverter.ParseDDT(ddt);
+                        if (image == null) throw new InvalidDataException("Failed to convert DDT file");
 
-                        file.Write(image_data.Value.Span);
+                        using var memory = new MemoryStream();
+                        await image.SaveAsTgaAsync(memory);
+                        image.Dispose();
+
+                        file.Write(memory.GetBuffer().AsSpan(0, (int)memory.Position));
                         continue;
                     }
                 }
@@ -583,9 +611,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     #region UI functions
     Bitmap? _previewImage = null;
-    public void SetImagePreview(Memory<byte>? data)
+    public async Task SetImagePreview(SixLabors.ImageSharp.Image? image, CancellationToken token = default)
     {
-        if (data == null)
+        if (image == null)
         {
             textEditor.IsVisible = true;
             previewImage.IsVisible = false;
@@ -600,14 +628,26 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _previewImage = null;
         }
 
-
-        using (var image = SixLabors.ImageSharp.Image.Load(data.Value.Span))
-        using (var stream = new MemoryStream())
+        try
         {
-            image.Save(stream, new PngEncoder { TransparentColorMode = PngTransparentColorMode.Preserve });
-            stream.Seek(0, SeekOrigin.Begin);
+            using (var stream = new MemoryStream())
+            {
+                await image.SaveAsPngAsync(stream, new SixLabors.ImageSharp.Formats.Png.PngEncoder
+                {
+                    CompressionLevel = SixLabors.ImageSharp.Formats.Png.PngCompressionLevel.BestSpeed
+                }, token);
 
-            _previewImage = new Bitmap(stream);
+                if (token.IsCancellationRequested || _previewImage != null) return;
+
+                stream.Seek(0, SeekOrigin.Begin);
+                _previewImage = new Bitmap(stream);
+            }
+        }
+        catch (OperationCanceledException) { return; }
+        catch
+        {
+            // note error or just ignore it?
+            return;
         }
 
         textEditor.IsVisible = false;

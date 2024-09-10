@@ -4,6 +4,8 @@ using System.Text;
 using System.Buffers.Binary;
 
 using CommunityToolkit.HighPerformance;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 
 namespace CryBar;
 
@@ -358,12 +360,27 @@ public static class BarFormatConverter
         }
     }
 
-    public static Task<Memory<byte>?> DDTtoTGA(ReadOnlyMemory<byte> ddt_data, int mipmap_index = 0, CancellationToken token = default)
+    public static async Task<Image<Rgba32>?> ParseDDT(DDTImage ddt, 
+        int mipmap_index = 0, int max_resolution = -1,
+        CancellationToken token = default)
     {
-        var ddt = new DDTImage(ddt_data);
-        if (!ddt.ParseHeader()) return Task.FromResult<Memory<byte>?>(null);
-        var data = ddt.ReadMipmap(mipmap_index, out var w, out var h);
-        return ddt.ConvertMipmapToTGA(0, token);
+        if (!ddt.HeaderParsed && !ddt.ParseHeader()) return null;
+        if (max_resolution > 0)
+        {
+            // find mipmap that is closest to max_resolution
+            for (int i = 0; i < ddt.MipmapOffsets!.Length; i++)
+            {
+                var mipmap = ddt.MipmapOffsets[i];
+                if (mipmap.Item3 > max_resolution ||
+                    mipmap.Item4 > max_resolution) 
+                    continue;
+
+                mipmap_index = i;
+                break;
+            }
+        }
+
+        return await ddt.DecodeMipmapToImage(mipmap_index, token);
     }
 
     public static Memory<byte> TGAtoDDT(Span<byte> tga_data)
