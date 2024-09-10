@@ -10,6 +10,7 @@ Tool for fast and easy resource management, focused on AOMR.
   - Any text or common image type
 - Syntax highlighting for common formats (json,xml,ini,xs,...)
 - Pick an **export Root directory** for fast exporting either from BAR or from Root directory
+- Replace any existing DDT image with custom image on export (all other params are copied)
 - Tools for direct file manipulation:
   - Convert XML -> XMB
   - Convert XMB -> XML
@@ -31,9 +32,9 @@ Tool for fast and easy resource management, focused on AOMR.
    
 ## Planned features
 Currently planned:
-- Converting DDT -> TGA
+- Adding prompts for errors, success messages and progress (right now many things are silent, lacking user feedback)
+- Converting DDT -> TGA where user can specify custom params (right now we only have conversion of existing DDT file with copied params)
 - Easier clearing of filter textboxes
-- Adding prompts for errors or success messages (right now many things fail and suceed silently)
 - Creating BAR archive from selected files
 - Creating modified BAR archive by only replacing selected entries in existing BAR archive
 - (Support for other relevant formats, such as .TMA, .TMM and .DATA)
