@@ -21,9 +21,9 @@ using System.Collections.Generic;
 using AvaloniaEdit.TextMate;
 using TextMateSharp.Grammars;
 using SixLabors.ImageSharp;
-using Configuration = CryBarEditor.Classes.Configuration;
+using SixLabors.ImageSharp.Formats.Tga;
 using CommunityToolkit.HighPerformance;
-
+using Configuration = CryBarEditor.Classes.Configuration;
 
 namespace CryBarEditor;
 
@@ -588,7 +588,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                         if (image == null) throw new InvalidDataException("Failed to convert DDT file");
 
                         using var memory = new MemoryStream();
-                        await image.SaveAsTgaAsync(memory);
+                        await image.SaveAsTgaAsync(memory, new TgaEncoder
+                        {
+                            BitsPerPixel = TgaBitsPerPixel.Pixel32
+                        });
                         image.Dispose();
 
                         file.Write(memory.GetBuffer().AsSpan(0, (int)memory.Position));

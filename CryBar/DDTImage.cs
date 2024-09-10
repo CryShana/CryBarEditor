@@ -21,9 +21,10 @@ public enum DDTVersion
 public enum DDTUsage : byte
 {
     None = 0,
-    Bump = 6,
+    AlphaTest = 1,
+    LowDetail = 2,
+    Bump = 4,
     Cube = 8
-    // others... I know there is [4]
 }
 
 public enum DDTAlpha : byte
@@ -173,7 +174,7 @@ public class DDTImage
                     // DXT5 - CompressionFormat.Bc3
                     decoded_pixels = await decoder.DecodeRaw2DAsync(mipmap_data, width, height, CompressionFormat.Bc3, token);
                     break;
-                default: // usually 1
+                default:
                     // CompressionFormat.Bgra
                     decoded_pixels = await decoder.DecodeRaw2DAsync(mipmap_data, width, height, CompressionFormat.Bgra, token);
                     break;
