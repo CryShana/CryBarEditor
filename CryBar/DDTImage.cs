@@ -18,14 +18,42 @@ public enum DDTVersion
     RTS4
 };
 
+public enum DDTUsage : byte
+{
+    None = 0,
+    Bump = 6,
+    Cube = 8
+    // others... I know there is [4]
+}
+
+public enum DDTAlpha : byte
+{
+    None = 0,
+    Player = 1,
+    Transparent = 4,
+    Blend = 8
+}
+
+public enum DDTFormat : byte
+{
+    None = 0,
+    Bgra = 1,
+    DXT1 = 4,
+    DXT1Alpha = 5,
+    Grey = 7,
+    DXT3 = 8,
+    DXT5 = 9
+    // others... I know there is [3]
+}
+
 public class DDTImage
 {
     public DDTVersion Version { get; private set; }
     public bool HeaderParsed { get; private set; }
 
-    public byte UsageFlag { get; private set; }
-    public byte AlphaFlag { get; private set; }
-    public byte FormatFlag { get; private set; }
+    public DDTUsage UsageFlag { get; private set; }
+    public DDTAlpha AlphaFlag { get; private set; }
+    public DDTFormat FormatFlag { get; private set; }
     public byte MipmapLevels { get; private set; }
 
     public ushort BaseWidth { get; private set; }
@@ -55,17 +83,17 @@ public class DDTImage
         var offset = 4;
 
         // image info
-        var usage = data_span[offset++];         // 0, 8 = Cube
-        var alpha = data_span[offset++];         // 0 = none, 1 = Player, 4 = transparent
-        var format = data_span[offset++];        // 1 = Bgra, 5 = Dxt1Alpha, 4 = Dxt1, 7 = Grey, 8 = Dxt3, 9 = Dxt5
-        var mipmap_levels = data_span[offset++];      // 10,7,8
+        var usage = data_span[offset++];
+        var alpha = data_span[offset++];
+        var format = data_span[offset++]; 
+        var mipmap_levels = data_span[offset++]; 
 
         var width = (ushort)BinaryPrimitives.ReadInt32LittleEndian(data_span.Slice(offset, 4)); offset += 4;
         var height = (ushort)BinaryPrimitives.ReadInt32LittleEndian(data_span.Slice(offset, 4)); offset += 4;
 
-        UsageFlag = usage;
-        AlphaFlag = alpha;
-        FormatFlag = format;
+        UsageFlag = (DDTUsage)usage;
+        AlphaFlag = (DDTAlpha)alpha;
+        FormatFlag = (DDTFormat)format;
         MipmapLevels = mipmap_levels;
         BaseWidth = width;
         BaseHeight = height;
@@ -117,8 +145,7 @@ public class DDTImage
         // - Most RST4 DDT files use format 4 = DXT1
         // - When Alpha = 4, format is usually either 1,8 or 9 (Bgra,DXT3,DXT5)
         // - When Alpha = 1, format is usually 1 (Bgra)
-        // - When Alpha = 0 and Usage = 4, format is usually 3 (???)
-        // - Most images, even large ones 2048x2048, load within 0.25 seconds (lag spike usually caused by displaying it in UI)
+        // - When Alpha = 0 and Usage = 4, format is usually 3
 
         try
         {
@@ -126,28 +153,28 @@ public class DDTImage
             Memory2D<ColorRgba32> decoded_pixels;
             switch (FormatFlag)
             {
-                case 4:
+                case DDTFormat.DXT1:
                     // DXT1 - CompressionFormat.Bc1
                     decoded_pixels = await decoder.DecodeRaw2DAsync(mipmap_data, width, height, CompressionFormat.Bc1, token);
                     break;
-                case 5:
+                case DDTFormat.DXT1Alpha:
                     // DXT1 with Transparency - CompressionFormat.Bc1WithAlpha
                     decoded_pixels = await decoder.DecodeRaw2DAsync(mipmap_data, width, height, CompressionFormat.Bc1WithAlpha, token);
                     break;
-                case 7:
+                case DDTFormat.Grey:
                     // Grey - CompressionFormat.R
                     decoded_pixels = await decoder.DecodeRaw2DAsync(mipmap_data, width, height, CompressionFormat.R, token);
                     break;
-                case 8:
+                case DDTFormat.DXT3:
                     // DXT3 - CompressionFormat.Bc2
                     decoded_pixels = await decoder.DecodeRaw2DAsync(mipmap_data, width, height, CompressionFormat.Bc2, token);
                     break;
-                case 9:
+                case DDTFormat.DXT5:
                     // DXT5 - CompressionFormat.Bc3
                     decoded_pixels = await decoder.DecodeRaw2DAsync(mipmap_data, width, height, CompressionFormat.Bc3, token);
                     break;
                 default: // usually 1
-                         // CompressionFormat.Bgra
+                    // CompressionFormat.Bgra
                     decoded_pixels = await decoder.DecodeRaw2DAsync(mipmap_data, width, height, CompressionFormat.Bgra, token);
                     break;
             }
@@ -166,7 +193,7 @@ public class DDTImage
         if (!data.HasValue) return null;
         return PixelsToImage(data.Value);
     }
-
+    
     public static Image<Rgba32> PixelsToImage(Memory2D<ColorRgba32> colors)
     {
         var output = new Image<Rgba32>(colors.Width, colors.Height);
@@ -178,5 +205,16 @@ public class DDTImage
             MemoryMarshal.Cast<ColorRgba32, Rgba32>(yColors).CopyTo(yPixels);
         }
         return output;
+    }
+    
+    public static Memory<byte> EncodeImageToDDT(Image<Rgba32> image, 
+        DDTVersion version, DDTUsage usage, DDTAlpha alpha, DDTFormat format)
+    {
+        // TODO: when RTS4, we need to make a color table (byte array sizes 64, 116, etc...)
+        // need to figure out how they are constructed
+
+        // TODO: image is the base image, we need to create mipmaps until sizes allow (smallest dimension is 4 pixels)
+
+        throw new NotImplementedException();
     }
 }
