@@ -46,7 +46,6 @@
 				<MenuItem Header="Compress">
 					<MenuItem Header="Alz4" Click="MenuItem_CompressAlz4" />
 					<MenuItem Header="L33t" Click="MenuItem_CompressL33t" />
-					<MenuItem Header="L66t" Click="MenuItem_CompressL66t" />
 				</MenuItem>
 				<MenuItem Header="Decompress" Click="MenuItem_Decompress" />
 				<MenuItem Header="Script">

@@ -11,7 +11,6 @@ public static class BarCompression
 {
     public static bool IsAlz4(this Span<byte> data) => data is [97, 108, 122, 52, ..];
     public static bool IsL33t(this Span<byte> data) => data is [108, 51, 51, 116, ..];
-    public static bool IsL66t(this Span<byte> data) => data is [108, 54, 54, 116, ..];
 
     #region ALZ4
     public static byte[]? DecompressAlz4(Span<byte> data)
@@ -77,41 +76,32 @@ public static class BarCompression
     #endregion
 
     #region L33T / L66T
-    public unsafe static byte[]? DecompressL33tL66t(Span<byte> data)
+    public static byte[]? DecompressL33t(Span<byte> data)
     {
-        var l66 = data.IsL66t();
-
         int offset = 4;
-        int size_uncompressed = l66 ?
-            (int)BinaryPrimitives.ReadInt64LittleEndian(data.Slice(offset, 8)) :
-            BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
-
+        int size_uncompressed = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
         if (size_uncompressed > BarFile.MAX_BUFFER_SIZE || size_uncompressed <= 0)
         {
             throw new InvalidDataException("Size is invalid: " + size_uncompressed);
         }
 
         var buffer = new byte[size_uncompressed];
-        DecompressL33tL66t(data, buffer);
+        DecompressL33t(data, buffer);
         return buffer;
     }
 
-    public unsafe static int DecompressL33tL66t(Span<byte> data, Span<byte> output_data)
+    public unsafe static int DecompressL33t(Span<byte> data, Span<byte> output_data)
     {
-        var l66 = data.IsL66t();
+        // TODO: there is a problem in how I decompress L33t files!!! AOMR doesn't seem to recognize when I compress it again 
 
         int offset = 4;
-        int size_uncompressed = l66 ?
-            (int)BinaryPrimitives.ReadInt64LittleEndian(data.Slice(offset, 8)) :
-            BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
-
-        offset += l66 ? 8 : 4;
-        offset += 2; // skip deflate spec
-
+        int size_uncompressed = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
         if (size_uncompressed > output_data.Length || size_uncompressed <= 0)
         {
             throw new InvalidDataException("Size is invalid: " + size_uncompressed);
         }
+
+        offset += 2; // skip deflate spec
 
         if (offset >= data.Length)
         {
@@ -128,43 +118,26 @@ public static class BarCompression
         return size_uncompressed;
     }
 
-    public static Memory<byte> CompressL33tL66t(Span<byte> data, bool useL66t)
+    public static Memory<byte> CompressL33t(Span<byte> data)
     {
-        const int HEADER_SIZE_L33t = 4 + 4 + 2;
-        const int HEADER_SIZE_L66t = 4 + 8 + 2;
-        int HEADER_SIZE = useL66t ? HEADER_SIZE_L66t : HEADER_SIZE_L33t;
+        const int HEADER_SIZE = 4 + 4 + 2;
 
         var compressed = new byte[HEADER_SIZE + data.Length];
         var cspan = compressed.AsSpan();
         var offset = 0;
 
-        if (useL66t)
-        {
-            // header
-            cspan[0] = 108;
-            cspan[1] = 54;
-            cspan[2] = 54;
-            cspan[3] = 116;
-            offset = 4;
+        // header
+        cspan[offset++] = 108;
+        cspan[offset++] = 51;
+        cspan[offset++] = 51;
+        cspan[offset++] = 116;
 
-            // size uncompressed (we fill in later)
-            BinaryPrimitives.WriteInt64LittleEndian(cspan.Slice(offset), data.Length); offset += 8;
-        }
-        else
-        {
-            // header
-            cspan[0] = 108;
-            cspan[1] = 51;
-            cspan[2] = 51;
-            cspan[3] = 116;
-            offset = 4;
-
-            // size uncompressed
-            BinaryPrimitives.WriteInt32LittleEndian(cspan.Slice(offset), data.Length); offset += 4;
-        }
-
+        // size uncompressed
+        BinaryPrimitives.WriteInt32LittleEndian(cspan.Slice(offset), data.Length); offset += 4;
+        
         // deflate spec
-        BinaryPrimitives.WriteUInt16LittleEndian(cspan.Slice(offset), 40056); offset += 2;
+        cspan[offset++] = 120;
+        cspan[offset++] = 156;
 
         var memory = new ActualMemoryStream(compressed.AsMemory(offset));
         using (var deflate = new DeflateStream(memory, CompressionLevel.Optimal))
@@ -178,13 +151,12 @@ public static class BarCompression
     {
         var data = buffer.Span;
         var l33 = data.IsL33t();
-        var l66 = data.IsL66t();
-        if (l33 || l66)
+        if (l33)
         {
-            var ddata = DecompressL33tL66t(data);
+            var ddata = DecompressL33t(data);
             if (ddata != null)
             {
-                type = l33 ? CompressionType.L33t : CompressionType.L66t;
+                type = CompressionType.L33t;
                 return ddata;
             }
         }
@@ -207,6 +179,5 @@ public enum CompressionType
 {
     None,
     L33t,
-    L66t,
     Alz4
 }

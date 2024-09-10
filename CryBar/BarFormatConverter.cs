@@ -308,10 +308,7 @@ public static class BarFormatConverter
                 return BarCompression.CompressAlz4(underlying_memory.Span);
 
             case CompressionType.L33t:
-                return BarCompression.CompressL33tL66t(underlying_memory.Span, false);
-
-            case CompressionType.L66t:
-                return BarCompression.CompressL33tL66t(underlying_memory.Span, true);
+                return BarCompression.CompressL33t(underlying_memory.Span);
         }
 
         static void FindNames(XmlNode node, List<string> elements, List<string> attributes)
@@ -416,8 +413,8 @@ public static class BarFormatConverter
 
         // image info
         var usage = data_span[offset++];         // 0, 8 = Cube
-        var alpha = data_span[offset++];         // 0 = none, 4 = transparent
-        var format = data_span[offset++];        // 1 = Bgra, 4 = Dxt1, 7 = Grey, 8 = Dxt3, 9 = Dxt5
+        var alpha = data_span[offset++];         // 0 = none, 1 = Player, 4 = transparent
+        var format = data_span[offset++];        // 1 = Bgra, 5 = Dxt1Alpha, 4 = Dxt1, 7 = Grey, 8 = Dxt3, 9 = Dxt5
         var mipmap_levels = data_span[offset++]; // 10,7,8
 
         var width = (ushort)BinaryPrimitives.ReadInt32LittleEndian(data_span.Slice(offset, 4)); offset += 4;

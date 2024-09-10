@@ -2,6 +2,7 @@ using CryBar;
 using CryBarEditor.Classes;
 
 using Avalonia.Controls;
+using Avalonia.Threading;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 
@@ -13,13 +14,13 @@ using System.Text;
 using System.Text.Json;
 using System.Reflection;
 using System.ComponentModel;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 
 using AvaloniaEdit.TextMate;
 using TextMateSharp.Grammars;
-using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Png;
-using Avalonia.Threading;
+
 
 namespace CryBarEditor;
 
@@ -450,7 +451,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         PreviewedFileNote = type switch
         {
             CompressionType.L33t => "(Decompressed L33t)",
-            CompressionType.L66t => "(Decompressed L66t)",
             CompressionType.Alz4 => "(Decompressed Alz4)",
             _ => ""
         };
@@ -988,27 +988,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         try
         {
             var data = File.ReadAllBytes(file);
-            var compressed = BarCompression.CompressL33tL66t(data, false);
-            using (var f = File.Create(out_file)) f.Write(compressed.Span);
-
-            // TODO: show success message
-        }
-        catch (Exception ex)
-        {
-            // TODO: show error
-        }
-    }
-
-    async void MenuItem_CompressL66t(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
-    {
-        var file = await PickFile(sender, "Compress using L66t");
-        if (file == null) return;
-
-        var out_file = PickOutFile(file, suffix: "_l66t");
-        try
-        {
-            var data = File.ReadAllBytes(file);
-            var compressed = BarCompression.CompressL33tL66t(data, true);
+            var compressed = BarCompression.CompressL33t(data);
             using (var f = File.Create(out_file)) f.Write(compressed.Span);
 
             // TODO: show success message

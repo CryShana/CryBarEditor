@@ -113,9 +113,9 @@ public class BarFileEntry
         {
             return BarCompression.DecompressAlz4(raw, read_data);
         }
-        else if (raw.IsL33t() || raw.IsL66t())
+        else if (raw.IsL33t())
         {
-            return BarCompression.DecompressL33tL66t(raw, read_data);      
+            return BarCompression.DecompressL33t(raw, read_data);      
         }
 
         return -1;
