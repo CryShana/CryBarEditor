@@ -26,6 +26,7 @@ using SixLabors.ImageSharp.PixelFormats;
 
 using CommunityToolkit.HighPerformance;
 using Configuration = CryBarEditor.Classes.Configuration;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 
 namespace CryBarEditor;
@@ -954,7 +955,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             var dir = Path.GetDirectoryName(output_path);
             if (dir != null) Directory.CreateDirectory(dir);
 
-            using (var out_file = File.Create(output_path)) 
+            using (var out_file = File.Create(output_path))
                 out_file.Write(modified_ddt_data.Span);
         }
         finally
@@ -1109,6 +1110,39 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             var formatted_xml = BarFormatConverter.FormatXML(xml);
             File.WriteAllText(out_file, formatted_xml);
+
+            // TODO: show success message
+        }
+        catch (Exception ex)
+        {
+            // TODO: show error
+        }
+    }
+
+    async void MenuItem_ConvertDDTtoTGA(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var file = await PickFile(sender, "Convert DDT to TGA", [new("DDT Image") { Patterns = ["*.ddt"] }]);
+        if (file == null) return;
+
+        var ext = Path.GetExtension(file).ToLower();
+
+        var out_file = PickOutFile(file, new_extension: ".tga", overwrite: true);
+        try
+        {
+            var ddt_data = BarCompression.EnsureDecompressed(File.ReadAllBytes(file), out _);
+
+            var ddt = new DDTImage(ddt_data);
+            var image = await BarFormatConverter.ParseDDT(ddt);
+            if (image == null) throw new InvalidDataException("Failed to convert DDT file");
+
+            using (var stream = File.Create(out_file))
+            {
+                await image.SaveAsTgaAsync(stream, new TgaEncoder
+                {
+                    BitsPerPixel = TgaBitsPerPixel.Pixel32
+                });
+                image.Dispose();
+            }
 
             // TODO: show success message
         }
