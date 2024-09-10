@@ -112,6 +112,13 @@ public class DDTImage
     {
         var mipmap_data = ReadMipmap(mipmap_index, out var width, out var height);  
 
+        // NOTE:
+        // - RTS3 files are rare (ex: "cloudshadows.ddt" in "ArtEffects.bar")
+        // - Most RST4 DDT files use format 4 = DXT1
+        // - When Alpha = 4, format is usually either 1,8 or 9 (Bgra,DXT3,DXT5)
+        // - When Alpha = 1, format is usually 1 (Bgra)
+        // - When Alpha = 0 and Usage = 4, format is usually 3 (???)
+
         Memory2D<ColorRgba32> pixels;
         switch (FormatFlag)
         {

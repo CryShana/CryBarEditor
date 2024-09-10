@@ -75,7 +75,10 @@ public static class BarCompression
     }
     #endregion
 
-    #region L33T / L66T
+    #region L33T
+    // NOTE: L33t compression seems to be used by .mythscn files only (that I found so far)
+    // NOTE: Current L33t decompression/compression implementation not supported by AOMR (need to investigate)
+
     public static byte[]? DecompressL33t(Span<byte> data)
     {
         int offset = 4;
@@ -89,7 +92,6 @@ public static class BarCompression
         DecompressL33t(data, buffer);
         return buffer;
     }
-
     public unsafe static int DecompressL33t(Span<byte> data, Span<byte> output_data)
     {
         // TODO: there is a problem in how I decompress L33t files!!! AOMR doesn't seem to recognize when I compress it again 
@@ -116,8 +118,7 @@ public static class BarCompression
         }
 
         return size_uncompressed;
-    }
-
+    }  
     public static Memory<byte> CompressL33t(Span<byte> data)
     {
         const int HEADER_SIZE = 4 + 4 + 2;
