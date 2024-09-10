@@ -1,11 +1,14 @@
 ﻿using CommunityToolkit.HighPerformance;
 
+using CryBar.BCnEncoder.Encoder;
 using CryBar.BCnEncoder.Decoder;
 using CryBar.BCnEncoder.Shared;
 
-using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Advanced;
+using SixLabors.ImageSharp.PixelFormats;
 
+using System.Text;
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using System.Diagnostics.CodeAnalysis;
@@ -56,6 +59,7 @@ public class DDTImage
     public DDTAlpha AlphaFlag { get; private set; }
     public DDTFormat FormatFlag { get; private set; }
     public byte MipmapLevels { get; private set; }
+    public ReadOnlyMemory<byte>? ColorTable { get; private set; }
 
     public ushort BaseWidth { get; private set; }
     public ushort BaseHeight { get; private set; }
@@ -103,11 +107,12 @@ public class DDTImage
         if (rts4)
         {
             int color_table_size = BinaryPrimitives.ReadInt32LittleEndian(data_span.Slice(offset, 4)); offset += 4;
-            var color_table = data_span.Slice(offset, color_table_size); offset += color_table_size;
+            var color_table = _data.Slice(offset, color_table_size); offset += color_table_size;
+            ColorTable = color_table;
         }
 
         // read mipmaps
-        int images_per_level = (usage & 8) == 8 ? 6 : 1; // there's more images when usage is 8 = [Cube]
+        int images_per_level = 1; // (usage & 8) == 8 ? 6 : 1; // there's more images when usage is 8 = [Cube] - I HAVE NOT ENCOUNTERED THIS YET, let's assume 1 for now
         var mipmap_image_count = mipmap_levels * images_per_level;
         var mipmap_offsets = new (int, int, ushort, ushort)[mipmap_image_count];
         for (int i = 0; i < mipmap_image_count; i++)
@@ -207,15 +212,134 @@ public class DDTImage
         }
         return output;
     }
-    
-    public static Memory<byte> EncodeImageToDDT(Image<Rgba32> image, 
-        DDTVersion version, DDTUsage usage, DDTAlpha alpha, DDTFormat format)
+
+    public static Memory2D<ColorRgba32> ImageToPixels(Image<Rgba32> inputImage)
     {
-        // TODO: when RTS4, we need to make a color table (byte array sizes 64, 116, etc...)
-        // need to figure out how they are constructed
+        var pixels = inputImage.GetPixelMemoryGroup()[0];
+        var colors = new ColorRgba32[inputImage.Width * inputImage.Height];
+        for (var y = 0; y < inputImage.Height; y++)
+        {
+            var yPixels = inputImage.Frames.RootFrame.PixelBuffer.DangerousGetRowSpan(y);
+            var yColors = colors.AsSpan(y * inputImage.Width, inputImage.Width);
 
-        // TODO: image is the base image, we need to create mipmaps until sizes allow (smallest dimension is 4 pixels)
+            MemoryMarshal.Cast<Rgba32, ColorRgba32>(yPixels).CopyTo(yColors);
+        }
+        var memory = colors.AsMemory().AsMemory2D(inputImage.Height, inputImage.Width);
+        return memory;
+    }
 
-        throw new NotImplementedException();
+    public static async Task<Memory<byte>> EncodeImageToDDT(Image<Rgba32> image, 
+        DDTVersion version, DDTUsage usage, DDTAlpha alpha, DDTFormat format,
+        byte minmap_levels = 0, ReadOnlyMemory<byte>? color_table = null,
+        CancellationToken token = default)
+    {
+        int base_width = image.Width;
+        int base_height = image.Height;
+
+        byte max_levels = GetMaxMinmapLevels(base_width, base_height);
+        byte mipmap_levels = minmap_levels == 0 ? max_levels : Math.Min(max_levels, minmap_levels);
+        var images_per_level = 1; // check above note... this could be different based on usage, but am not handling it here as I've not encountered it in any AOM file
+        var mipmap_count = mipmap_levels * images_per_level;
+
+        var encoder = new BcEncoder();
+        encoder.OutputOptions.GenerateMipMaps = true;
+        encoder.OutputOptions.Quality = CompressionQuality.Balanced;
+        encoder.OutputOptions.Format = format switch
+        {
+            DDTFormat.DXT1 => CompressionFormat.Bc1,
+            DDTFormat.DXT1Alpha => CompressionFormat.Bc1WithAlpha,
+            DDTFormat.Grey => CompressionFormat.R,
+            DDTFormat.DXT3 => CompressionFormat.Bc2,
+            DDTFormat.DXT5 => CompressionFormat.Bc3,
+            _=> CompressionFormat.Bgra,
+        };
+        encoder.OutputOptions.MaxMipMapLevel = mipmap_levels;
+
+        byte[][] mipmaps = await encoder.EncodeToRawBytesAsync(ImageToPixels(image), token);
+
+        var memory = new MemoryStream();
+        using var writer = new BinaryWriter(memory, Encoding.UTF8, true);
+
+        switch (version)
+        {
+            case DDTVersion.RTS4:
+                writer.Write((byte)0x52);
+                writer.Write((byte)0x54);
+                writer.Write((byte)0x53);
+                writer.Write((byte)0x34);
+                break;
+
+            case DDTVersion.RTS3:
+                writer.Write((byte)0x52);
+                writer.Write((byte)0x54);
+                writer.Write((byte)0x53);
+                writer.Write((byte)0x33);
+                break;
+
+            default:
+                throw new NotSupportedException("Unsupported DDT version provided");
+        }
+
+        writer.Write((byte)usage);
+        writer.Write((byte)alpha);
+        writer.Write((byte)format);
+        writer.Write(mipmap_levels);
+        writer.Write(base_width);
+        writer.Write(base_height);
+
+        if (version == DDTVersion.RTS4)
+        {
+            // TODO: how is this color table constructed? for now we just copy it from existing DDT image
+
+            // color table
+            int color_table_size = color_table.HasValue ? color_table.Value.Length : 0;
+            writer.Write(color_table_size);
+
+            if (color_table_size > 0)
+            {
+                writer.Write(color_table!.Value.Span);
+            }
+        }
+
+        // write mipmap offsets/length
+        int mipmap_header_offset = (int)memory.Position;
+        int mipmap_data_offset = mipmap_header_offset + (mipmap_count * 8);
+        for (int i = 0; i < mipmap_count; i++)
+        {
+            int mipmap_size = mipmaps[i].Length;
+            writer.Write(mipmap_data_offset);
+            writer.Write(mipmap_size);
+
+            mipmap_data_offset += mipmap_size;
+        }
+
+        // write mipmap data
+        for (int i = 0; i < mipmap_count; i++)
+        {
+            var mipmap_data = mipmaps[i];
+            writer.Write(mipmap_data);
+        }
+
+        return memory.GetBuffer().AsMemory(0, (int)memory.Position);
+    }
+
+    /// <summary>
+    /// Calculates the expected and max. amount of minmap levels based on resolution
+    /// (This will not always match the actual levels in a DDT file, it could be less, but never more)
+    /// </summary>
+    public static byte GetMaxMinmapLevels(int width, int height)
+    {
+        // always take the smallest dimension
+        int size = Math.Min(width, height);
+
+        byte levels = 0; 
+        int new_size = size;
+        for (int i = 0; new_size > 4 ; i++)
+        {
+            levels++;
+            new_size = size >> i;
+        }
+
+        return levels;
     }
 }

@@ -22,8 +22,11 @@ using AvaloniaEdit.TextMate;
 using TextMateSharp.Grammars;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Tga;
+using SixLabors.ImageSharp.PixelFormats;
+
 using CommunityToolkit.HighPerformance;
 using Configuration = CryBarEditor.Classes.Configuration;
+
 
 namespace CryBarEditor;
 
@@ -95,7 +98,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public string PreviewedFileName { get => string.IsNullOrEmpty(_previewedFileName) ? "No file selected" : _previewedFileName; set { _previewedFileName = value; OnPropertyChanged(nameof(PreviewedFileName)); } }
     public string PreviewedFileNote { get => _previewedFileNote; set { _previewedFileNote = value; OnPropertyChanged(nameof(PreviewedFileNote)); } }
     public string PreviewedFileData { get => _previewedFileData; set { _previewedFileData = value; OnPropertyChanged(nameof(PreviewedFileData)); } }
-
+    public bool SelectedIsDDT =>
+        Path.GetExtension(SelectedFileEntry?.RelativePath ?? "").ToLower() == ".ddt" ||
+        Path.GetExtension(SelectedBarEntry?.RelativePath ?? "").ToLower() == ".ddt";
 
     public FileEntry? SelectedFileEntry
     {
@@ -106,6 +111,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             _selectedFileEntry = value;
             OnPropertyChanged(nameof(SelectedFileEntry));
+            OnPropertyChanged(nameof(SelectedIsDDT));
 
             // ensure BAR file is not already loaded
             if (value != null && _barStream?.Name == Path.Combine(_rootDirectory, value.RelativePath))
@@ -127,6 +133,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             _selectedBarEntry = value;
             OnPropertyChanged(nameof(SelectedBarEntry));
+            OnPropertyChanged(nameof(SelectedIsDDT));
+
             _ = Preview(value);
         }
     }
@@ -881,6 +889,73 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 await Export(to_export, false, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
                 await Export(to_export, true, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
             }
+        }
+        finally
+        {
+            item.IsEnabled = true;
+        }
+    }
+
+    async void MenuItem_ReplaceImageAndExportDDT(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (!Directory.Exists(_exportRootDirectory))
+            return;
+
+        var item = (MenuItem)sender!;
+        var list = item.Parent?.Parent?.Parent as ListBox;
+        if (list == null)
+            return;
+
+        item.IsEnabled = false;
+
+        try
+        {
+            string relative_path_full = "";
+            string title = "";
+            Memory<byte> data;
+            if (list.ItemsSource == Entries)
+            {
+                if (SelectedBarEntry == null || _barStream == null)
+                    return;
+
+                relative_path_full = GetBARFullRelativePath(SelectedBarEntry);
+                data = SelectedBarEntry.ReadDataDecompressed(_barStream);
+                title = $"Pick image to replace {Path.GetFileName(SelectedBarEntry.RelativePath)}";
+            }
+            else
+            {
+                if (SelectedFileEntry == null || !Directory.Exists(_rootDirectory))
+                    return;
+
+                relative_path_full = GetRootFullRelativePath(SelectedFileEntry);
+                data = BarCompression.EnsureDecompressed(File.ReadAllBytes(Path.Combine(_rootDirectory, SelectedFileEntry.RelativePath)), out _);
+                title = $"Pick image to replace {Path.GetFileName(SelectedFileEntry.RelativePath)}";
+            }
+
+            var ddt = new DDTImage(data);
+            if (!ddt.ParseHeader())
+            {
+                // TODO: show error
+                return;
+            }
+
+            var file = await PickFile(sender, title, [new("Image") { Patterns = ["*.jpg", "*.jpeg", "*.png", "*.tga", "*.bmp", "*.webp"] }]);
+            if (file == null) return;
+
+            // TODO: show progress for this, because it's a slow process!!!
+
+            using var image = SixLabors.ImageSharp.Image.Load<Rgba32>(file);
+            var modified_ddt_data = await DDTImage.EncodeImageToDDT(image, ddt.Version, ddt.UsageFlag, ddt.AlphaFlag, ddt.FormatFlag, ddt.MipmapLevels, ddt.ColorTable);
+
+            // CHECK: should I consider decompression of the original and apply it?
+
+            // export it
+            var output_path = Path.Combine(_exportRootDirectory, relative_path_full);
+            var dir = Path.GetDirectoryName(output_path);
+            if (dir != null) Directory.CreateDirectory(dir);
+
+            using (var out_file = File.Create(output_path)) 
+                out_file.Write(modified_ddt_data.Span);
         }
         finally
         {

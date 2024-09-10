@@ -106,6 +106,12 @@
 								<MenuItem Header="{Binding SelectedFileEntries.Count, StringFormat='Export {0} selected (copy+converted)'}"
 										  IsVisible="{Binding CanExport}"
 										  Click="MenuItem_ExportSelectedRawConverted" />
+								
+								<Separator IsVisible="{Binding SelectedIsDDT}"/>
+
+								<MenuItem Header="Replace image and export DDT"
+										  IsVisible="{Binding SelectedIsDDT}"
+										  Click="MenuItem_ReplaceImageAndExportDDT"/>
 							</ContextMenu>
 						</ListBox.ContextMenu>
 					</ListBox>
@@ -154,6 +160,12 @@
 								<MenuItem Header="{Binding SelectedBarFileEntries.Count, StringFormat='Export {0} selected (copy+converted)'}"
 										  IsVisible="{Binding CanExport}"
 										  Click="MenuItem_ExportSelectedRawConverted" />
+
+								<Separator IsVisible="{Binding SelectedIsDDT}"/>
+
+								<MenuItem Header="Replace image and export DDT"
+										  IsVisible="{Binding SelectedIsDDT}"
+										  Click="MenuItem_ReplaceImageAndExportDDT"/>
 							</ContextMenu>
 						</ListBox.ContextMenu>
 					</ListBox>
