@@ -358,15 +358,12 @@ public static class BarFormatConverter
         }
     }
 
-    public static Memory<byte>? DDTtoTGA(ReadOnlyMemory<byte> ddt_data, int mipmap_index = 0)
+    public static Task<Memory<byte>?> DDTtoTGA(ReadOnlyMemory<byte> ddt_data, int mipmap_index = 0, CancellationToken token = default)
     {
-        var data_span = ddt_data.Span;
-
         var ddt = new DDTImage(ddt_data);
-        if (!ddt.ParseHeader()) return null;
+        if (!ddt.ParseHeader()) return Task.FromResult<Memory<byte>?>(null);
         var data = ddt.ReadMipmap(mipmap_index, out var w, out var h);
-
-        return ddt.ConvertMipmapToTGA(0);
+        return ddt.ConvertMipmapToTGA(0, token);
     }
 
     public static Memory<byte> TGAtoDDT(Span<byte> tga_data)

@@ -108,9 +108,9 @@ public class DDTImage
         return image_data;
     }
 
-    public Memory<byte> ConvertMipmapToTGA(int mipmap_index = 0)
+    public async Task<Memory<byte>?> ConvertMipmapToTGA(int mipmap_index = 0, CancellationToken token = default)
     {
-        var mipmap_data = ReadMipmap(mipmap_index, out var width, out var height);  
+        var mipmap_data = ReadMipmap(mipmap_index, out var width, out var height);
 
         // NOTE:
         // - RTS3 files are rare (ex: "cloudshadows.ddt" in "ArtEffects.bar")
@@ -118,41 +118,51 @@ public class DDTImage
         // - When Alpha = 4, format is usually either 1,8 or 9 (Bgra,DXT3,DXT5)
         // - When Alpha = 1, format is usually 1 (Bgra)
         // - When Alpha = 0 and Usage = 4, format is usually 3 (???)
+        // - Most images, even large ones 2048x2048, load within 0.25 seconds (lag spike usually caused by displaying it in UI)
 
-        Memory2D<ColorRgba32> pixels;
-        switch (FormatFlag)
+        try
         {
-            case 4:
-                // DXT1 - CompressionFormat.Bc1
-                pixels = new BcDecoder().DecodeRaw2D(mipmap_data, width, height, CompressionFormat.Bc1);
-                break;
-            case 5:
-                // DXT1 with Transparency - CompressionFormat.Bc1WithAlpha
-                pixels = new BcDecoder().DecodeRaw2D(mipmap_data, width, height, CompressionFormat.Bc1WithAlpha);
-                break;
-            case 7:
-                // Grey - CompressionFormat.R
-                pixels = new BcDecoder().DecodeRaw2D(mipmap_data, width, height, CompressionFormat.R);
-                break;
-            case 8:
-                // DXT3 - CompressionFormat.Bc2
-                pixels = new BcDecoder().DecodeRaw2D(mipmap_data, width, height, CompressionFormat.Bc2);
-                break;
-            case 9:
-                // DXT5 - CompressionFormat.Bc3
-                pixels = new BcDecoder().DecodeRaw2D(mipmap_data, width, height, CompressionFormat.Bc3);
-                break;
-            default: // usually 1
-                // CompressionFormat.Bgra
-                pixels = new BcDecoder().DecodeRaw2D(mipmap_data, width, height, CompressionFormat.Bgra);
-                break;
+            var decoder = new BcDecoder();
+            Memory2D<ColorRgba32> decoded_pixels;
+            switch (FormatFlag)
+            {
+                case 4:
+                    // DXT1 - CompressionFormat.Bc1
+                    decoded_pixels = await decoder.DecodeRaw2DAsync(mipmap_data, width, height, CompressionFormat.Bc1, token);
+                    break;
+                case 5:
+                    // DXT1 with Transparency - CompressionFormat.Bc1WithAlpha
+                    decoded_pixels = await decoder.DecodeRaw2DAsync(mipmap_data, width, height, CompressionFormat.Bc1WithAlpha, token);
+                    break;
+                case 7:
+                    // Grey - CompressionFormat.R
+                    decoded_pixels = await decoder.DecodeRaw2DAsync(mipmap_data, width, height, CompressionFormat.R, token);
+                    break;
+                case 8:
+                    // DXT3 - CompressionFormat.Bc2
+                    decoded_pixels = await decoder.DecodeRaw2DAsync(mipmap_data, width, height, CompressionFormat.Bc2, token);
+                    break;
+                case 9:
+                    // DXT5 - CompressionFormat.Bc3
+                    decoded_pixels = await decoder.DecodeRaw2DAsync(mipmap_data, width, height, CompressionFormat.Bc3, token);
+                    break;
+                default: // usually 1
+                         // CompressionFormat.Bgra
+                    decoded_pixels = await decoder.DecodeRaw2DAsync(mipmap_data, width, height, CompressionFormat.Bgra, token);
+                    break;
+            }
+
+            using var memory = new MemoryStream();
+            using (var image = PixelsToImage(decoded_pixels))
+                await image.SaveAsTgaAsync(memory, token);
+
+            return memory.GetBuffer().AsMemory(0, (int)memory.Position);
         }
-
-        using var memory = new MemoryStream();
-        using (var image = PixelsToImage(pixels))
-            image.SaveAsTga(memory);
-
-        return memory.GetBuffer().AsMemory(0, (int)memory.Position);
+        catch (OperationCanceledException) { return null; }
+        catch
+        {
+            throw;
+        }
     }
 
     public static Image<Rgba32> PixelsToImage(Memory2D<ColorRgba32> colors)

@@ -12,6 +12,7 @@ using System.Xml;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Reflection;
 using System.ComponentModel;
 using System.Threading.Tasks;
@@ -39,7 +40,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     List<FileEntry>? _loadedFiles = null;
     FileSystemWatcher? _watcher = null;
     BarFileEntry? _selectedBarEntry = null;
-    
+
 
     /// <summary>
     /// This is used to find relative path for Root directory files
@@ -92,7 +93,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public string PreviewedFileName { get => string.IsNullOrEmpty(_previewedFileName) ? "No file selected" : _previewedFileName; set { _previewedFileName = value; OnPropertyChanged(nameof(PreviewedFileName)); } }
     public string PreviewedFileNote { get => _previewedFileNote; set { _previewedFileNote = value; OnPropertyChanged(nameof(PreviewedFileNote)); } }
     public string PreviewedFileData { get => _previewedFileData; set { _previewedFileData = value; OnPropertyChanged(nameof(PreviewedFileData)); } }
-    
+
 
     public FileEntry? SelectedFileEntry
     {
@@ -110,8 +111,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             Dispatcher.UIThread.Post(() =>
             {
-                Preview(value);
-            });     
+                _ = Preview(value);
+            });
         }
     }
 
@@ -124,7 +125,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             _selectedBarEntry = value;
             OnPropertyChanged(nameof(SelectedBarEntry));
-            Preview(value);
+            _ = Preview(value);
         }
     }
     #endregion
@@ -141,7 +142,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         InitializeComponent();
 
-        TryRestorePreviousConfiguration(); 
+        TryRestorePreviousConfiguration();
 
         // set up editor
         _registryOptions = new RegistryOptions(ThemeName.DarkPlus);
@@ -414,7 +415,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
-    public void Preview(FileEntry? entry)
+    CancellationTokenSource? _previewCsc;
+
+    public async Task Preview(FileEntry? entry)
     {
         if (entry == null || !Directory.Exists(_rootDirectory))
             return;
@@ -426,24 +429,30 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
+        _previewCsc?.Cancel();
+        _previewCsc = new();
         PreviewedFileData = $"File Size: {new FileInfo(path).Length}";
-        Preview(entry, F_GetFullRelativePathRoot, F_ReadRoot);
+        await Preview(entry, F_GetFullRelativePathRoot, F_ReadRoot, _previewCsc.Token);
     }
 
-    public void Preview(BarFileEntry? entry)
+    public async Task Preview(BarFileEntry? entry)
     {
         if (entry == null || _barStream == null)
             return;
 
+        _previewCsc?.Cancel();
+        _previewCsc = new();
+
         PreviewedFileData = $"BAR Offset: {entry.ContentOffset},   BAR Size: {entry.SizeInArchive},   Actual Size: {entry.SizeUncompressed},   Compressed: {(entry.IsCompressed ? "true" : "false")}";
-        Preview(entry, F_GetFullRelativePathBAR, F_ReadBAR);
+        await Preview(entry, F_GetFullRelativePathBAR, F_ReadBAR, _previewCsc.Token);
     }
 
-    public void Preview<T>(T entry, Func<T, string> get_rel_path, Func<T, Memory<byte>> read)
+    public async Task Preview<T>(T entry, Func<T, string> get_rel_path, 
+        Func<T, Memory<byte>> read, CancellationToken token = default)
     {
         var relative_path = get_rel_path(entry);
         var ext = Path.GetExtension(relative_path).ToLower();
-        
+
         var text = "";
         PreviewedFileName = Path.GetFileName(relative_path);
 
@@ -475,19 +484,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             {
                 text = "Failed to parse XMB document";
                 ext = ".txt";
-            } 
+            }
         }
         else if (ext == ".ddt")
         {
             PreviewedFileNote = "(Converted to TGA)";
 
-            var image_data = BarFormatConverter.DDTtoTGA(data);
+            var image_data = await BarFormatConverter.DDTtoTGA(data, token: token);
             SetImagePreview(image_data);
             return;
         }
         else
         {
-            text = Encoding.UTF8.GetString(data.Span);     
+            text = Encoding.UTF8.GetString(data.Span);
         }
 
         SetImagePreview(null);
@@ -497,7 +506,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         textEditor.ScrollTo(0, 0);
     }
 
-    public void Export<T>(IList<T> files, bool should_convert, Func<T, string> getFullRelPath, Action<T, FileStream> copy, Func<T, Memory<byte>> read)
+    public async Task Export<T>(IList<T> files, bool should_convert,
+        Func<T, string> getFullRelPath,
+        Action<T, FileStream> copy,
+        Func<T, Memory<byte>> read)
     {
         // TODO: show progress bar somewhere
 
@@ -548,7 +560,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     }
                     else if (ext == ".ddt")
                     {
-                        var image_data = BarFormatConverter.DDTtoTGA(data);
+                        var image_data = await BarFormatConverter.DDTtoTGA(data);
                         if (image_data == null) throw new InvalidDataException("Failed to convert DDT file");
 
                         file.Write(image_data.Value.Span);
@@ -738,7 +750,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
-    void MenuItem_ExportSelectedRaw(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    async void MenuItem_ExportSelectedRaw(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         if (!Directory.Exists(_exportRootDirectory))
             return;
@@ -748,19 +760,28 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (list == null)
             return;
 
-        if (list.ItemsSource == Entries)
+        item.IsEnabled = false;
+
+        try
         {
-            var to_export = SelectedBarFileEntries.ToArray();
-            Export(to_export, false, F_GetFullRelativePathBAR, F_CopyBAR, F_ReadBAR);
+            if (list.ItemsSource == Entries)
+            {
+                var to_export = SelectedBarFileEntries.ToArray();
+                await Export(to_export, false, F_GetFullRelativePathBAR, F_CopyBAR, F_ReadBAR);
+            }
+            else
+            {
+                var to_export = SelectedFileEntries.ToArray();
+                await Export(to_export, false, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
+            }
         }
-        else
+        finally
         {
-            var to_export = SelectedFileEntries.ToArray();
-            Export(to_export, false, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
+            item.IsEnabled = true;
         }
     }
 
-    void MenuItem_ExportSelectedConverted(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    async void MenuItem_ExportSelectedConverted(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         if (!Directory.Exists(_exportRootDirectory))
             return;
@@ -770,19 +791,28 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (list == null)
             return;
 
-        if (list.ItemsSource == Entries)
+        item.IsEnabled = false;
+
+        try
         {
-            var to_export = SelectedBarFileEntries.ToArray();
-            Export(to_export, true, F_GetFullRelativePathBAR, F_CopyBAR, F_ReadBAR);
+            if (list.ItemsSource == Entries)
+            {
+                var to_export = SelectedBarFileEntries.ToArray();
+                await Export(to_export, true, F_GetFullRelativePathBAR, F_CopyBAR, F_ReadBAR);
+            }
+            else
+            {
+                var to_export = SelectedFileEntries.ToArray();
+                await Export(to_export, true, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
+            }
         }
-        else
+        finally
         {
-            var to_export = SelectedFileEntries.ToArray();
-            Export(to_export, true, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
+            item.IsEnabled = true;
         }
     }
 
-    void MenuItem_ExportSelectedRawConverted(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    async void MenuItem_ExportSelectedRawConverted(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         if (!Directory.Exists(_exportRootDirectory))
             return;
@@ -792,17 +822,26 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (list == null)
             return;
 
-        if (list.ItemsSource == Entries)
+        item.IsEnabled = false;
+
+        try
         {
-            var to_export = SelectedBarFileEntries.ToArray();
-            Export(to_export, false, F_GetFullRelativePathBAR, F_CopyBAR, F_ReadBAR);
-            Export(to_export, true, F_GetFullRelativePathBAR, F_CopyBAR, F_ReadBAR);
+            if (list.ItemsSource == Entries)
+            {
+                var to_export = SelectedBarFileEntries.ToArray();
+                await Export(to_export, false, F_GetFullRelativePathBAR, F_CopyBAR, F_ReadBAR);
+                await Export(to_export, true, F_GetFullRelativePathBAR, F_CopyBAR, F_ReadBAR);
+            }
+            else
+            {
+                var to_export = SelectedFileEntries.ToArray();
+                await Export(to_export, false, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
+                await Export(to_export, true, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
+            }
         }
-        else
+        finally
         {
-            var to_export = SelectedFileEntries.ToArray();
-            Export(to_export, false, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
-            Export(to_export, true, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
+            item.IsEnabled = true;
         }
     }
     #endregion
@@ -945,7 +984,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var out_file = PickOutFile(file, suffix: (ext == ".xmb" ? "" : ext), new_extension: (ext == ".xmb" ? "" : ".xml"), overwrite: true);
         try
         {
-            var xmb_data= File.ReadAllBytes(file);
+            var xmb_data = File.ReadAllBytes(file);
             var xml_decompressed = BarCompression.EnsureDecompressed(xmb_data, out _);
             var xml = BarFormatConverter.XMBtoXML(xml_decompressed.Span);
             if (xml == null) throw new Exception("Failed to parse XMB file");
@@ -1023,7 +1062,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     async void MenuItem_XStoRM(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
-        var file = await PickFile(sender, "Pick XS script to make RM friendly", [ new("XS script") { Patterns = [ "*.xs" ] }]);
+        var file = await PickFile(sender, "Pick XS script to make RM friendly", [new("XS script") { Patterns = ["*.xs"] }]);
         if (file == null) return;
 
         var out_file = PickOutFile(file, suffix: "_RMFriendly");
@@ -1081,7 +1120,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             if (Directory.Exists(config.RootDirectory))
                 LoadDir(config.RootDirectory, false);
-            
+
             if (Directory.Exists(config.ExportRootDirectory))
                 ExportRootDirectory = config.ExportRootDirectory;
         }
@@ -1095,7 +1134,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         var exe_dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
         var config_path = Path.Combine(exe_dir ?? "", CONFIG_FILE);
-        
+
         try
         {
             File.WriteAllText(config_path, JsonSerializer.Serialize(new Configuration
