@@ -25,8 +25,7 @@ public static class BarFormatConverter
         }
 
         var offset = 2;
-        var data_length = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4));
-        offset += 4;
+        var data_length = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4)); offset += 4;
 
         if (data_length < 0 || data_length > xmb_data.Length - 6)
         {
@@ -36,7 +35,6 @@ public static class BarFormatConverter
 
         // let's limit ourselves to just this data
         xmb_data = xmb_data.Slice(0, 6 + data_length);
-
         if (xmb_data.Slice(offset, 2) is not [88, 82])
         {
             // XR not found (marks the root node)
@@ -44,27 +42,21 @@ public static class BarFormatConverter
         }
         offset += 2;
 
-        var id1 = BinaryPrimitives.ReadUInt32LittleEndian(xmb_data.Slice(offset, 4));
-        offset += 4;
-
+        var id1 = BinaryPrimitives.ReadUInt32LittleEndian(xmb_data.Slice(offset, 4)); offset += 4;
         if (id1 != 4)
         {
             // invalid id
             return null;
         }
 
-        var version = BinaryPrimitives.ReadUInt32LittleEndian(xmb_data.Slice(offset, 4));
-        offset += 4;
-
+        var version = BinaryPrimitives.ReadUInt32LittleEndian(xmb_data.Slice(offset, 4)); offset += 4;
         if (version != 8)
         {
             // unsupported version
             return null;
         }
 
-        var element_count = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4));
-        offset += 4;
-
+        var element_count = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4)); offset += 4;
         if (element_count <= 0 || element_count > BarFile.MAX_ENTRY_COUNT)
         {
             // too many items, value probably invalid
@@ -75,23 +67,18 @@ public static class BarFormatConverter
         List<string> elements = new(element_count);
         for (int i = 0; i < element_count; i++)
         {
-            var name_length = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4)) * 2;
-            offset += 4;
-
+            var name_length = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4)) * 2; offset += 4;
             if (name_length <= 0 || name_length > BarFile.MAX_TEXT_LENGTH)
             {
                 // invalid item name length
                 return null;
             }
 
-            var name = Encoding.Unicode.GetString(xmb_data.Slice(offset, name_length));
-            offset += name_length;
+            var name = Encoding.Unicode.GetString(xmb_data.Slice(offset, name_length)); offset += name_length;
             elements.Add(name);
         }
 
-        var attrib_count = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4));
-        offset += 4;
-
+        var attrib_count = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4)); offset += 4;
         if (attrib_count < 0 || attrib_count > BarFile.MAX_ENTRY_COUNT)
         {
             // too many attributes, value probably invalid
@@ -101,17 +88,14 @@ public static class BarFormatConverter
         List<string> attributes = new(element_count);
         for (int i = 0; i < attrib_count; i++)
         {
-            var name_length = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4)) * 2;
-            offset += 4;
-
+            var name_length = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4)) * 2; offset += 4;
             if (name_length <= 0 || name_length > BarFile.MAX_TEXT_LENGTH)
             {
                 // invalid attribute name length
                 return null;
             }
 
-            var name = Encoding.Unicode.GetString(xmb_data.Slice(offset, name_length));
-            offset += name_length;
+            var name = Encoding.Unicode.GetString(xmb_data.Slice(offset, name_length)); offset += name_length;
             attributes.Add(name);
         }
 
@@ -141,20 +125,14 @@ public static class BarFormatConverter
             //var node_length = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
             offset += 4;
 
-            var text_length = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)) * 2;
-            offset += 4;
-
+            var text_length = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)) * 2; offset += 4;
             if (text_length < 0 || text_length > BarFile.MAX_TEXT_LENGTH)
             {
                 return null;
             }
 
-            var text = text_length == 0 ? "" : Encoding.Unicode.GetString(data.Slice(offset, text_length));
-            offset += text_length;
-
-            var element_idx = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
-            offset += 4;
-
+            var text = text_length == 0 ? "" : Encoding.Unicode.GetString(data.Slice(offset, text_length)); offset += text_length;
+            var element_idx = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
             if (element_idx < 0 || element_idx >= elements.Count)
             {
                 return null;
@@ -167,40 +145,29 @@ public static class BarFormatConverter
             offset += 4;
 
             // ATTRIBUTES
-            int attrib_count = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
-            offset += 4;
-
+            int attrib_count = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
             for (int i = 0; i < attrib_count; i++)
             {
-                int attrib_idx = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
-                offset += 4;
-
+                int attrib_idx = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
                 if (attrib_idx < 0 || attrib_idx >= attributes.Count)
                 {
                     return null;
                 }
 
                 var attrib = doc.CreateAttribute(attributes[attrib_idx]);
-
-                var attrib_text_length = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)) * 2;
-                offset += 4;
-
+                var attrib_text_length = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)) * 2; offset += 4;
                 if (attrib_text_length < 0 || attrib_text_length > BarFile.MAX_TEXT_LENGTH)
                 {
                     return null;
                 }
 
-                var attrib_text = attrib_text_length == 0 ? "" : Encoding.Unicode.GetString(data.Slice(offset, attrib_text_length));
-                offset += attrib_text_length;
-
+                var attrib_text = attrib_text_length == 0 ? "" : Encoding.Unicode.GetString(data.Slice(offset, attrib_text_length)); offset += attrib_text_length;
                 attrib.InnerText = attrib_text;
                 node.Attributes.Append(attrib);
             }
 
             // CHILD NODES
-            int child_count = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
-            offset += 4;
-
+            int child_count = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
             for (int i = 0; i < child_count; i++)
             {
                 var child = GetNextNode(doc, data, ref offset, elements, attributes);
@@ -405,8 +372,10 @@ public static class BarFormatConverter
         // TODO: move this to separate class where we can just read mipmap level and then decide which mipmap to read
         // TODO: optimize how we read and decode this data, right now it's quite slow
 
-        // RTS4 header
-        if (data_span is not [0x52, 0x54, 0x53, 0x34, ..])
+        // game uses either RTS4 or RTS3
+        var rts4 = data_span is [0x52, 0x54, 0x53, 0x34, ..];
+        var rts3 = data_span is [0x52, 0x54, 0x53, 0x33, ..];
+        if (!rts4 && !rts3)
             return null;
 
         var offset = 4;
@@ -419,10 +388,13 @@ public static class BarFormatConverter
 
         var width = (ushort)BinaryPrimitives.ReadInt32LittleEndian(data_span.Slice(offset, 4)); offset += 4;
         var height = (ushort)BinaryPrimitives.ReadInt32LittleEndian(data_span.Slice(offset, 4)); offset += 4;
-        
-        // color table (for RTS4 only):
-        int color_table_size = BinaryPrimitives.ReadInt32LittleEndian(data_span.Slice(offset, 4)); offset += 4;
-        Span<byte> color_table = data_span.Slice(offset, color_table_size); offset += color_table_size;
+
+        // color table (RTS4 only):
+        if (rts4)
+        {
+            int color_table_size = BinaryPrimitives.ReadInt32LittleEndian(data_span.Slice(offset, 4)); offset += 4;
+            Span<byte> color_table = data_span.Slice(offset, color_table_size); offset += color_table_size;
+        }
 
         // mipmaps start here
         int images_per_level = (usage & 8) == 8 ? 6 : 1; // there's more images when usage is 8 = [Cube]
@@ -468,7 +440,7 @@ public static class BarFormatConverter
                 // DXT5 - CompressionFormat.Bc3
                 pixels = new BcDecoder().DecodeRaw2D(image_data, main_width, main_height, CompressionFormat.Bc3);
                 break;
-            default:
+            default: // usually 1
                 // CompressionFormat.Bgra
                 pixels = new BcDecoder().DecodeRaw2D(image_data, main_width, main_height, CompressionFormat.Bgra);
                 break;

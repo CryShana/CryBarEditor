@@ -6,14 +6,14 @@ Tool for fast and easy resource management, focused on AOMR.
 - Pick a **Root directory** (usually `\games` folder) for fast switching between BAR and other files
 - Editor supports previewing various formats:
   - XMB
-  - Preview images (DDT not yet supported)
+  - Preview images (including DDT)
 - Syntax highlighting for common formats (json,xml,ini,xs,...)
 - Pick an **export Root directory** for fast exporting either from BAR or from Root directory
 - Tools for direct file manipulation:
   - Convert XML -> XMB
   - Convert XMB -> XML
-  - Compress with Alz4/L33t/L66t
-  - Decompress file (autodetects any of above formats
+  - Compress with Alz4/L33t
+  - Decompress file with Alz4/L33t
 - Tool for converting XS trigger scripts to RM-friendly scripts for easy inclusion in random maps
 - "**Search everything**" tool added that searches for query in all files and all BAR entries (useful for finding references)
 - Remembering last selected Root directory and export Root directory, so you can **easily return to where you left off**
