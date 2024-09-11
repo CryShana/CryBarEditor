@@ -25,6 +25,7 @@ public partial class SearchWindow : SimpleWindow
 
     public bool CurrentlySearching { get => _searching; set { _searching = value; OnSelfChanged(); } }
     public bool CanSearch => _query.Length > 2;
+
     public string Query { get => _query; set { _query = value; OnSelfChanged(); OnPropertyChanged(nameof(CanSearch)); } }
     public string Status { get => _status; set { _status = value; OnSelfChanged(); } }
     public ObservableCollectionExtended<SearchResult> SearchResults { get; } = new();
@@ -296,10 +297,7 @@ public partial class SearchWindow : SimpleWindow
             return (left_context, query, right_context);
         }
 
-        static string MakeItSafe(string text)
-        {
-            return GetUnsafeCharsRgx().Replace(text, " ");
-        }
+        static string MakeItSafe(string text) => GetUnsafeCharsRgx().Replace(text, " ");        
     }
 
     [GeneratedRegex(@"\n|\r|[^\u0020-\u007E\u00A1-]")]

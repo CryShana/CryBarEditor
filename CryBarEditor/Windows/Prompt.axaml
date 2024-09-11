@@ -3,7 +3,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 		xmlns:micons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
-        mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="150"
+        mc:Ignorable="d" d:DesignWidth="350" d:DesignHeight="160"
         x:Class="CryBarEditor.Prompt" WindowStartupLocation="CenterOwner"
 		ExtendClientAreaChromeHints="NoChrome"
 		ExtendClientAreaToDecorationsHint="True"
@@ -23,43 +23,54 @@
 									 Kind="AlertCircle" Width="50" Height="50"
 									 Foreground="#f55142"
 									 IsVisible="{Binding PromptIsError}" />
-				
+
 				<micons:MaterialIcon DockPanel.Dock="Left" VerticalAlignment="Top"
 									 Kind="CheckCircle" Width="50" Height="50"
 									 Foreground="#78f542"
 									 IsVisible="{Binding PromptIsSuccess}" />
-				
+
 				<micons:MaterialIcon DockPanel.Dock="Left" VerticalAlignment="Top"
 									 Kind="Information" Width="50" Height="50"
 									 Foreground="#77c1e0"
 									 IsVisible="{Binding PromptIsInformation}" />
-				
+
 				<micons:MaterialIcon DockPanel.Dock="Left" VerticalAlignment="Top"
 									 Kind="ProgressHelper" Width="50" Height="50"
 									 Foreground="#5da2e8"
+									 Classes.Finished="{Binding ProgressFinished}"
 									 IsVisible="{Binding PromptIsProgress}" />
+
 				<DockPanel Margin="0,0,5,0">
 					<TextBlock Text="{Binding PromptTitle}"
 							   FontWeight="Bold" Margin="4,5,0,0"
 							   DockPanel.Dock="Top"
 							   VerticalAlignment="Top"
-							   TextWrapping="NoWrap" />
+							   TextWrapping="Wrap" />
 
-					<ScrollViewer DockPanel.Dock="Top">
-						<TextBlock Text="{Binding PromptText}"
+					<ScrollViewer DockPanel.Dock="Top"
+								  ScrollViewer.VerticalScrollBarVisibility="Auto">
+						<SelectableTextBlock Text="{Binding PromptText}"
 									Margin="4,5,0,0"
 									VerticalAlignment="Top"
 									TextWrapping="Wrap" />
 					</ScrollViewer>
-					
-					<ProgressBar Minimum="0" Maximum="100" Value="50"
-								 DockPanel.Dock="Bottom"
-								 IsVisible="{Binding PromptIsProgress}"/>
 				</DockPanel>
 
 			</DockPanel>
 			<DockPanel Grid.Row="1" Margin="5,0,5,0" LastChildFill="False">
-				<Button DockPanel.Dock="Right" Content="Close" 
+				<ProgressBar x:Name="progressBar" Minimum="0" Maximum="100" Value="50"
+							 DockPanel.Dock="Left" IsIndeterminate="True"
+							 Width="255" Height="9"
+							 Classes.Finished="{Binding ProgressFinished}"
+							 IsVisible="{Binding PromptIsProgress}">
+					<ProgressBar.Styles>
+						<Style Selector="ProgressBar.Finished">
+							<Setter Property="Foreground" Value="#78f542" />
+						</Style>
+					</ProgressBar.Styles>
+				</ProgressBar>
+
+				<Button DockPanel.Dock="Right" Content="Close"
 						Click="CloseButtonClick"
 						IsEnabled="{Binding CanClose}" />
 			</DockPanel>

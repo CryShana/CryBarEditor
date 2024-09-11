@@ -13,8 +13,6 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
-using System.Reflection;
-using System.ComponentModel;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
@@ -27,7 +25,7 @@ using SixLabors.ImageSharp.PixelFormats;
 
 using CommunityToolkit.HighPerformance;
 using Configuration = CryBarEditor.Classes.Configuration;
-
+using System.Diagnostics;
 
 namespace CryBarEditor;
 
@@ -580,12 +578,20 @@ public partial class MainWindow : SimpleWindow
         Action<T, FileStream> copy,
         Func<T, Memory<byte>> read)
     {
-        // TODO: show progress bar somewhere
+        var progress = new Progress<string?>();
+        IProgress<string?> p = progress;
+
+        _ = ShowProgress($"Exporting {files.Count} files", progress);
+
+        p.Report("Starting export...");
+
+        var sw = Stopwatch.StartNew();
 
         List<string> failed = new();
         foreach (var f in files)
         {
             var relative_path = getFullRelPath(f);
+            p.Report($"Exporting '{Path.GetFileName(relative_path)}'");
 
             try
             {
@@ -654,7 +660,19 @@ public partial class MainWindow : SimpleWindow
             }
         }
 
-        // TODO: maybe show faileda attempts
+        sw.Stop();
+
+        if (failed.Count > 0)
+        {
+            p.Report($"Finished in {sw.Elapsed.TotalSeconds:0.00} seconds with {failed.Count} failed exports:\n"
+                + string.Join(",", failed.Select(x => Path.GetFileName(x))));
+        }
+        else
+        {
+            p.Report($"Finished in {sw.Elapsed.TotalSeconds:0.00} seconds");
+        }
+
+        p.Report(null); 
     }
     #endregion
 
@@ -740,11 +758,6 @@ public partial class MainWindow : SimpleWindow
             return;
 
         Entries.AddItems(FilterBAR(_barFile.Entries));
-    }
-
-    public void RefreshPreview()
-    {
-
     }
 
     IEnumerable<BarFileEntry> FilterBAR(IEnumerable<BarFileEntry> entries)
@@ -969,20 +982,42 @@ public partial class MainWindow : SimpleWindow
             var file = await PickFile(sender, title, [new("Image") { Patterns = ["*.jpg", "*.jpeg", "*.png", "*.tga", "*.bmp", "*.webp"] }]);
             if (file == null) return;
 
-            // TODO: show progress for this, because it's a slow process!!!
+            var progress = new Progress<string?>();
+            IProgress<string?> p = progress;
+            _ = ShowProgress($"Exporting with new image", progress);
 
-            using var image = SixLabors.ImageSharp.Image.Load<Rgba32>(file);
-            var modified_ddt_data = await DDTImage.EncodeImageToDDT(image, ddt.Version, ddt.UsageFlag, ddt.AlphaFlag, ddt.FormatFlag, ddt.MipmapLevels, ddt.ColorTable);
+            try
+            {
+                var sw = Stopwatch.StartNew();
 
-            // CHECK: should I consider decompression of the original and apply it?
+                p.Report("Loading target image");
+                using var image = SixLabors.ImageSharp.Image.Load<Rgba32>(file);
+                
+                p.Report("Encoding image into DDT");
+                var modified_ddt_data = await DDTImage.EncodeImageToDDT(image, ddt.Version, ddt.UsageFlag, ddt.AlphaFlag, ddt.FormatFlag, ddt.MipmapLevels, ddt.ColorTable);
 
-            // export it
-            var output_path = Path.Combine(_exportRootDirectory, relative_path_full);
-            var dir = Path.GetDirectoryName(output_path);
-            if (dir != null) Directory.CreateDirectory(dir);
+                // CHECK: should I consider decompression of the original and apply it?
 
-            using (var out_file = File.Create(output_path))
-                out_file.Write(modified_ddt_data.Span);
+                // export it
+                p.Report("Exporting final DDT");
+                var output_path = Path.Combine(_exportRootDirectory, relative_path_full);
+                var dir = Path.GetDirectoryName(output_path);
+                if (dir != null) Directory.CreateDirectory(dir);
+
+                using (var out_file = File.Create(output_path))
+                    out_file.Write(modified_ddt_data.Span);
+
+                sw.Stop();
+                p.Report($"Exported in {sw.Elapsed.TotalSeconds:0.00} seconds");
+            }
+            catch (Exception ex)
+            {
+                p.Report("Failed to export: " + ex.Message);
+            }
+            finally
+            {
+                p.Report(null);
+            }
         }
         finally
         {
@@ -1137,7 +1172,7 @@ public partial class MainWindow : SimpleWindow
             var data = BarFormatConverter.XMLtoXMB(xml, CompressionType.Alz4);
             using (var f = File.Create(out_file)) f.Write(data.Span);
 
-            // TODO: show success message
+            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file));
         }
         catch (Exception ex)
         {
@@ -1164,7 +1199,7 @@ public partial class MainWindow : SimpleWindow
             var formatted_xml = BarFormatConverter.FormatXML(xml);
             File.WriteAllText(out_file, formatted_xml);
 
-            // TODO: show success message
+            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file));
         }
         catch (Exception ex)
         {
@@ -1197,7 +1232,7 @@ public partial class MainWindow : SimpleWindow
                 image.Dispose();
             }
 
-            // TODO: show success message
+            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file));
         }
         catch (Exception ex)
         {
@@ -1217,7 +1252,7 @@ public partial class MainWindow : SimpleWindow
             var compressed = BarCompression.CompressAlz4(data);
             using (var f = File.Create(out_file)) f.Write(compressed.Span);
 
-            // TODO: show success message
+            _ = ShowSuccess("Compression completed, new file:\n" + Path.GetFileName(out_file));
         }
         catch (Exception ex)
         {
@@ -1237,7 +1272,7 @@ public partial class MainWindow : SimpleWindow
             var compressed = BarCompression.CompressL33t(data);
             using (var f = File.Create(out_file)) f.Write(compressed.Span);
 
-            // TODO: show success message
+            _ = ShowSuccess("Compression completed, new file:\n" + Path.GetFileName(out_file));
         }
         catch (Exception ex)
         {
@@ -1257,7 +1292,7 @@ public partial class MainWindow : SimpleWindow
             var decompressed = BarCompression.EnsureDecompressed(data, out var type);
             using (var f = File.Create(out_file)) f.Write(decompressed.Span);
 
-            // TODO: show success message
+            _ = ShowSuccess("Decompression completed, new file:\n" + Path.GetFileName(out_file));
         }
         catch (Exception ex)
         {
@@ -1276,7 +1311,7 @@ public partial class MainWindow : SimpleWindow
             var class_name = XStoRM.GetSafeClassNameRgx().Replace(Path.GetFileNameWithoutExtension(file), "");
             XStoRM.Convert(file, out_file, class_name);
 
-            // TODO: show success message
+            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file));
         }
         catch (Exception ex)
         {
@@ -1355,6 +1390,18 @@ public partial class MainWindow : SimpleWindow
     async Task ShowError(string text)
     {
         var prompt = new Prompt(PromptType.Error, "Error", text);
+        await prompt.ShowDialog(this);
+    }
+
+    async Task ShowSuccess(string text)
+    {
+        var prompt = new Prompt(PromptType.Success, "Success", text);
+        await prompt.ShowDialog(this);
+    }
+
+    async Task ShowProgress(string title, Progress<string?> progress)
+    {
+        var prompt = new Prompt(PromptType.Progress, title, progress_reporter: progress);
         await prompt.ShowDialog(this);
     }
 }
