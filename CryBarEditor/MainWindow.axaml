@@ -130,10 +130,17 @@
 						<Label DockPanel.Dock="Top" Content="{Binding LoadedBARFilePathOrRelative}" Foreground="Gray" Margin="0,2,0,0" />
 					</DockPanel>
 					<TextBox DockPanel.Dock="Top" Text="{Binding EntryQuery, Mode=TwoWay}" Watermark="Filter BAR entries" />
-					<TextBlock DockPanel.Dock="Top" Margin="0,6,0,0">
-						<Run Text="Root: " FontWeight="Bold"/>
-						<Run Text="{Binding BarFileRootPath}"/>
-					</TextBlock>
+					<DockPanel DockPanel.Dock="Top" Margin="0,6,0,0">
+						<TextBlock DockPanel.Dock="Left" HorizontalAlignment="Left">
+							<Run Text="Root: " FontWeight="Bold"/>
+							<Run Text="{Binding BarFileRootPath}"/>
+						</TextBlock>
+						<TextBlock DockPanel.Dock="Right" HorizontalAlignment="Right">
+							<Run Text="Entries: " FontWeight="Bold"/>
+							<Run Text="{Binding BarFile.Entries.Count}"/>
+						</TextBlock>
+					</DockPanel>
+					
 					<ListBox ItemsSource="{Binding Entries}" Margin="0,10,0,0"
 							 SelectionMode="Multiple"
 							 SelectedItems="{Binding SelectedBarFileEntries, Mode=TwoWay}"

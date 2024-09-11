@@ -36,9 +36,12 @@ public class BarFileEntry
     {
         from.Seek(ContentOffset, SeekOrigin.Begin);
 
+        const int MAX_BUFFER_SIZE = 81920;
+        int BufferSize = Math.Min(MAX_BUFFER_SIZE, SizeInArchive);
+
         // copy [SizeInArchive] amount of bytes to [to] stream
-        using var buffer = SpanOwner<byte>.Allocate(81920);
-        var span = buffer.Span.Slice(0, SizeInArchive);
+        using var buffer = SpanOwner<byte>.Allocate(BufferSize);
+        var span = buffer.Span.Slice(0, BufferSize); 
         var size = SizeInArchive;
 
         var copied_bytes = 0;

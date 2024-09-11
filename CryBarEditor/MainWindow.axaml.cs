@@ -409,6 +409,7 @@ public partial class MainWindow : SimpleWindow
 
             OnPropertyChanged(nameof(LoadedBARFilePathOrRelative));
             OnPropertyChanged(nameof(BarFileRootPath));
+            OnPropertyChanged(nameof(BarFile));
 
             // if BAR file is contained within root dir, select it there for convenience
             if (Directory.Exists(_rootDirectory) && bar_file.StartsWith(_rootDirectory))
