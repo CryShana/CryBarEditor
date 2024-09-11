@@ -2,30 +2,66 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+		xmlns:micons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="150"
         x:Class="CryBarEditor.Prompt" WindowStartupLocation="CenterOwner"
+		ExtendClientAreaChromeHints="NoChrome"
+		ExtendClientAreaToDecorationsHint="True"
+		Foreground="#d9d9d9"
+		Background="#141414"
 		DataContext="{Binding RelativeSource={RelativeSource Self}}"
-		CanResize="False" Width="300" Height="150"
+		CanResize="False" Width="350" Height="160"
         Title="Prompt">
-	<Border Padding="5">
+	<Border Padding="5" BorderThickness="2" BorderBrush="#d9d9d9">
 		<Grid>
 			<Grid.RowDefinitions>
 				<RowDefinition Height="*" />
-				<RowDefinition Height="40" />
+				<RowDefinition Height="35" />
 			</Grid.RowDefinitions>
 			<DockPanel Grid.Row="0">
-				<Image DockPanel.Dock="Left" Stretch="Uniform" Width="55"
-					   Margin="5,5,8,0"
-					   VerticalAlignment="Top"
-					   Source="resm:Avalonia.Skia.Assets.NoiseAsset_256X256_PNG.png?assembly=Avalonia.Skia" />
-		
-				<TextBlock Text="Prompt message" 
-						   Margin="0,5,0,0"
-						   VerticalAlignment="Top"
-						   TextWrapping="Wrap" />
+				<micons:MaterialIcon DockPanel.Dock="Left" VerticalAlignment="Top"
+									 Kind="AlertCircle" Width="50" Height="50"
+									 Foreground="#f55142"
+									 IsVisible="{Binding PromptIsError}" />
+				
+				<micons:MaterialIcon DockPanel.Dock="Left" VerticalAlignment="Top"
+									 Kind="CheckCircle" Width="50" Height="50"
+									 Foreground="#78f542"
+									 IsVisible="{Binding PromptIsSuccess}" />
+				
+				<micons:MaterialIcon DockPanel.Dock="Left" VerticalAlignment="Top"
+									 Kind="Information" Width="50" Height="50"
+									 Foreground="#77c1e0"
+									 IsVisible="{Binding PromptIsInformation}" />
+				
+				<micons:MaterialIcon DockPanel.Dock="Left" VerticalAlignment="Top"
+									 Kind="ProgressHelper" Width="50" Height="50"
+									 Foreground="#5da2e8"
+									 IsVisible="{Binding PromptIsProgress}" />
+				<DockPanel Margin="0,0,5,0">
+					<TextBlock Text="{Binding PromptTitle}"
+							   FontWeight="Bold" Margin="4,5,0,0"
+							   DockPanel.Dock="Top"
+							   VerticalAlignment="Top"
+							   TextWrapping="NoWrap" />
+
+					<ScrollViewer DockPanel.Dock="Top">
+						<TextBlock Text="{Binding PromptText}"
+									Margin="4,5,0,0"
+									VerticalAlignment="Top"
+									TextWrapping="Wrap" />
+					</ScrollViewer>
+					
+					<ProgressBar Minimum="0" Maximum="100" Value="50"
+								 DockPanel.Dock="Bottom"
+								 IsVisible="{Binding PromptIsProgress}"/>
+				</DockPanel>
+
 			</DockPanel>
-			<DockPanel Grid.Row="1" Margin="5,5,5,0" LastChildFill="False">
-				<Button DockPanel.Dock="Right" Content="Close" />
+			<DockPanel Grid.Row="1" Margin="5,0,5,0" LastChildFill="False">
+				<Button DockPanel.Dock="Right" Content="Close" 
+						Click="CloseButtonClick"
+						IsEnabled="{Binding CanClose}" />
 			</DockPanel>
 		</Grid>
 	</Border>

@@ -14,7 +14,6 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
-
 namespace CryBarEditor;
 
 public partial class SearchWindow : SimpleWindow

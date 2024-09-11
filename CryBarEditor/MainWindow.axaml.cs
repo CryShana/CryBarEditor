@@ -225,7 +225,7 @@ public partial class MainWindow : SimpleWindow
 
         if (ExportRootDirectory == RootDirectory)
         {
-            // TODO: show error
+            _ = ShowError("Export directory can not be same as root directory");
             return;
         }
 
@@ -358,7 +358,7 @@ public partial class MainWindow : SimpleWindow
         }
         catch (Exception ex)
         {
-            // TODO: show error
+            _ = ShowError("Failed to load root directory:\n" + ex.Message);
         }
     }
 
@@ -425,8 +425,7 @@ public partial class MainWindow : SimpleWindow
         catch (Exception ex)
         {
             _barStream = null;
-
-            // TODO: show error
+            _ = ShowError("Failed to load BAR archive:\n" + ex.Message);
         }
     }
 
@@ -780,11 +779,7 @@ public partial class MainWindow : SimpleWindow
     {
         var item = (MenuItem)sender!;
         var list = item.Parent?.Parent?.Parent as ListBox;
-        if (list == null)
-        {
-            // TODO: show error
-            return;
-        }
+        if (list == null) return;
 
         if (list.ItemsSource == Entries)
         {
@@ -810,11 +805,7 @@ public partial class MainWindow : SimpleWindow
     {
         var item = (MenuItem)sender!;
         var list = item.Parent?.Parent?.Parent as ListBox;
-        if (list == null)
-        {
-            // TODO: show error
-            return;
-        }
+        if (list == null) return;
 
         if (list.ItemsSource == Entries)
         {
@@ -971,7 +962,7 @@ public partial class MainWindow : SimpleWindow
             var ddt = new DDTImage(data);
             if (!ddt.ParseHeader())
             {
-                // TODO: show error
+                _ = ShowError("Failed to parse DDT header");
                 return;
             }
 
@@ -1097,6 +1088,33 @@ public partial class MainWindow : SimpleWindow
         } while (File.Exists(new_file));
         return new_file;
     }
+    
+    public static bool DetectIfUnicode(ReadOnlySpan<byte> data)
+    {
+        var length = Math.Min(data.Length, 1000);
+
+        // detect if unicode
+        int empty_pair = 0;
+        int nonempty_pair = 0;
+        for (int i = 0; i < length - 1; i++)
+        {
+            byte b1 = data[i];
+            byte b2 = data[i + 1];
+            if ((b1 > 0 && b2 == 0) || (b2 > 0 && b1 == 0))
+            {
+                empty_pair++;
+            }
+            else
+            {
+                nonempty_pair++;
+            }
+        }
+        var unicode = empty_pair > (length / 2) && empty_pair > nonempty_pair;
+        return unicode;
+    }
+
+    [GeneratedRegex(@"<\w+[^>]+>[^<]+</\w+\>")]
+    public static partial Regex GetXMLTagRegex();
     #endregion
 
     #region Menu events
@@ -1123,7 +1141,7 @@ public partial class MainWindow : SimpleWindow
         }
         catch (Exception ex)
         {
-            // TODO: show error
+            _ = ShowError("Failed to convert to XMB:\n" + ex.Message);
         }
     }
 
@@ -1150,7 +1168,7 @@ public partial class MainWindow : SimpleWindow
         }
         catch (Exception ex)
         {
-            // TODO: show error
+            _ = ShowError("Failed to convert to XML:\n" + ex.Message);
         }
     }
 
@@ -1183,7 +1201,7 @@ public partial class MainWindow : SimpleWindow
         }
         catch (Exception ex)
         {
-            // TODO: show error
+            _ = ShowError("Failed to convert to TGA:\n" + ex.Message);
         }
     }
 
@@ -1203,7 +1221,7 @@ public partial class MainWindow : SimpleWindow
         }
         catch (Exception ex)
         {
-            // TODO: show error
+            _ = ShowError("Failed to compress using Alz4:\n" + ex.Message);
         }
     }
 
@@ -1223,7 +1241,7 @@ public partial class MainWindow : SimpleWindow
         }
         catch (Exception ex)
         {
-            // TODO: show error
+            _ = ShowError("Failed to compress using L33t:\n" + ex.Message);
         }
     }
 
@@ -1243,7 +1261,7 @@ public partial class MainWindow : SimpleWindow
         }
         catch (Exception ex)
         {
-            // TODO: show error
+            _ = ShowError("Failed to decompress:\n" + ex.Message);
         }
     }
 
@@ -1262,7 +1280,7 @@ public partial class MainWindow : SimpleWindow
         }
         catch (Exception ex)
         {
-            // TODO: show error
+            _ = ShowError("Failed to convert script:\n" + ex.Message);
         }
     }
 
@@ -1278,7 +1296,7 @@ public partial class MainWindow : SimpleWindow
         if (_barFile == null && _barStream == null && string.IsNullOrEmpty(_rootDirectory) &&
             !Directory.Exists(_rootDirectory))
         {
-            // TODO: show error
+            _ = ShowError("No BAR archive or Root directory loaded");
             return;
         }
 
@@ -1334,30 +1352,9 @@ public partial class MainWindow : SimpleWindow
         }
     }
 
-    public static bool DetectIfUnicode(ReadOnlySpan<byte> data)
+    async Task ShowError(string text)
     {
-        var length = Math.Min(data.Length, 1000);
-
-        // detect if unicode
-        int empty_pair = 0;
-        int nonempty_pair = 0;
-        for (int i = 0; i < length - 1; i++)
-        {
-            byte b1 = data[i];
-            byte b2 = data[i + 1];
-            if ((b1 > 0 && b2 == 0) || (b2 > 0 && b1 == 0))
-            {
-                empty_pair++;
-            }
-            else
-            {
-                nonempty_pair++;
-            }
-        }
-        var unicode = empty_pair > (length / 2) && empty_pair > nonempty_pair;
-        return unicode;
+        var prompt = new Prompt(PromptType.Error, "Error", text);
+        await prompt.ShowDialog(this);
     }
-
-    [GeneratedRegex(@"<\w+[^>]+>[^<]+</\w+\>")]
-    public static partial Regex GetXMLTagRegex();
 }
