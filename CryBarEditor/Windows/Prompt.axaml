@@ -27,7 +27,7 @@
 				<micons:MaterialIcon DockPanel.Dock="Left" VerticalAlignment="Top"
 									 Kind="CheckCircle" Width="50" Height="50"
 									 Foreground="#78f542"
-									 IsVisible="{Binding PromptIsSuccess}" />
+									 IsVisible="{Binding ShowSuccessIcon}" />
 
 				<micons:MaterialIcon DockPanel.Dock="Left" VerticalAlignment="Top"
 									 Kind="Information" Width="50" Height="50"
@@ -38,7 +38,8 @@
 									 Kind="ProgressHelper" Width="50" Height="50"
 									 Foreground="#5da2e8"
 									 Classes.Finished="{Binding ProgressFinished}"
-									 IsVisible="{Binding PromptIsProgress}" />
+									 IsVisible="{Binding ShowProgressIcon}">
+				</micons:MaterialIcon>
 
 				<DockPanel Margin="0,0,5,0">
 					<TextBlock Text="{Binding PromptTitle}"
@@ -72,7 +73,8 @@
 
 				<Button DockPanel.Dock="Right" Content="Close"
 						Click="CloseButtonClick"
-						IsEnabled="{Binding CanClose}" />
+						IsEnabled="{Binding CanClose}"
+						IsDefault="True" />
 			</DockPanel>
 		</Grid>
 	</Border>

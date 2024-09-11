@@ -15,6 +15,8 @@ public partial class Prompt : SimpleWindow
     PromptType _type = PromptType.Information;
     Progress<string?>? _progressReporter;
     bool _progressFinished = false;
+    bool _showSuccess = false;
+    bool _showProgress = false;
 
     public string PromptText { get => _text; set { _text = value; OnSelfChanged(); } }
     public string PromptTitle { get => _title; set { _title = value; Title = value; OnSelfChanged(); } }
@@ -26,6 +28,9 @@ public partial class Prompt : SimpleWindow
     public bool PromptIsSuccess => _type == PromptType.Success;
     public bool PromptIsInformation => _type == PromptType.Information;
     public bool PromptIsProgress => _type == PromptType.Progress;
+
+    public bool ShowProgressIcon { get => _showSuccess; set { _showSuccess = value; OnSelfChanged(); } }
+    public bool ShowSuccessIcon { get => _showProgress; set { _showProgress = value; OnSelfChanged(); } }
 
     public Prompt()
     {
@@ -44,10 +49,14 @@ public partial class Prompt : SimpleWindow
         OnPropertyChanged(nameof(PromptIsInformation));
         OnPropertyChanged(nameof(PromptIsProgress));
 
+        if (type == PromptType.Success) 
+            ShowSuccessIcon = true;
+        
         if (_progressReporter != null)
         {
             CanClose = false;
             ProgressFinished = false;
+            ShowProgressIcon = true;
             _progressReporter.ProgressChanged += ProgressChanged;
         }
     }
@@ -59,6 +68,8 @@ public partial class Prompt : SimpleWindow
             // finished
             CanClose = true;
             ProgressFinished = true;
+            ShowProgressIcon = false;
+            ShowSuccessIcon = true;
 
             progressBar.Minimum = 0;
             progressBar.Maximum = 100;
@@ -70,7 +81,13 @@ public partial class Prompt : SimpleWindow
         PromptText = text;
     }
 
-    void CloseButtonClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => Close();
+    void CloseButtonClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (!CanClose)
+            return;
+
+        Close();
+    }
 
     protected override void OnClosing(WindowClosingEventArgs e)
     {
