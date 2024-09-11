@@ -17,6 +17,7 @@ using System.Reflection;
 using System.ComponentModel;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 
 using AvaloniaEdit.TextMate;
 using TextMateSharp.Grammars;
@@ -26,11 +27,11 @@ using SixLabors.ImageSharp.PixelFormats;
 
 using CommunityToolkit.HighPerformance;
 using Configuration = CryBarEditor.Classes.Configuration;
-using System.Text.RegularExpressions;
+
 
 namespace CryBarEditor;
 
-public partial class MainWindow : Window, INotifyPropertyChanged
+public partial class MainWindow : SimpleWindow
 {
     string _entryQuery = "";
     string _filesQuery = "";
@@ -75,7 +76,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         get => string.IsNullOrEmpty(_exportRootDirectory) ? "No export Root directory selected" : _exportRootDirectory; set
         {
             _exportRootDirectory = value;
-            OnPropertyChanged(nameof(ExportRootDirectory));
+            OnSelfChanged();
             OnPropertyChanged(nameof(CanExport));
         }
     }
@@ -86,18 +87,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             _rootDirectory = value;
             _rootRelevantPathCached = null;
-            OnPropertyChanged(nameof(RootDirectory));
+            OnSelfChanged();
             OnPropertyChanged(nameof(RootFileRootPath));
         }
     }
 
-    public string EntryQuery { get => _entryQuery; set { _entryQuery = value; OnPropertyChanged(nameof(EntryQuery)); RefreshBAREntries(); } }
-    public string FilesQuery { get => _filesQuery; set { _filesQuery = value; OnPropertyChanged(nameof(FilesQuery)); RefreshFileEntries(); } }
+    public string EntryQuery { get => _entryQuery; set { _entryQuery = value; OnSelfChanged(); RefreshBAREntries(); } }
+    public string FilesQuery { get => _filesQuery; set { _filesQuery = value; OnSelfChanged(); RefreshFileEntries(); } }
     public string BarFileRootPath => _barFile == null ? "-" : _barFile.RootPath!;
     public string RootFileRootPath => string.IsNullOrEmpty(_rootDirectory) ? "-" : GetRootRelevantPath();
     public string PreviewedFileName { get => string.IsNullOrEmpty(_previewedFileName) ? "No file selected" : _previewedFileName; set { _previewedFileName = value; OnPropertyChanged(nameof(PreviewedFileName)); } }
-    public string PreviewedFileNote { get => _previewedFileNote; set { _previewedFileNote = value; OnPropertyChanged(nameof(PreviewedFileNote)); } }
-    public string PreviewedFileData { get => _previewedFileData; set { _previewedFileData = value; OnPropertyChanged(nameof(PreviewedFileData)); } }
+    public string PreviewedFileNote { get => _previewedFileNote; set { _previewedFileNote = value; OnSelfChanged(); } }
+    public string PreviewedFileData { get => _previewedFileData; set { _previewedFileData = value; OnSelfChanged(); } }
     public bool SelectedIsDDT =>
         Path.GetExtension(SelectedFileEntry?.RelativePath ?? "").ToLower() == ".ddt" ||
         Path.GetExtension(SelectedBarEntry?.RelativePath ?? "").ToLower() == ".ddt";
@@ -110,7 +111,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 return;
 
             _selectedFileEntry = value;
-            OnPropertyChanged(nameof(SelectedFileEntry));
+            OnSelfChanged();
             OnPropertyChanged(nameof(SelectedIsDDT));
 
             // ensure BAR file is not already loaded
@@ -132,7 +133,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 return;
 
             _selectedBarEntry = value;
-            OnPropertyChanged(nameof(SelectedBarEntry));
+            OnSelfChanged();
             OnPropertyChanged(nameof(SelectedIsDDT));
 
             _ = Preview(value);
@@ -743,9 +744,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             yield return e;
         }
     }
-
-    public new event PropertyChangedEventHandler? PropertyChanged;
-    void OnPropertyChanged(string propertyName) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     #endregion
 
     #region ContextMenu events
@@ -1267,8 +1265,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     void TryRestorePreviousConfiguration()
     {
-        var exe_dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-        var config_path = Path.Combine(exe_dir ?? "", CONFIG_FILE);
+        var config_path = Path.Combine(AppContext.BaseDirectory, CONFIG_FILE);
         if (!File.Exists(config_path))
             return;
 
@@ -1292,8 +1289,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     void SaveConfiguration()
     {
-        var exe_dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-        var config_path = Path.Combine(exe_dir ?? "", CONFIG_FILE);
+        var config_path = Path.Combine(AppContext.BaseDirectory, CONFIG_FILE);
 
         try
         {

@@ -10,7 +10,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
-using System.ComponentModel;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
@@ -18,17 +17,17 @@ using System.Text.RegularExpressions;
 
 namespace CryBarEditor;
 
-public partial class SearchWindow : Window, INotifyPropertyChanged
+public partial class SearchWindow : SimpleWindow
 {
     string _status = "This searches through all FILTERED files and opened BAR archives";
     string _query = "";
     bool _searching = false;
     CancellationTokenSource? _csc;
 
-    public bool CurrentlySearching { get => _searching; set { _searching = value; OnPropertyChanged(nameof(CurrentlySearching)); } }
+    public bool CurrentlySearching { get => _searching; set { _searching = value; OnSelfChanged(); } }
     public bool CanSearch => _query.Length > 2;
-    public string Query { get => _query; set { _query = value; OnPropertyChanged(nameof(Query)); OnPropertyChanged(nameof(CanSearch)); } }
-    public string Status { get => _status; set { _status = value; OnPropertyChanged(nameof(Status)); } }
+    public string Query { get => _query; set { _query = value; OnSelfChanged(); OnPropertyChanged(nameof(CanSearch)); } }
+    public string Status { get => _status; set { _status = value; OnSelfChanged(); } }
     public ObservableCollectionExtended<SearchResult> SearchResults { get; } = new();
 
     readonly string? _rootDirectory;
@@ -306,10 +305,6 @@ public partial class SearchWindow : Window, INotifyPropertyChanged
 
     [GeneratedRegex(@"\n|\r|[^\u0020-\u007E\u00A1-]")]
     private static partial Regex GetUnsafeCharsRgx();
-
-
-    public new event PropertyChangedEventHandler? PropertyChanged;
-    void OnPropertyChanged(string propertyName) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }
 
 public class SearchResult

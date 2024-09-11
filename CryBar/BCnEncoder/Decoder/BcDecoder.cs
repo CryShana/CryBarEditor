@@ -1831,7 +1831,6 @@ namespace CryBar.BCnEncoder.Decoder
                 case GlInternalFormat.GlCompressedRgbBptcSignedFloatArb:
                     return CompressionFormat.Bc6S;
 
-                // TODO: Not sure what to do with SRGB input.
                 case GlInternalFormat.GlCompressedRgbaBptcUnormArb:
                 case GlInternalFormat.GlCompressedSrgbAlphaBptcUnormArb:
                     return CompressionFormat.Bc7;

@@ -77,7 +77,7 @@ public static class BarCompression
 
     #region L33T
     // NOTE: L33t compression seems to be used by .mythscn files only (that I found so far)
-    // NOTE: Current L33t decompression/compression implementation not supported by AOMR (need to investigate)
+    // TODO: Current L33t decompression/compression implementation not supported by AOMR (need to investigate)
 
     public static byte[]? DecompressL33t(Span<byte> data)
     {
@@ -94,8 +94,6 @@ public static class BarCompression
     }
     public unsafe static int DecompressL33t(Span<byte> data, Span<byte> output_data)
     {
-        // TODO: there is a problem in how I decompress L33t files!!! AOMR doesn't seem to recognize when I compress it again 
-
         int offset = 4;
         int size_uncompressed = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
         if (size_uncompressed > output_data.Length || size_uncompressed <= 0)

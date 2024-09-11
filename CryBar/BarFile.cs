@@ -76,7 +76,6 @@ public class BarFile
     {
         error = BarFileLoadError.None;
 
-        // TODO: replace exceptions with Result return type for better performance in case of errors
         if (Loaded)
         {
             error = BarFileLoadError.AlreadyLoaded;
