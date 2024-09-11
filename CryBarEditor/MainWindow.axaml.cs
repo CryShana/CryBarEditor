@@ -221,9 +221,10 @@ public partial class MainWindow : SimpleWindow
         if (folders.Count == 0)
             return;
 
-        if (ExportRootDirectory == RootDirectory)
+        var dir = folders[0].Path.LocalPath;
+        if (dir == _rootDirectory)
         {
-            _ = ShowError("Export directory can not be same as root directory");
+            _ = ShowError("Root directory is the same as export directory");
             return;
         }
 
@@ -332,6 +333,9 @@ public partial class MainWindow : SimpleWindow
         {
             if (!Directory.Exists(dir))
                 throw new DirectoryNotFoundException("Directory not found");
+
+            if (_exportRootDirectory == dir)
+                throw new InvalidOperationException("Root directory is the same as export directory");
 
             if (_watcher != null)
             {
@@ -1360,7 +1364,7 @@ public partial class MainWindow : SimpleWindow
             if (Directory.Exists(config.RootDirectory))
                 LoadDir(config.RootDirectory, false);
 
-            if (Directory.Exists(config.ExportRootDirectory))
+            if (Directory.Exists(config.ExportRootDirectory) && config.ExportRootDirectory != _rootDirectory)
                 ExportRootDirectory = config.ExportRootDirectory;
         }
         catch
