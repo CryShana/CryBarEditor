@@ -153,6 +153,8 @@
 								</TextBlock>
 							</DataTemplate>
 						</ListBox.ItemTemplate>
+						<!--TODO: BUG? When using custom ItemTemplate with ContextMenu on ListBox, some items disappear 
+						when opening context menu, they reappear when hovering over them again... what is this?-->
 						<ListBox.ContextMenu>
 							<ContextMenu>
 								<MenuItem Header="Copy file name" Click="MenuItem_CopyFileName" />

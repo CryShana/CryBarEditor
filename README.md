@@ -32,9 +32,7 @@ Tool for fast and easy resource management, focused on AOMR.
    
 ## Planned features
 Currently planned:
-- Adding prompts for errors, success messages and progress (right now many things are silent, lacking user feedback)
 - Converting DDT -> TGA where user can specify custom params (right now we only have conversion of existing DDT file with copied params)
-- Easier clearing of filter textboxes
 - Creating BAR archive from selected files
 - Creating modified BAR archive by only replacing selected entries in existing BAR archive
 - (Support for other relevant formats, such as .TMA, .TMM and .DATA)
