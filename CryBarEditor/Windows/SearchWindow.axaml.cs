@@ -255,7 +255,10 @@ public partial class SearchWindow : Window, INotifyPropertyChanged
             }
             else
             {
-                text = Encoding.UTF8.GetString(decompressed_data.Span);
+                var unicode = MainWindow.DetectIfUnicode(decompressed_data.Span);
+                text = unicode ? 
+                    Encoding.Unicode.GetString(decompressed_data.Span) : 
+                    Encoding.UTF8.GetString(decompressed_data.Span);
             }
 
             // now search

@@ -527,23 +527,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         else
         {
-            // detect if unicode
-            int empty_pair = 0;
-            int nonempty_pair = 0;
-            for (int i = 0; i < data.Length - 1; i++)
-            {
-                byte b1 = data.Span[i];
-                byte b2 = data.Span[i + 1];
-                if ((b1 > 0 && b2 == 0) || (b2 > 0 && b1 == 0))
-                {
-                    empty_pair++;
-                }
-                else
-                {
-                    nonempty_pair++;
-                }
-            }
-            var unicode = empty_pair > (data.Length / 2) && empty_pair > nonempty_pair;
+            var unicode = DetectIfUnicode(data.Span);
             PreviewedFileNote = unicode ? "[Unicode]" : "[UTF-8]";
 
             // set text
@@ -1323,6 +1307,30 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
 
         }
+    }
+
+    public static bool DetectIfUnicode(ReadOnlySpan<byte> data)
+    {
+        var length = Math.Min(data.Length, 1000);
+
+        // detect if unicode
+        int empty_pair = 0;
+        int nonempty_pair = 0;
+        for (int i = 0; i < length - 1; i++)
+        {
+            byte b1 = data[i];
+            byte b2 = data[i + 1];
+            if ((b1 > 0 && b2 == 0) || (b2 > 0 && b1 == 0))
+            {
+                empty_pair++;
+            }
+            else
+            {
+                nonempty_pair++;
+            }
+        }
+        var unicode = empty_pair > (length / 2) && empty_pair > nonempty_pair;
+        return unicode;
     }
 
     [GeneratedRegex(@"<\w+[^>]+>[^<]+</\w+\>")]
