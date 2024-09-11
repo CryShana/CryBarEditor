@@ -16,7 +16,7 @@
 		<Style Selector="ListBox">
 			<Setter Property="Background" Value="#1c1c1c" />
 		</Style>
-		<Style Selector="TextBlock Run.BAR">
+		<Style Selector="TextBlock.BAR">
 			<Setter Property="Foreground" Value="#6f96bf"/>
 		</Style>
 		<Style Selector="ListBoxItem:selected /template/ ContentPresenter">
@@ -86,10 +86,10 @@
 							 SelectedItem="{Binding SelectedFileEntry, Mode=TwoWay}">
 						<ListBox.ItemTemplate>
 							<DataTemplate x:DataType="cc:FileEntry">
-								<TextBlock>
-									<Run Text="{Binding DirectoryPath}" Foreground="#808080" />
-									<Run Text="{Binding Name}" Classes.BAR="{Binding IsBAR}" />
-								</TextBlock>
+								<StackPanel Orientation="Horizontal">
+									<TextBlock Text="{Binding DirectoryPath}" Foreground="#808080"/>
+									<TextBlock Text="{Binding Name}" Classes.BAR="{Binding IsBAR}" />
+								</StackPanel>
 							</DataTemplate>
 						</ListBox.ItemTemplate>
 						<ListBox.ContextMenu>
@@ -147,14 +147,12 @@
 							 SelectedItem="{Binding SelectedBarEntry, Mode=TwoWay}">
 						<ListBox.ItemTemplate>
 							<DataTemplate x:DataType="cb:BarFileEntry">
-								<TextBlock>
-									<Run Text="{Binding DirectoryPath}" Foreground="#808080" />
-									<Run Text="{Binding Name}" />
-								</TextBlock>
+								<StackPanel Orientation="Horizontal">
+									<TextBlock Text="{Binding DirectoryPath}" Foreground="#808080"/>
+									<TextBlock Text="{Binding Name}" />
+								</StackPanel>
 							</DataTemplate>
 						</ListBox.ItemTemplate>
-						<!--TODO: BUG? When using custom ItemTemplate with ContextMenu on ListBox, some items disappear 
-						when opening context menu, they reappear when hovering over them again... what is this?-->
 						<ListBox.ContextMenu>
 							<ContextMenu>
 								<MenuItem Header="Copy file name" Click="MenuItem_CopyFileName" />
