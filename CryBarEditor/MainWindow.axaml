@@ -5,6 +5,7 @@
 		xmlns:ae="clr-namespace:AvaloniaEdit;assembly=AvaloniaEdit"
 		xmlns:cb="using:CryBar"
 		xmlns:cc="using:CryBarEditor.Classes"
+		xmlns:micons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
 		mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="450"
         x:Class="CryBarEditor.MainWindow"
 		DataContext="{Binding RelativeSource={RelativeSource Self}}"
@@ -69,7 +70,8 @@
 				<DockPanel Grid.Row="1" Grid.Column="0">
 					<Label DockPanel.Dock="Top" Content="Root Directory" FontWeight="Bold"  FontSize="16"/>
 					<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
-						<Button Content="Load" Click="LoadDir_Click" Margin="0,0,6,6" />
+						<Button Content="{micons:MaterialIconExt Kind=FolderArrowUpOutline, Size=20}" Padding="4"
+								Click="LoadDir_Click" Margin="0,0,6,6" />
 						<Label DockPanel.Dock="Top" Content="{Binding RootDirectory}" Foreground="Gray" Margin="0,2,0,0"  />
 					</DockPanel>
 
@@ -124,7 +126,7 @@
 				<DockPanel Grid.Row="1" Grid.Column="2">
 					<Label DockPanel.Dock="Top" Content="BAR File" FontWeight="Bold"  FontSize="16"/>
 					<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
-						<Button Content="Load" Click="LoadBAR_Click" Margin="0,0,6,6"/>
+						<Button Content="{micons:MaterialIconExt Kind=ArchiveArrowUpOutline, Size=20}" Padding="4" Click="LoadBAR_Click" Margin="0,0,6,6"/>
 						<Label DockPanel.Dock="Top" Content="{Binding LoadedBARFilePathOrRelative}" Foreground="Gray" Margin="0,2,0,0" />
 					</DockPanel>
 					<TextBox DockPanel.Dock="Top" Text="{Binding EntryQuery, Mode=TwoWay}" Watermark="Filter BAR entries" />
@@ -178,7 +180,7 @@
 				<DockPanel Grid.Row="1" Grid.Column="4">
 					<Label DockPanel.Dock="Top" Content="Export Root Directory" FontWeight="Bold" FontSize="16"/>
 					<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
-						<Button Content="Select" Click="SelectExportRootDir_Click" Margin="0,0,6,6"/>
+						<Button Content="{micons:MaterialIconExt Kind=FolderArrowDownOutline, Size=20}" Padding="4" Click="SelectExportRootDir_Click" Margin="0,0,6,6"/>
 						<Label Content="{Binding ExportRootDirectory}" Foreground="Gray" Margin="0,2,0,0"  />
 					</DockPanel>
 					<TextBlock DockPanel.Dock="Top" Margin="0,10,0,0" FontSize="16">
