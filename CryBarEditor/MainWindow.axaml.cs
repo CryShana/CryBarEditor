@@ -26,8 +26,7 @@ using SixLabors.ImageSharp.PixelFormats;
 
 using CommunityToolkit.HighPerformance;
 using Configuration = CryBarEditor.Classes.Configuration;
-using static System.Runtime.InteropServices.JavaScript.JSType;
-
+using System.Text.RegularExpressions;
 
 namespace CryBarEditor;
 
@@ -528,7 +527,32 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         else
         {
-            text = Encoding.UTF8.GetString(data.Span);
+            // detect if unicode
+            int empty_pair = 0;
+            int nonempty_pair = 0;
+            for (int i = 0; i < data.Length - 1; i++)
+            {
+                byte b1 = data.Span[i];
+                byte b2 = data.Span[i + 1];
+                if ((b1 > 0 && b2 == 0) || (b2 > 0 && b1 == 0))
+                {
+                    empty_pair++;
+                }
+                else
+                {
+                    nonempty_pair++;
+                }
+            }
+            var unicode = empty_pair > (data.Length / 2) && empty_pair > nonempty_pair;
+            PreviewedFileNote = unicode ? "[Unicode]" : "[UTF-8]";
+
+            // set text
+            text = unicode ?
+                Encoding.Unicode.GetString(data.Span) :
+                Encoding.UTF8.GetString(data.Span);
+
+            var xml_tags = GetXMLTagRegex().Count(text);
+            if (xml_tags > 0) ext = ".xml";
         }
 
         await SetImagePreview(null);
@@ -1300,4 +1324,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         }
     }
+
+    [GeneratedRegex(@"<\w+[^>]+>[^<]+</\w+\>")]
+    public static partial Regex GetXMLTagRegex();
 }

@@ -38,7 +38,7 @@ public class BarFileEntry
 
         // copy [SizeInArchive] amount of bytes to [to] stream
         using var buffer = SpanOwner<byte>.Allocate(81920);
-        var span = buffer.Span;
+        var span = buffer.Span.Slice(0, SizeInArchive);
         var size = SizeInArchive;
 
         var copied_bytes = 0;

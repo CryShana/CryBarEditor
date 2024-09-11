@@ -1,8 +1,8 @@
 ﻿using CommunityToolkit.HighPerformance;
 
+using CryBar.BCnEncoder.Shared;
 using CryBar.BCnEncoder.Encoder;
 using CryBar.BCnEncoder.Decoder;
-using CryBar.BCnEncoder.Shared;
 
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Advanced;
