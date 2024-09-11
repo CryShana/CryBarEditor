@@ -148,6 +148,8 @@ public partial class MainWindow : SimpleWindow
     readonly Action<BarFileEntry, FileStream> F_CopyBAR;
     readonly Func<FileEntry, Memory<byte>> F_ReadRoot;
     readonly Func<BarFileEntry, Memory<byte>> F_ReadBAR;
+    readonly Func<FileEntry,long> F_ReadSizeRoot;
+    readonly Func<BarFileEntry, long> F_ReadSizeBAR;
 
     public MainWindow()
     {
@@ -170,6 +172,8 @@ public partial class MainWindow : SimpleWindow
         F_CopyBAR = (f, stream) => f.CopyData(_barStream!, stream);
         F_ReadRoot = f => File.ReadAllBytes(Path.Combine(_rootDirectory, f.RelativePath));
         F_ReadBAR = f => f.ReadDataRaw(_barStream!);
+        F_ReadSizeRoot = f => new FileInfo(Path.Combine(_rootDirectory, f.RelativePath)).Length;
+        F_ReadSizeBAR = f => f.SizeUncompressed;
     }
 
     #region Button events
@@ -443,7 +447,7 @@ public partial class MainWindow : SimpleWindow
         _previewCsc?.Cancel();
         _previewCsc = new();
         PreviewedFileData = $"File Size: {new FileInfo(path).Length}";
-        await Preview(entry, F_GetFullRelativePathRoot, F_ReadRoot, _previewCsc.Token);
+        await Preview(entry, F_GetFullRelativePathRoot, F_ReadSizeRoot, F_ReadRoot, _previewCsc.Token);
     }
 
     public async Task Preview(BarFileEntry? entry)
@@ -455,12 +459,26 @@ public partial class MainWindow : SimpleWindow
         _previewCsc = new();
 
         PreviewedFileData = $"BAR Offset: {entry.ContentOffset},   BAR Size: {entry.SizeInArchive},   Actual Size: {entry.SizeUncompressed},   Compressed: {(entry.IsCompressed ? "true" : "false")}";
-        await Preview(entry, F_GetFullRelativePathBAR, F_ReadBAR, _previewCsc.Token);
+        await Preview(entry, F_GetFullRelativePathBAR, F_ReadSizeBAR, F_ReadBAR, _previewCsc.Token);
     }
 
     public async Task Preview<T>(T entry, Func<T, string> get_rel_path,
-        Func<T, Memory<byte>> read, CancellationToken token = default)
+        Func<T, long> get_read_size, Func<T, Memory<byte>> read, CancellationToken token = default)
     {
+        const int MAX_DATA_SIZE = 1_500_000_000;    // 1.5 GB
+        const int MAX_DATA_TEXT_SIZE = 100_000_000; // 100 MB
+
+        var data_size = get_read_size(entry);
+        if (data_size > MAX_DATA_SIZE)
+        {
+            await SetImagePreview(null);
+            SetTextEditorLanguage(".txt");
+
+            textEditor.Text = "Data too big to be loaded for preview";
+            textEditor.ScrollTo(0, 0);
+            return;
+        }
+
         var relative_path = get_rel_path(entry);
         var ext = Path.GetExtension(relative_path).ToLower();
 
@@ -528,6 +546,17 @@ public partial class MainWindow : SimpleWindow
         }
         else
         {
+            if (data_size > MAX_DATA_TEXT_SIZE)
+            {
+                // to large for text file
+                await SetImagePreview(null);
+                SetTextEditorLanguage(".txt");
+
+                textEditor.Text = "Data too big to preview as text";
+                textEditor.ScrollTo(0, 0);
+                return;
+            }
+
             var unicode = DetectIfUnicode(data.Span);
             PreviewedFileNote = unicode ? "[Unicode]" : "[UTF-8]";
 
