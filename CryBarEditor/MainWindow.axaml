@@ -171,10 +171,10 @@
 										  IsVisible="{Binding CanExport}"
 										  Click="MenuItem_ExportSelectedRawConverted" />
 
-								<Separator IsVisible="{Binding SelectedIsDDT}"/>
+								<Separator IsVisible="{Binding CanExportAndIsDDT}"/>
 
 								<MenuItem Header="Replace image and export DDT"
-										  IsVisible="{Binding SelectedIsDDT}"
+										  IsVisible="{Binding CanExportAndIsDDT}"
 										  Click="MenuItem_ReplaceImageAndExportDDT"/>
 							</ContextMenu>
 						</ListBox.ContextMenu>

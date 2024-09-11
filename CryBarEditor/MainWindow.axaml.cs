@@ -76,9 +76,11 @@ public partial class MainWindow : SimpleWindow
             _exportRootDirectory = value;
             OnSelfChanged();
             OnPropertyChanged(nameof(CanExport));
+            OnPropertyChanged(nameof(CanExportAndIsDDT));
         }
     }
     public bool CanExport => !string.IsNullOrEmpty(_exportRootDirectory);
+    public bool CanExportAndIsDDT => !string.IsNullOrEmpty(_exportRootDirectory) && SelectedIsDDT;
     public string RootDirectory
     {
         get => string.IsNullOrEmpty(_rootDirectory) ? "No Root directory loaded" : _rootDirectory; set
@@ -111,6 +113,7 @@ public partial class MainWindow : SimpleWindow
             _selectedFileEntry = value;
             OnSelfChanged();
             OnPropertyChanged(nameof(SelectedIsDDT));
+            OnPropertyChanged(nameof(CanExportAndIsDDT));
 
             // ensure BAR file is not already loaded
             if (value != null && _barStream?.Name == Path.Combine(_rootDirectory, value.RelativePath))
@@ -133,6 +136,7 @@ public partial class MainWindow : SimpleWindow
             _selectedBarEntry = value;
             OnSelfChanged();
             OnPropertyChanged(nameof(SelectedIsDDT));
+            OnPropertyChanged(nameof(CanExportAndIsDDT));
 
             _ = Preview(value);
         }
