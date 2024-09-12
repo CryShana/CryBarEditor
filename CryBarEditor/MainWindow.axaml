@@ -9,7 +9,7 @@
 		mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="450"
         x:Class="CryBarEditor.MainWindow"
 		DataContext="{Binding RelativeSource={RelativeSource Self}}"
-        Title="CryBarEditor 1.0.0" 
+        Title="CryBarEditor" 
 		Foreground="#d9d9d9"
 		Background="#141414">
 	<Window.Styles>

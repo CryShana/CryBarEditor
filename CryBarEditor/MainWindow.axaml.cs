@@ -61,7 +61,6 @@ public partial class MainWindow : SimpleWindow
     readonly RegistryOptions _registryOptions;
     readonly TextMate.Installation _textMateInstallation;
     
-
     #region Properties
     public BarFile? BarFile => _barFile;
     public FileStream? BarFileStream => _barStream;
@@ -186,6 +185,13 @@ public partial class MainWindow : SimpleWindow
 
         // events
         PointerWheelChanged += ScrollChanged;
+
+        // append version
+        var v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        if (v != null)
+        {
+            Title = $"{Title} {v.Major}.{v.Minor}.{v.Build}";
+        }
     }
  
     #region UI events

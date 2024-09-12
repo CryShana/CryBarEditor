@@ -1,5 +1,14 @@
-# CryBarEditor (for AOM Retold)
-Tool for fast and easy resource management, focused on AOMR.
+<div align="center">
+    <a href="https://github.com/CryShana/CryBarEditor"><img src="https://assets.cryshana.me/KaDz0e4q7ubO.png" /></a>
+</div>
+
+<div align="center">
+<b>CryBarEditor</b> - AoM:Retold resource manager / BAR editor / modding tool
+</div>
+
+## Description
+The purpose of this tool is to enable fast and easy modding of Age of Mythology Retold.
+
 
 ## Features
 - **Read BAR archives**
@@ -32,15 +41,11 @@ Tool for fast and easy resource management, focused on AOMR.
    
 ## Planned features
 Currently planned:
-- Support for easily making additive mods (if they work, haven't tested it yet)
+- Support for easily making additive mods with right clicking on supported files
 - Converting DDT -> TGA where user can specify custom params (right now we only have conversion of existing DDT file with copied params)
 - Creating BAR archive from selected files
 - Creating modified BAR archive by only replacing selected entries in existing BAR archive
 - (Support for other relevant formats, such as .TMA, .TMM and .DATA)
-
-## Note
-This is a personal project made in span of few days. I work on it in my free time, don't expect much.
-Format support is focused on Age of Mythology Retold, so it may not work for other Age titles.
 
 ## Modding Basics
 Please read [Modding Basics](Documentation/Modding.md) document to get started.
