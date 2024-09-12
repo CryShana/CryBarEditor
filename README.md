@@ -101,9 +101,9 @@ Textures are usually in any `...Textures.bar` archive. Atlantean temple textures
 - This will create a new DDT and export it to your export folder
 
 ### Modding note
-I am still not fully familiar with how modding works for this game, all examples I gave above are from personal experience.
-I will update these examples as I learn more. I have also encountered some problems trying to create custom anim files, they don't seem to be loaded by the game
-and am unsure yet why. For now, have fun and experiment.
+I am still not fully familiar with how modding works, all examples I gave above are from me playing around.
+I have also encountered some problems trying to create custom anim files, they don't seem to be loaded by the game.
+Maybe you have to register them somewhere, unsure yet. I will update this document as I learn more. If you know something I don't, please contact me.
 
 ## Screenshots
 ### Previewing XMB content
