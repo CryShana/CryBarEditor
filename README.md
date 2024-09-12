@@ -48,12 +48,6 @@ Format support is focused on Age of Mythology Retold, so it may not work for oth
 - To override a file used by the game, you need to first determine it's relative path, for example `\game\art\something.png` - and then have a file in your mod folder with **same relative path**
 - Most game files are inside **.BAR** archives, but every file in those archives has a relative path that we can override - we don't need to create a whole new .BAR file!
 
-### Additive mods
-I haven't tested this yet, but it has been brought to my attention that AoMR may support additive mods just like AoE3.
-This means instead of modifying whole files which can break with future game updates, you could modify the base file partially with an additive mod.
-
-The below examples describe the traditional way of modding AoM, I will soon update the document with additive modding instructions.
-
 ### Example 1 - New unit
 If you wish to add a new unit to the game, you will want to override `proto.xml` file. This file is located within `Data.bar` archive
 - Open `Data.bar` archive 
@@ -106,6 +100,11 @@ Textures are usually in any `...Textures.bar` archive. Atlantean temple textures
 - Texture files are DDT files, which are special image files that contain multiple smaller versions of themselves, called mipmaps or mips
 - The easiest way to modify them at the moment is to right click and `Replace image and export DDT` - then you select your own image you wish to replace it with
 - This will create a new DDT and export it to your export folder
+
+### Additive mods
+I haven't tested this yet, but it has been brought to my attention that AoMR may support additive mods just like AoE3.
+This means instead of modifying whole files which can break with future game updates, you could modify the base file partially with an additive mod.
+This would most likely not work for all files, just certain common ones, just like in AoE3.
 
 ### Modding note
 I am still not fully familiar with how modding works, all examples I gave above are from me playing around.
