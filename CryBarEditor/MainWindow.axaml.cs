@@ -13,6 +13,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
@@ -25,7 +26,7 @@ using SixLabors.ImageSharp.PixelFormats;
 
 using CommunityToolkit.HighPerformance;
 using Configuration = CryBarEditor.Classes.Configuration;
-using System.Diagnostics;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace CryBarEditor;
 
@@ -473,106 +474,119 @@ public partial class MainWindow : SimpleWindow
     {
         const int MAX_DATA_SIZE = 1_500_000_000;    // 1.5 GB
         const int MAX_DATA_TEXT_SIZE = 100_000_000; // 100 MB
-
-        var data_size = get_read_size(entry);
-        if (data_size > MAX_DATA_SIZE)
-        {
-            await SetImagePreview(null);
-            SetTextEditorLanguage(".txt");
-
-            textEditor.Text = "Data too big to be loaded for preview";
-            textEditor.ScrollTo(0, 0);
-            return;
-        }
-
+        
         var relative_path = get_rel_path(entry);
         var ext = Path.GetExtension(relative_path).ToLower();
-
         var text = "";
+
         PreviewedFileName = Path.GetFileName(relative_path);
 
-        var data = BarCompression.EnsureDecompressed(read(entry), out var type);
-        PreviewedFileNote = type switch
+        try
         {
-            CompressionType.L33t => "(Decompressed L33t)",
-            CompressionType.Alz4 => "(Decompressed Alz4)",
-            _ => ""
-        };
-
-        if (IsImage(ext))
-        {
-            using (var image = SixLabors.ImageSharp.Image.Load(data.Span))
+            var data_size = get_read_size(entry);
+            if (data_size > MAX_DATA_SIZE)
             {
-                await SetImagePreview(image, token);
-                PreviewedFileNote = $"[{image.Width}x{image.Height}]";
-            }
-
-            return;
-        }
-
-
-        if (ext == ".xmb")
-        {
-            var xml = BarFormatConverter.XMBtoXML(data.Span);
-            if (xml != null)
-            {
-                PreviewedFileNote = "(Converted to XML)";
-                text = BarFormatConverter.FormatXML(xml);
-                ext = ".xml";
-            }
-            else
-            {
-                text = "Failed to parse XMB document";
-                ext = ".txt";
-            }
-        }
-        else if (ext == ".ddt")
-        {
-            var ddt = new DDTImage(data);
-            if (!ddt.ParseHeader())
-            {
-                PreviewedFileNote = "(Failed to parse DDT)";
-                return;
-            }
-
-            using var image = await BarFormatConverter.ParseDDT(ddt, max_resolution: 1024, token: token);
-            if (image == null)
-            {
-                PreviewedFileNote = "(Failed to parse DDT)";
-                return;
-            }
-
-            var preview_note = $"(Converted to PNG) [{ddt.Version} {ddt.MipmapOffsets[0].Item3}x{ddt.MipmapOffsets[0].Item4}, {ddt.MipmapOffsets.Length} Mips] ";
-            if (image.Width < ddt.BaseWidth || image.Height < ddt.BaseHeight)
-                preview_note += $"- Downscaled to {image.Width}x{image.Height}";
-
-            PreviewedFileNote = preview_note;
-            await SetImagePreview(image, token);
-            return;
-        }
-        else
-        {
-            if (data_size > MAX_DATA_TEXT_SIZE)
-            {
-                // to large for text file
                 await SetImagePreview(null);
                 SetTextEditorLanguage(".txt");
 
-                textEditor.Text = "Data too big to preview as text";
+                textEditor.Text = "Data too big to be loaded for preview";
                 textEditor.ScrollTo(0, 0);
                 return;
             }
 
-            var unicode = DetectIfUnicode(data.Span);
-            PreviewedFileNote = unicode ? "[Unicode]" : "[UTF-8]";
+            var data = BarCompression.EnsureDecompressed(read(entry), out var type);
+            PreviewedFileNote = type switch
+            {
+                CompressionType.L33t => "(Decompressed L33t)",
+                CompressionType.Alz4 => "(Decompressed Alz4)",
+                _ => ""
+            };
 
-            // set text
-            text = unicode ?
-                Encoding.Unicode.GetString(data.Span) :
-                Encoding.UTF8.GetString(data.Span);
+            if (IsImage(ext))
+            {
+                using (var image = SixLabors.ImageSharp.Image.Load(data.Span))
+                {
+                    await SetImagePreview(image, token);
+                    PreviewedFileNote = $"[{image.Width}x{image.Height}]";
+                }
 
-            var xml_tags = GetXMLTagRegex().Count(text);
-            if (xml_tags > 0) ext = ".xml";
+                return;
+            }
+
+
+            if (ext == ".xmb")
+            {
+                var xml = BarFormatConverter.XMBtoXML(data.Span);
+                if (xml != null)
+                {
+                    PreviewedFileNote = "(Converted to XML)";
+                    text = BarFormatConverter.FormatXML(xml);
+                    ext = ".xml";
+                }
+                else
+                {
+                    text = "Failed to parse XMB document";
+                    ext = ".txt";
+                }
+            }
+            else if (ext == ".ddt")
+            {
+                var ddt = new DDTImage(data);
+                if (!ddt.ParseHeader())
+                {
+                    PreviewedFileNote = "(Failed to parse DDT)";
+                    return;
+                }
+
+                using var image = await BarFormatConverter.ParseDDT(ddt, max_resolution: 1024, token: token);
+                if (image == null)
+                {
+                    PreviewedFileNote = "(Failed to parse DDT)";
+                    return;
+                }
+
+                var preview_note = $"(Converted to PNG) [{ddt.Version} {ddt.MipmapOffsets[0].Item3}x{ddt.MipmapOffsets[0].Item4}, {ddt.MipmapOffsets.Length} Mips] ";
+                if (image.Width < ddt.BaseWidth || image.Height < ddt.BaseHeight)
+                    preview_note += $"- Downscaled to {image.Width}x{image.Height}";
+
+                PreviewedFileNote = preview_note;
+                await SetImagePreview(image, token);
+                return;
+            }
+            else
+            {
+                if (data_size > MAX_DATA_TEXT_SIZE)
+                {
+                    // to large for text file
+                    await SetImagePreview(null);
+                    SetTextEditorLanguage(".txt");
+
+                    textEditor.Text = "Data too big to preview as text";
+                    textEditor.ScrollTo(0, 0);
+                    return;
+                }
+
+                var unicode = DetectIfUnicode(data.Span);
+                PreviewedFileNote = unicode ? "[Unicode]" : "[UTF-8]";
+
+                // set text
+                text = unicode ?
+                    Encoding.Unicode.GetString(data.Span) :
+                    Encoding.UTF8.GetString(data.Span);
+
+                var xml_tags = GetXMLTagRegex().Count(text);
+                if (xml_tags > 0) ext = ".xml";
+            }        
+        }
+        catch (UnknownImageFormatException)
+        {
+            ext = ".txt";
+            text = "Preview failed: Unrecognized image format";
+        }
+        catch (Exception ex)
+        {
+            ext = ".txt";
+            text = "Preview failed: " + ex.Message;
         }
 
         await SetImagePreview(null);
