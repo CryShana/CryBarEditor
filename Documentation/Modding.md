@@ -15,6 +15,7 @@ Most game files are packaged within **BAR archives**, luckily for us, CryBarEdit
 
 With both root directory and export root directory set, you are ready to start using CryBarEditor.
 
+---
 ## Standard modding method
 The standard method is quite straight forward. If your mod folder contains a file with same relative path as used by the game, it will be used instead.
 
@@ -79,22 +80,24 @@ For example we want to modify the Atlantean temple texture:
 ### Note when creating new anim files
 `anim` files are used to specify what models units use in `proto.xml`. But if you were to create your own anim file, you will notice it's not loaded by the game. I haven't yet figured out why, I think it has to do with `simdata.simjson` file that links these anim files with tactics, but I haven't delved into this yet.
 
+---
 ## Additive modding method
 The additive method is meant to solve 2 main problems of the standard method:
 - Game updates breaking your mod
 - Other mods having conflicting changes with your mod
 
-Only certain files support additive modding, I don't have the list of all of them, but so far I have confirmed the following:
-- `proto.xml` uses `proto_mods.xml`
-- `techtree.xml` uses `techtree_mods.xml`
+Only certain files support additive modding, I confirmed only the following:
+
+| File name | Additive mod name | Root element
+| --------- | ----------------- | -------------
+| `proto.xml` | `proto_mods.xml` | `<protomods>`
+| `techtree.xml` | `techtree_mods.xml` | `<techtreemods>`
+
 
 ### How it works
 - The additive mod is usually just the original file name suffixed with `_mods`
 - The additive mod is always an `.xml` file (I haven't found a case where it's not yet)
-- The additive mod always has a unique root XML element:
-    - `proto_mods.xml` has `<protomods>`
-    - `techtree_mods.xml` has `<techtreemods>`
-    - ...
+- The additive mod always has a unique root XML element (check table above)
 - Tags now accept a new attribute called `mergeMode`. It defines how certain tags should be handled when merged with base file. It has following possible values:
     - `modify` - replace if exists, otherwise add tag to existing object (default merge mode)
     - `replace` - replace an existing tag within existing object
