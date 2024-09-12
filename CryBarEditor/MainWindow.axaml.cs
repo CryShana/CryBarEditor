@@ -191,7 +191,8 @@ public partial class MainWindow : SimpleWindow
     #region UI events
     async void LoadBAR_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
-        var file = await PickFile(sender, "Open BAR file", [new("BAR file") { Patterns = ["*.bar"] }]);
+        var suggested_folder = _lastConfiguration?.BarFile == null ? null : Path.GetDirectoryName(_lastConfiguration.BarFile);
+        var file = await PickFile(sender, "Open BAR file", [new("BAR file") { Patterns = ["*.bar"] }], suggested_folder);
         if (file == null) return;
         LoadBAR(file);
     }
@@ -202,10 +203,12 @@ public partial class MainWindow : SimpleWindow
         if (btn != null)
             btn.IsEnabled = false;
 
+        var suggested_folder = _lastConfiguration?.RootDirectory == null ? null : Path.GetDirectoryName(_lastConfiguration.RootDirectory);
         var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
             Title = "Select Root directory",
-            AllowMultiple = false
+            AllowMultiple = false,
+            SuggestedStartLocation = suggested_folder == null ? null : await StorageProvider.TryGetFolderFromPathAsync(suggested_folder)
         });
 
         if (btn != null)
@@ -223,10 +226,12 @@ public partial class MainWindow : SimpleWindow
         if (btn != null)
             btn.IsEnabled = false;
 
+        var suggested_folder = _lastConfiguration?.ExportRootDirectory == null ? null : Path.GetDirectoryName(_lastConfiguration.ExportRootDirectory);
         var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
             Title = "Select export Root directory",
-            AllowMultiple = false
+            AllowMultiple = false,
+            SuggestedStartLocation = suggested_folder == null ? null : await StorageProvider.TryGetFolderFromPathAsync(suggested_folder)
         });
 
         if (btn != null)
@@ -436,7 +441,7 @@ public partial class MainWindow : SimpleWindow
         }
     }
 
-    public void LoadBAR(string bar_file)
+    public void LoadBAR(string bar_file, bool update_config = true)
     {
         _barStream?.Dispose();
         var stream = File.OpenRead(bar_file);
@@ -470,12 +475,17 @@ public partial class MainWindow : SimpleWindow
                     }
                 }
             }
+
+            if (update_config)
+            {
+                SaveConfiguration();
+            }
         }
         catch (Exception ex)
         {
             _barStream = null;
             _ = ShowError("Failed to load BAR archive:\n" + ex.Message);
-        }
+        } 
     }
 
     CancellationTokenSource? _previewCsc;
@@ -1155,7 +1165,7 @@ public partial class MainWindow : SimpleWindow
         return Path.Combine(GetRootRelevantPath(), entry.RelativePath);
     }
 
-    async Task<string?> PickFile(object? sender, string title, IReadOnlyList<FilePickerFileType>? filter = null)
+    async Task<string?> PickFile(object? sender, string title, IReadOnlyList<FilePickerFileType>? filter = null, string? suggested_folder = null)
     {
         var btn = sender as Button;
         if (btn != null)
@@ -1165,7 +1175,8 @@ public partial class MainWindow : SimpleWindow
         {
             Title = title,
             AllowMultiple = false,
-            FileTypeFilter = filter
+            FileTypeFilter = filter,
+            SuggestedStartLocation = suggested_folder == null ? null : await StorageProvider.TryGetFolderFromPathAsync(suggested_folder)
         });
 
         if (btn != null)
@@ -1428,6 +1439,7 @@ public partial class MainWindow : SimpleWindow
     #endregion
 
     #region Configuration
+    Configuration? _lastConfiguration;
     void TryRestorePreviousConfiguration()
     {
         var config_path = Path.Combine(AppContext.BaseDirectory, CONFIG_FILE);
@@ -1440,11 +1452,16 @@ public partial class MainWindow : SimpleWindow
             if (config == null)
                 return;
 
+            _lastConfiguration = config;
+
             if (Directory.Exists(config.RootDirectory))
                 LoadDir(config.RootDirectory, false);
 
             if (Directory.Exists(config.ExportRootDirectory) && config.ExportRootDirectory != _rootDirectory)
                 ExportRootDirectory = config.ExportRootDirectory;
+
+            if (File.Exists(config.BarFile))
+                LoadBAR(config.BarFile, false);
         }
         catch
         {
@@ -1458,11 +1475,14 @@ public partial class MainWindow : SimpleWindow
 
         try
         {
-            File.WriteAllText(config_path, JsonSerializer.Serialize(new Configuration
+            _lastConfiguration = new Configuration
             {
                 RootDirectory = _rootDirectory,
-                ExportRootDirectory = _exportRootDirectory
-            }, CryBarJsonContext.Default.Configuration));
+                ExportRootDirectory = _exportRootDirectory,
+                BarFile = _barStream?.Name
+            };
+
+            File.WriteAllText(config_path, JsonSerializer.Serialize(_lastConfiguration, CryBarJsonContext.Default.Configuration));
         }
         catch
         {

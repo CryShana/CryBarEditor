@@ -6,6 +6,7 @@ public class Configuration
 {
     public string? RootDirectory { get; set; }
     public string? ExportRootDirectory { get; set; } 
+    public string? BarFile { get; set; }
 }
 
 [JsonSerializable(typeof(Configuration))]
