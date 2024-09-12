@@ -43,12 +43,10 @@ This is a personal project made in span of few days. I work on it in my free tim
 Format support is focused on Age of Mythology Retold, so it may not work for other Age titles.
 
 ## Modding Basics
-Please read my [Modding Basics](Documentation/Modding.md) document to get started.
+Please read [Modding Basics](Documentation/Modding.md) document to get started.
 
-### Modding note
-I am still not fully familiar with how modding works, all examples I gave above are from me playing around.
-I have also encountered some problems trying to create custom anim files, they don't seem to be loaded by the game.
-Maybe you have to register them somewhere, unsure yet. I will update this document as I learn more. If you know something I don't, please contact me.
+I describe the **Standard** and **Additive** modding method.
+You should always prefer the Additive method if possible
 
 ## Screenshots
 ### Previewing XMB content
