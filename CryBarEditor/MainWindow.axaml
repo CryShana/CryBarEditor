@@ -198,13 +198,17 @@
 					<SelectableTextBlock DockPanel.Dock="Top"
 							   Text="{Binding PreviewedFileData}"
 							   Margin="0,3,0,13" Foreground="Gray"  />
-					<Grid>
+					<Grid x:Name="_gridPreview">						
 						<Image x:Name="_imgPreview" ZIndex="1"
-							   HorizontalAlignment="Left" VerticalAlignment="Top"
-							   Stretch="Uniform" StretchDirection="DownOnly" />
-						<ae:TextEditor x:Name="_txtEditor" IsReadOnly="True" Text="Click on any file to preview it here" ShowLineNumbers="True"
-								   FontFamily="Cascadia Code,Consolas,Menlo,Monospace"
-								   Background="#1c1c1c"/>
+							HorizontalAlignment="Left" VerticalAlignment="Top"
+							Stretch="Uniform" StretchDirection="DownOnly" />
+						
+						<ae:TextEditor x:Name="_txtEditor" 
+									   IsReadOnly="True" 
+									   Text="Click on any file to preview it here" 
+									   ShowLineNumbers="True"
+									   FontFamily="Cascadia Code,Consolas,Menlo,Monospace"
+								       Background="#1c1c1c"/>
 					</Grid>
 
 				</DockPanel>

@@ -1,6 +1,7 @@
 using CryBar;
 using CryBarEditor.Classes;
 
+using Avalonia.Media;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using Avalonia.Media.Imaging;
@@ -47,6 +48,7 @@ public partial class MainWindow : SimpleWindow
     List<FileEntry>? _loadedFiles = null;
     FileSystemWatcher? _watcher = null;
     BarFileEntry? _selectedBarEntry = null;
+    double _imageZoomLevel = 1.0;
 
 
     /// <summary>
@@ -181,9 +183,12 @@ public partial class MainWindow : SimpleWindow
         F_ReadBAR = f => f.ReadDataRaw(_barStream!);
         F_ReadSizeRoot = f => new FileInfo(Path.Combine(_rootDirectory, f.RelativePath)).Length;
         F_ReadSizeBAR = f => f.SizeUncompressed;
-    }
 
-    #region Button events
+        // events
+        PointerWheelChanged += ScrollChanged;
+    }
+ 
+    #region UI events
     async void LoadBAR_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         var file = await PickFile(sender, "Open BAR file", [new("BAR file") { Patterns = ["*.bar"] }]);
@@ -239,6 +244,38 @@ public partial class MainWindow : SimpleWindow
 
         ExportRootDirectory = folders[0].Path.LocalPath;
         SaveConfiguration();
+    }
+
+    void ScrollChanged(object? sender, Avalonia.Input.PointerWheelEventArgs e)
+    {
+        // is going to be -1 or 1
+        var delta = e.Delta.Y;
+        if (delta == 0) 
+            return;
+
+        // just to make sure, don't want any surprises
+        if (delta < 0) delta = -1;
+        else if (delta > 0) delta = 1;
+
+        // HANDLE IMAGE ZOOMING IN
+        if (!_imgPreview.IsVisible || _imgPreview.Source == null) 
+            return;
+     
+        // only zoom in if pointer within preview grid
+        var position = e.GetPosition(_gridPreview);
+        if (position.X < 0 || position.Y < 0 ||
+            position.X > _gridPreview.Bounds.Width ||
+            position.Y > _gridPreview.Bounds.Height)
+            return;
+
+        // it has to be exponential for percieved zoom step to be kinda consistent
+        var zoom_speed = 0.1;
+        var zoom_step = Math.Pow(1 + zoom_speed, _imageZoomLevel) - 1;
+        var zoom_factor_change = delta * zoom_step;
+        _imageZoomLevel = Math.Clamp(_imageZoomLevel + zoom_factor_change, 0.1, 10.0);
+
+        // scale image
+        RefreshImageScale();
     }
     #endregion
 
@@ -477,7 +514,7 @@ public partial class MainWindow : SimpleWindow
         Func<T, long> get_read_size, Func<T, Memory<byte>> read, CancellationToken token = default)
     {
         const int MAX_DATA_SIZE = 1_500_000_000;    // 1.5 GB
-        const int MAX_DATA_TEXT_SIZE = 100_000_000; // 100 MB
+        const int MAX_DATA_TEXT_SIZE = 25_000_000; // 25 MB
         
         var relative_path = get_rel_path(entry);
         var ext = Path.GetExtension(relative_path).ToLower();
@@ -695,6 +732,12 @@ public partial class MainWindow : SimpleWindow
     #endregion
 
     #region UI functions
+    void RefreshImageScale()
+    {
+        _imgPreview.RenderTransformOrigin = new Avalonia.RelativePoint(0, 0, Avalonia.RelativeUnit.Absolute);
+        _imgPreview.RenderTransform = new ScaleTransform(_imageZoomLevel, _imageZoomLevel);
+    }
+
     Bitmap? _previewImage = null;
     public async Task SetImagePreview(SixLabors.ImageSharp.Image? image, CancellationToken token = default)
     {
@@ -711,6 +754,9 @@ public partial class MainWindow : SimpleWindow
             _previewImage.Dispose();
             _previewImage = null;
         }
+
+        _imageZoomLevel = 1.0;
+        RefreshImageScale();
 
         try
         {
@@ -1381,6 +1427,7 @@ public partial class MainWindow : SimpleWindow
     }
     #endregion
 
+    #region Configuration
     void TryRestorePreviousConfiguration()
     {
         var config_path = Path.Combine(AppContext.BaseDirectory, CONFIG_FILE);
@@ -1423,6 +1470,9 @@ public partial class MainWindow : SimpleWindow
         }
     }
 
+    #endregion
+
+    #region Prompt functions
     async Task ShowError(string text)
     {
         var prompt = new Prompt(PromptType.Error, "Error", text);
@@ -1439,5 +1489,6 @@ public partial class MainWindow : SimpleWindow
     {
         var prompt = new Prompt(PromptType.Progress, title, progress_reporter: progress);
         await prompt.ShowDialog(this);
-    }
+    }  
+    #endregion
 }
