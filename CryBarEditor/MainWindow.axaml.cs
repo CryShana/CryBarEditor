@@ -18,15 +18,17 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
+using AvaloniaEdit.Folding;
+using AvaloniaEdit.Document;
 using AvaloniaEdit.TextMate;
 using TextMateSharp.Grammars;
+
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Tga;
 using SixLabors.ImageSharp.PixelFormats;
 
 using CommunityToolkit.HighPerformance;
 using Configuration = CryBarEditor.Classes.Configuration;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace CryBarEditor;
 
@@ -53,8 +55,10 @@ public partial class MainWindow : SimpleWindow
     const string ROOT_DIRECTORY_NAME = "game";
     const string CONFIG_FILE = "config.json";
 
+    FoldingManager? _foldingManager;
     readonly RegistryOptions _registryOptions;
     readonly TextMate.Installation _textMateInstallation;
+    
 
     #region Properties
     public BarFile? BarFile => _barFile;
@@ -162,7 +166,7 @@ public partial class MainWindow : SimpleWindow
 
         // set up editor
         _registryOptions = new RegistryOptions(ThemeName.DarkPlus);
-        _textMateInstallation = textEditor.InstallTextMate(_registryOptions);
+        _textMateInstallation = _txtEditor.InstallTextMate(_registryOptions);
 
         // prepare functions (to handle different types of entries - one from Root dir - others from BAR archives)
         F_GetFullRelativePathRoot = f => GetRootFullRelativePath(f);
@@ -487,10 +491,7 @@ public partial class MainWindow : SimpleWindow
             if (data_size > MAX_DATA_SIZE)
             {
                 await SetImagePreview(null);
-                SetTextEditorLanguage(".txt");
-
-                textEditor.Text = "Data too big to be loaded for preview";
-                textEditor.ScrollTo(0, 0);
+                SetEditorText(".txt", "Data too big to be loaded for preview");
                 return;
             }
 
@@ -559,10 +560,7 @@ public partial class MainWindow : SimpleWindow
                 {
                     // to large for text file
                     await SetImagePreview(null);
-                    SetTextEditorLanguage(".txt");
-
-                    textEditor.Text = "Data too big to preview as text";
-                    textEditor.ScrollTo(0, 0);
+                    SetEditorText(".txt", "Data too big to preview as text");
                     return;
                 }
 
@@ -590,10 +588,7 @@ public partial class MainWindow : SimpleWindow
         }
 
         await SetImagePreview(null);
-        SetTextEditorLanguage(ext);
-
-        textEditor.Text = text;
-        textEditor.ScrollTo(0, 0);
+        SetEditorText(ext, text);   
     }
 
     public async Task Export<T>(IList<T> files, bool should_convert,
@@ -705,10 +700,9 @@ public partial class MainWindow : SimpleWindow
     {
         if (image == null)
         {
-            textEditor.IsVisible = true;
-            previewImage.IsVisible = false;
-
-            previewImage.Source = null;
+            _txtEditor.IsVisible = true;
+            _imgPreview.IsVisible = false;
+            _imgPreview.Source = null;
             return;
         }
 
@@ -740,29 +734,48 @@ public partial class MainWindow : SimpleWindow
             return;
         }
 
-        textEditor.IsVisible = false;
-        previewImage.IsVisible = true;
-        previewImage.Source = _previewImage;
+        _txtEditor.IsVisible = false;
+        _imgPreview.IsVisible = true;
+        _imgPreview.Source = _previewImage;
     }
 
-    public void SetTextEditorLanguage(string extension)
+    public void SetEditorText(string extension, string text)
     {
-        if (string.Equals(extension, ".xs", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(extension, ".con", StringComparison.OrdinalIgnoreCase))
-            extension = ".cpp";
-
-        if (string.Equals(extension, ".composite", StringComparison.OrdinalIgnoreCase))
-            extension = ".json";
-
-        var lang = _registryOptions.GetLanguageByExtension(extension);
-        if (lang == null)
+        // ANY CLEANUP
+        if (_foldingManager != null)
         {
-            _textMateInstallation.SetGrammar("");
-            return;
+            _foldingManager.Clear();
+            FoldingManager.Uninstall(_foldingManager);
         }
 
-        var scope = _registryOptions.GetScopeByLanguageId(lang.Id);
+        // PREPARE EXTENSION
+        var ext = extension.ToLower();
+        if (ext is ".xs" or ".con")
+            ext = ".cpp";
+
+        if (ext is ".composite")
+            ext = ".json";
+
+        if (ext is ".xaml")
+            ext = ".xml";
+
+        // SET GRAMMAR + TEXT
+        var lang = _registryOptions.GetLanguageByExtension(ext);
+        var scope = lang == null ? null : _registryOptions.GetScopeByLanguageId(lang.Id);
+
+        _txtEditor.Document = new TextDocument(text);
         _textMateInstallation.SetGrammar(scope);
+
+        // HANDLE FOLDING
+        if (ext is ".xml")
+        {
+            _foldingManager = FoldingManager.Install(_txtEditor.TextArea);
+            var strategy = new XmlFoldingStrategy();
+            strategy.UpdateFoldings(_foldingManager, _txtEditor.Document);
+        }
+
+        // SCROLL TO TOP (must be with a delay, because the document gets moved a bit)
+        Task.Delay(50).ContinueWith((t) => Dispatcher.UIThread.Post(() => _txtEditor.ScrollTo(0, 0)));
     }
 
     public void RefreshFileEntries()
@@ -1342,12 +1355,12 @@ public partial class MainWindow : SimpleWindow
         }
     }
 
-    SearchWindow? _activeWindow;
+    SearchWindow? _activeSearchWindow;
     void MenuItem_Search(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
-        if (_activeWindow != null)
+        if (_activeSearchWindow != null)
         {
-            _activeWindow.Focus();
+            _activeSearchWindow.Focus();
             return;
         }
 
@@ -1358,13 +1371,13 @@ public partial class MainWindow : SimpleWindow
             return;
         }
 
-        _activeWindow = new SearchWindow(this);
-        _activeWindow.Closed += (a, b) =>
+        _activeSearchWindow = new SearchWindow(this);
+        _activeSearchWindow.Closed += (a, b) =>
         {
-            _activeWindow = null;
+            _activeSearchWindow = null;
         };
 
-        _activeWindow.Show(this);
+        _activeSearchWindow.Show(this);
     }
     #endregion
 
