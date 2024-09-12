@@ -43,16 +43,13 @@ Format support is focused on Age of Mythology Retold, so it may not work for oth
 
 ## Screenshots
 ### Previewing XMB content
-![CryBarEditor_rCP7YoQNoY](https://github.com/user-attachments/assets/1af49461-0d1d-41ab-a82e-4f70dbdb58f7)
+![CryBarEditor_1](https://assets.cryshana.me/34Cmg3iPHLA9.png)
 ### Previewing image
-![CryBarEditor_MqdkEqNUit](https://github.com/user-attachments/assets/da732a48-cc53-4911-9ed1-5ab6b4ef23e8)
-### Searching in everything
-![CryBarEditor_D6fNnVhNxQ](https://github.com/user-attachments/assets/9725302b-0eb2-4710-bcfe-bf5593411c0c)
+![CryBarEditor_2](https://assets.cryshana.me/g18ndgdKDzLQ.png)
+### Previewing DDT image and searching
+![CryBarEditor_3](https://assets.cryshana.me/okCtQiWGpAlx.png)
 ### Exporting selected files
-![CryBarEditor_NhvzYFEvOX](https://github.com/user-attachments/assets/e8deca7e-f652-4d41-b388-e20e870ccd9e)
-Copy = exports them as they are without doing anything else
+![CryBarEditor_4](https://assets.cryshana.me/pOaZBwQHtRsN.png)
 
-Convert = optionally decompresses and then converts to readable file (like XMB -> XML or DDT -> TGA)
-
-Copy+Convert = will do both and export 2 files, meant for editing and having the original nearby
-
+When exporting, you can either `Copy` export it by just copying the data to export directory as is.
+Or you can `Convert` it by optionally converting data to readable format (such as DDT->TGA or XMB->XML)
