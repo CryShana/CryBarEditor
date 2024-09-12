@@ -32,6 +32,7 @@ Tool for fast and easy resource management, focused on AOMR.
    
 ## Planned features
 Currently planned:
+- Support for easily making additive mods (if they work, haven't tested it yet)
 - Converting DDT -> TGA where user can specify custom params (right now we only have conversion of existing DDT file with copied params)
 - Creating BAR archive from selected files
 - Creating modified BAR archive by only replacing selected entries in existing BAR archive
@@ -46,6 +47,12 @@ Format support is focused on Age of Mythology Retold, so it may not work for oth
 - Set your mod folder as the export Root directory (this is where all exported files will be copied to, retaining relative paths)
 - To override a file used by the game, you need to first determine it's relative path, for example `\game\art\something.png` - and then have a file in your mod folder with **same relative path**
 - Most game files are inside **.BAR** archives, but every file in those archives has a relative path that we can override - we don't need to create a whole new .BAR file!
+
+### Additive mods
+I haven't tested this yet, but it has been brought to my attention that AoMR may support additive mods just like AoE3.
+This means instead of modifying whole files which can break with future game updates, you could modify the base file partially with an additive mod.
+
+The below examples describe the traditional way of modding AoM, I will soon update the document with additive modding instructions.
 
 ### Example 1 - New unit
 If you wish to add a new unit to the game, you will want to override `proto.xml` file. This file is located within `Data.bar` archive
