@@ -35,6 +35,37 @@
 			<Setter Property="Foreground" Value="#ebebeb" />
 		</Style>
 	</Window.Styles>
+	<Window.Resources>
+		<ContextMenu x:Key="SharedContextMenu">
+			<MenuItem Header="Copy file name" Click="MenuItem_CopyFileName" />
+			<MenuItem Header="Copy file path" Click="MenuItem_CopyFilePath" />
+			<Separator IsVisible="{Binding CanExport}" />
+
+			<MenuItem Header="{Binding SelectedFileEntries.Count, StringFormat='Export {0} selected (copy)'}"
+						IsVisible="{Binding CanExport}"
+						Click="MenuItem_ExportSelectedRaw" />
+
+			<MenuItem Header="{Binding SelectedFileEntries.Count, StringFormat='Export {0} selected (converted)'}"
+						IsVisible="{Binding CanExport}"
+						Click="MenuItem_ExportSelectedConverted" />
+
+			<MenuItem Header="{Binding SelectedFileEntries.Count, StringFormat='Export {0} selected (copy+converted)'}"
+						IsVisible="{Binding CanExport}"
+						Click="MenuItem_ExportSelectedRawConverted" />
+
+			<Separator IsVisible="{Binding SelectedIsDDT}"/>
+
+			<MenuItem Header="Replace image and export DDT"
+						IsVisible="{Binding SelectedIsDDT}"
+						Click="MenuItem_ReplaceImageAndExportDDT"/>
+
+			<Separator IsVisible="{Binding SelectedCanHaveAdditiveMod}"/>
+
+			<MenuItem Header="Create additive mod"
+						IsVisible="{Binding SelectedCanHaveAdditiveMod}"
+						Click="MenuItem_CreateNewAdditiveMod"/>	
+		</ContextMenu>
+	</Window.Resources>
 
 	<DockPanel>
 		<StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Background="#1c1c1c">
@@ -83,7 +114,8 @@
 					<ListBox ItemsSource="{Binding FileEntries}" Margin="0,10,0,0"
 							 SelectionMode="Multiple"
 							 SelectedItems="{Binding SelectedFileEntries, Mode=TwoWay}"
-							 SelectedItem="{Binding SelectedFileEntry, Mode=TwoWay}">
+							 SelectedItem="{Binding SelectedFileEntry, Mode=TwoWay}"
+							 ContextMenu="{StaticResource SharedContextMenu}">
 						<ListBox.ItemTemplate>
 							<DataTemplate x:DataType="cc:FileEntry">
 								<StackPanel Orientation="Horizontal">
@@ -92,37 +124,6 @@
 								</StackPanel>
 							</DataTemplate>
 						</ListBox.ItemTemplate>
-						<ListBox.ContextMenu>
-							<ContextMenu>
-								<MenuItem Header="Copy file name" Click="MenuItem_CopyFileName" />
-								<MenuItem Header="Copy file path" Click="MenuItem_CopyFilePath" />
-								<Separator IsVisible="{Binding CanExport}" />
-
-								<MenuItem Header="{Binding SelectedFileEntries.Count, StringFormat='Export {0} selected (copy)'}"
-										  IsVisible="{Binding CanExport}"
-										  Click="MenuItem_ExportSelectedRaw" />
-
-								<MenuItem Header="{Binding SelectedFileEntries.Count, StringFormat='Export {0} selected (converted)'}"
-										  IsVisible="{Binding CanExport}"
-										  Click="MenuItem_ExportSelectedConverted" />
-
-								<MenuItem Header="{Binding SelectedFileEntries.Count, StringFormat='Export {0} selected (copy+converted)'}"
-										  IsVisible="{Binding CanExport}"
-										  Click="MenuItem_ExportSelectedRawConverted" />
-								
-								<Separator IsVisible="{Binding SelectedIsDDT}"/>
-
-								<MenuItem Header="Replace image and export DDT"
-										  IsVisible="{Binding SelectedIsDDT}"
-										  Click="MenuItem_ReplaceImageAndExportDDT"/>
-
-								<Separator IsVisible="{Binding SelectedCanHaveAdditiveMod}"/>
-
-								<MenuItem Header="Create additive mod"
-										  IsVisible="{Binding SelectedCanHaveAdditiveMod}"
-										  Click="MenuItem_CreateNewAdditiveMod"/>
-							</ContextMenu>
-						</ListBox.ContextMenu>
 					</ListBox>
 				</DockPanel>
 
@@ -150,7 +151,8 @@
 					<ListBox ItemsSource="{Binding Entries}" Margin="0,10,0,0"
 							 SelectionMode="Multiple"
 							 SelectedItems="{Binding SelectedBarFileEntries, Mode=TwoWay}"
-							 SelectedItem="{Binding SelectedBarEntry, Mode=TwoWay}">
+							 SelectedItem="{Binding SelectedBarEntry, Mode=TwoWay}"
+							ContextMenu="{StaticResource SharedContextMenu}">
 						<ListBox.ItemTemplate>
 							<DataTemplate x:DataType="cb:BarFileEntry">
 								<StackPanel Orientation="Horizontal">
@@ -159,37 +161,6 @@
 								</StackPanel>
 							</DataTemplate>
 						</ListBox.ItemTemplate>
-						<ListBox.ContextMenu>
-							<ContextMenu>
-								<MenuItem Header="Copy file name" Click="MenuItem_CopyFileName" />
-								<MenuItem Header="Copy file path" Click="MenuItem_CopyFilePath" />
-								<Separator IsVisible="{Binding CanExport}" />
-
-								<MenuItem Header="{Binding SelectedBarFileEntries.Count, StringFormat='Export {0} selected (copy)'}"
-										  IsVisible="{Binding CanExport}"
-										  Click="MenuItem_ExportSelectedRaw" />
-
-								<MenuItem Header="{Binding SelectedBarFileEntries.Count, StringFormat='Export {0} selected (converted)'}"
-										  IsVisible="{Binding CanExport}"
-										  Click="MenuItem_ExportSelectedConverted" />
-
-								<MenuItem Header="{Binding SelectedBarFileEntries.Count, StringFormat='Export {0} selected (copy+converted)'}"
-										  IsVisible="{Binding CanExport}"
-										  Click="MenuItem_ExportSelectedRawConverted" />
-
-								<Separator IsVisible="{Binding CanExportAndIsDDT}"/>
-
-								<MenuItem Header="Replace image and export DDT"
-										  IsVisible="{Binding CanExportAndIsDDT}"
-										  Click="MenuItem_ReplaceImageAndExportDDT"/>
-
-								<Separator IsVisible="{Binding SelectedCanHaveAdditiveMod}"/>
-
-								<MenuItem Header="Create additive mod"
-										  IsVisible="{Binding SelectedCanHaveAdditiveMod}"
-										  Click="MenuItem_CreateNewAdditiveMod"/>
-							</ContextMenu>
-						</ListBox.ContextMenu>
 					</ListBox>
 				</DockPanel>
 
