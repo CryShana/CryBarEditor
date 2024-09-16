@@ -134,11 +134,13 @@
 							 ContextMenu="{StaticResource SharedContextMenu}">
 						<ListBox.ItemTemplate>
 							<DataTemplate x:DataType="cc:RootFileEntry">
-								<StackPanel Orientation="Horizontal">
-									<TextBlock Text="{Binding DirectoryPath}" Foreground="#808080"/>
-									<TextBlock Text="{Binding Name}" Classes.BAR="{Binding IsBAR}" />
+								<StackPanel Orientation="Horizontal" Height="19">
+									<TextBlock Text="{Binding DirectoryPath}" Foreground="#808080" VerticalAlignment="Center"/>
+									<TextBlock Text="{Binding Name}" Classes.BAR="{Binding IsBAR}" VerticalAlignment="Center"/>
 									<micons:MaterialIcon Kind="FileExportOutline" VerticalAlignment="Center"
-														 Margin="5,0,0,0" Foreground="#e3bd54" ToolTip.Tip="Overriden in export directory">
+														 Margin="5,0,0,0" Foreground="#e3bd54" 
+														 Width="19" Height="19"
+														 ToolTip.Tip="Overriden in export directory">
 										<micons:MaterialIcon.IsVisible>
 											<MultiBinding Converter="{StaticResource overridenConverter}">
 												<Binding Path="." />
@@ -181,11 +183,13 @@
 							 ContextMenu="{StaticResource SharedContextMenu}">
 						<ListBox.ItemTemplate>
 							<DataTemplate x:DataType="cb:BarFileEntry">
-								<StackPanel Orientation="Horizontal">
-									<TextBlock Text="{Binding DirectoryPath}" Foreground="#808080"/>
-									<TextBlock Text="{Binding Name}" />
+								<StackPanel Orientation="Horizontal" Height="19">
+									<TextBlock Text="{Binding DirectoryPath}" Foreground="#808080" VerticalAlignment="Center"/>
+									<TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
 									<micons:MaterialIcon Kind="FileExportOutline" VerticalAlignment="Center" 
-														 Margin="5,0,0,0" Foreground="#e3bd54" ToolTip.Tip="Overriden in export directory">
+														 Margin="5,0,0,0" Foreground="#e3bd54" 
+														 Width="19" Height="19"
+														 ToolTip.Tip="Overriden in export directory">
 										<micons:MaterialIcon.IsVisible>
 											<MultiBinding Converter="{StaticResource overridenConverter}">
 												<Binding Path="." />

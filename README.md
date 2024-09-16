@@ -67,6 +67,8 @@ You should always prefer the Additive method if possible
 ![CryBarEditor_4](https://assets.cryshana.me/pOaZBwQHtRsN.png)
 ### Creating DDT from selected image
 ![CryBarEditor_5](https://assets.cryshana.me/RueQpmx0q9L3.png)
+### Real-time status if file is overriden (in export directory)
+![CryBarEditor_6](https://assets.cryshana.me/HEMu7Ojws84P.png)
 
 ## Thanks
 I wish to thank the developers of AoE3 Resource Manager, their code helped me with decoding of XMB and DDT files.
