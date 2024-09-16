@@ -96,9 +96,9 @@ Only certain files support additive modding, I confirmed only the following:
 
 
 ### How it works
-- The additive mod is usually just the original file name suffixed with `_mods`
-- The additive mod is always an `.xml` file (I haven't found a case where it's not yet)
-- The additive mod always has a unique root XML element (check table above)
+- The additive mod **usually** is just the original file name suffixed with `_mods`
+- The additive mod **usually** is an `.xml` file (I only found the string mods not to be XML so far)
+- The additive mod **usually** has a unique root element (check table above) and uses same syntax as the files it's overriding
 - Tags now accept a new attribute called `mergeMode`. It defines how certain tags should be handled when merged with base file. It has following possible values:
     - `modify` - replace if exists, otherwise add tag to existing object (default merge mode)
     - `replace` - replace an existing tag within existing object
