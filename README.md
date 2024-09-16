@@ -65,3 +65,6 @@ You should always prefer the Additive method if possible
 
 When exporting, you can either `Copy` export it by just copying the data to export directory as is.
 Or you can `Convert` it by optionally converting data to readable format (such as DDT->TGA or XMB->XML)
+
+## Thanks
+I wish to thank the developers of AoE3 Resource Manager, their code helped me with decoding of XMB and DDT files.
