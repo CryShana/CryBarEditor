@@ -42,14 +42,17 @@ public partial class MainWindow : SimpleWindow
     string _previewedFileName = "";
     string _previewedFileNote = "";
     string _previewedFileData = "";
+
     BarFile? _barFile = null;
     FileStream? _barStream = null;
+    BarFileEntry? _selectedBarEntry = null;
     RootFileEntry? _selectedRootFileEntry = null;
     List<RootFileEntry>? _loadedRootFiles = null;
-    FileSystemWatcher? _watcher = null;
-    BarFileEntry? _selectedBarEntry = null;
-    double _imageZoomLevel = 1.0;
 
+    double _imageZoomLevel = 1.0;
+    FileSystemWatcher? _rootWatcher = null;
+    FileSystemWatcher? _exportWatcher = null;
+    
     /// <summary>
     /// This is used to find relative path for Root directory files
     /// </summary>
@@ -82,6 +85,7 @@ public partial class MainWindow : SimpleWindow
             OnSelfChanged();
             OnPropertyChanged(nameof(CanExport));
             OnPropertyChanged(nameof(CanExportAndIsDDT));
+            ResetExportWatcher();
         }
     }
     public bool CanExport => !string.IsNullOrEmpty(_exportRootDirectory);
@@ -303,11 +307,17 @@ public partial class MainWindow : SimpleWindow
         if (_loadedRootFiles == null || !Directory.Exists(_rootDirectory))
             return;
 
-        var removed_file = e.FullPath;
-        if (!removed_file.StartsWith(_rootDirectory))
+        var removed_path = e.FullPath;
+        if (!removed_path.StartsWith(_rootDirectory))
             return;
 
-        var relative_path = Path.GetRelativePath(_rootDirectory, removed_file);
+        if (Directory.Exists(removed_path))
+        {
+            // TODO: handle all removed items under this directory...
+            return;
+        }
+
+        var relative_path = Path.GetRelativePath(_rootDirectory, removed_path);
 
         RootFileEntry? entry_removed = null;
         for (int i = 0; i < _loadedRootFiles.Count; i++)
@@ -335,8 +345,11 @@ public partial class MainWindow : SimpleWindow
         if (_loadedRootFiles == null || !Directory.Exists(_rootDirectory))
             return;
 
-        var removed_file = e.FullPath;
-        if (!removed_file.StartsWith(_rootDirectory))
+        var created_path = e.FullPath;
+        if (!created_path.StartsWith(_rootDirectory))
+            return;
+
+        if (Directory.Exists(created_path))
             return;
 
         var prev_file = SelectedRootFileEntry;
@@ -363,13 +376,19 @@ public partial class MainWindow : SimpleWindow
         if (_loadedRootFiles == null || !Directory.Exists(_rootDirectory))
             return;
 
-        var renamed_file = e.OldFullPath;
-        if (!renamed_file.StartsWith(_rootDirectory) ||
+        var renamed_path = e.OldFullPath;
+        if (!renamed_path.StartsWith(_rootDirectory) ||
             !e.FullPath.StartsWith(_rootDirectory))
             return;
 
+        if (Directory.Exists(renamed_path))
+        {
+            // TODO: handle all affected files under this directory...
+            return;
+        }
+
         var new_entry = new RootFileEntry(_rootDirectory, e.FullPath);
-        var old_relative_path = Path.GetRelativePath(_rootDirectory, renamed_file);
+        var old_relative_path = Path.GetRelativePath(_rootDirectory, renamed_path);
 
         for (int i = 0; i < _loadedRootFiles.Count; i++)
         {
@@ -388,6 +407,80 @@ public partial class MainWindow : SimpleWindow
         RefreshFileEntries();
     }
 
+    void ExportDir_Deleted(object sender, FileSystemEventArgs e)
+    {
+        if (_loadedRootFiles == null || !Directory.Exists(_rootDirectory))
+            return;
+
+        var removed_path = e.FullPath;
+        if (!removed_path.StartsWith(_exportRootDirectory))
+            return;
+
+        if (Directory.Exists(removed_path))
+        {
+            // TODO: handle all removed files under this directory...
+            return;
+        }
+
+        var relative_path = Path.GetRelativePath(_exportRootDirectory, removed_path);
+        UpdateOverridenStatus(relative_path, false);
+    }
+
+    void ExportDir_Created(object sender, FileSystemEventArgs e)
+    {
+        if (_loadedRootFiles == null || !Directory.Exists(_rootDirectory))
+            return;
+
+        var created_path = e.FullPath;
+        if (!created_path.StartsWith(_exportRootDirectory))
+            return;
+
+        if (Directory.Exists(created_path))
+            return;
+
+        var relative_path = Path.GetRelativePath(_exportRootDirectory, created_path);
+        UpdateOverridenStatus(relative_path, true);
+    }
+
+    void ExportDir_Renamed(object sender, RenamedEventArgs e)
+    {
+        if (_loadedRootFiles == null || !Directory.Exists(_rootDirectory))
+            return;
+
+        var renamed_path = e.OldFullPath;
+        if (!renamed_path.StartsWith(_exportRootDirectory) ||
+            !e.FullPath.StartsWith(_exportRootDirectory))
+            return;
+
+        if (Directory.Exists(renamed_path))
+        {
+            // TODO: handle all moved files under this directory...
+            return;
+        }
+
+        var relative_path_old = Path.GetRelativePath(_exportRootDirectory, renamed_path);
+        var relative_path_new = Path.GetRelativePath(_exportRootDirectory, e.FullPath);
+        UpdateOverridenStatus(relative_path_old, false);
+        UpdateOverridenStatus(relative_path_new, true);    
+    }
+
+    void UpdateOverridenStatus(string relative_path, bool wasCreated)
+    {
+        var bar_entry = BarFile?.Entries?.FirstOrDefault(x => relative_path.Contains(x.RelativePath));
+        if (bar_entry != null)
+        {
+            // TODO: update status
+            return;
+        }
+
+        var root_entry = _loadedRootFiles?.Find(x => relative_path.Contains(x.RelativePath));
+        if (root_entry != null)
+        {
+            // TODO: update status
+            return;
+        }
+    }
+
     #endregion
 
     #region Loading files
@@ -401,24 +494,24 @@ public partial class MainWindow : SimpleWindow
             if (_exportRootDirectory == dir)
                 throw new InvalidOperationException("Root directory is the same as export directory");
 
-            if (_watcher != null)
+            if (_rootWatcher != null)
             {
-                _watcher.Renamed -= RootDir_Renamed;
-                _watcher.Created -= RootDir_Created;
-                _watcher.Deleted -= RootDir_Deleted;
-                _watcher.Dispose();
-                _watcher = null;
+                _rootWatcher.Renamed -= RootDir_Renamed;
+                _rootWatcher.Created -= RootDir_Created;
+                _rootWatcher.Deleted -= RootDir_Deleted;
+                _rootWatcher.Dispose();
+                _rootWatcher = null;
             }
 
             RootDirectory = dir;
             LoadFilesFromRoot();
 
-            _watcher = new FileSystemWatcher(RootDirectory);
-            _watcher.IncludeSubdirectories = true;
-            _watcher.EnableRaisingEvents = true;
-            _watcher.Renamed += RootDir_Renamed;
-            _watcher.Created += RootDir_Created;
-            _watcher.Deleted += RootDir_Deleted;
+            _rootWatcher = new FileSystemWatcher(RootDirectory);
+            _rootWatcher.IncludeSubdirectories = true;
+            _rootWatcher.EnableRaisingEvents = true;
+            _rootWatcher.Renamed += RootDir_Renamed;
+            _rootWatcher.Created += RootDir_Created;
+            _rootWatcher.Deleted += RootDir_Deleted;
 
             if (update_config) SaveConfiguration();
         }
@@ -948,6 +1041,46 @@ public partial class MainWindow : SimpleWindow
         }
     }
 
+    void MenuItem_ExportSelectedOpenDirectory(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (!Directory.Exists(_exportRootDirectory))
+            return;
+
+        var item = (MenuItem)sender!;
+        var list = item.Parent?.Parent?.Parent as ListBox;
+        if (list == null)
+            return;
+
+        string relative_path_full;
+        if (list.ItemsSource == BarEntries && SelectedBarEntry != null)
+        {
+            relative_path_full = GetBARFullRelativePath(SelectedBarEntry);
+        }
+        else if (list.ItemsSource == RootFileEntries && SelectedRootFileEntry != null)
+        {
+            relative_path_full = GetRootFullRelativePath(SelectedRootFileEntry);
+        }
+        else
+        {
+            return;
+        }
+
+        var export_path = Path.Combine(_exportRootDirectory, relative_path_full);
+        var export_dir = Path.GetDirectoryName(export_path);
+        Directory.CreateDirectory(export_dir);
+
+        // TODO: only for windows, maybe make methods for other platforms? But will people even use it elsewhere?
+
+        var process_info = new ProcessStartInfo
+        {
+            UseShellExecute = true,
+            FileName = $"explorer.exe",
+            Arguments = $"\"{export_dir}\""
+        };
+
+        Process.Start(process_info);
+    }
+
     async void MenuItem_ExportSelectedRaw(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         if (!Directory.Exists(_exportRootDirectory))
@@ -1186,6 +1319,26 @@ public partial class MainWindow : SimpleWindow
 
     #region Helpers
     public bool IsImage(string extension) => extension is ".jpg" or ".jpeg" or ".png" or ".tga" or ".gif" or ".webp" or ".avif" or ".jpx" or ".bmp";
+
+    public bool IsFileOverriden(string relative_path_full)
+    {
+        if (string.IsNullOrEmpty(relative_path_full))
+            return false;
+
+        if (!CanExport)
+            return false;
+
+        var exported_path = Path.Combine(_exportRootDirectory, relative_path_full);
+        if (File.Exists(exported_path))
+            return true;
+
+        // also check files that work without the XMB extension
+        if (exported_path.EndsWith(".xmb", StringComparison.OrdinalIgnoreCase) && 
+            File.Exists(exported_path[..^4]))
+            return true;
+
+        return false;
+    }
 
     public string GetBARFullRelativePath(BarFileEntry entry)
     {
@@ -1596,4 +1749,29 @@ public partial class MainWindow : SimpleWindow
         await prompt.ShowDialog(this);
     }
     #endregion
+
+    void ResetExportWatcher()
+    {
+        if (_exportWatcher != null)
+        {
+            _exportWatcher.Renamed -= ExportDir_Renamed;
+            _exportWatcher.Created -= ExportDir_Created;
+            _exportWatcher.Deleted -= ExportDir_Deleted;
+            _exportWatcher.Dispose();
+            _exportWatcher = null;
+        }
+
+        if (string.IsNullOrEmpty(_exportRootDirectory))
+            return;
+
+        if (!Directory.Exists(_exportRootDirectory))
+            return;
+
+        _exportWatcher = new FileSystemWatcher(ExportRootDirectory);
+        _exportWatcher.IncludeSubdirectories = true;
+        _exportWatcher.EnableRaisingEvents = true;
+        _exportWatcher.Renamed += ExportDir_Renamed;
+        _exportWatcher.Created += ExportDir_Created;
+        _exportWatcher.Deleted += ExportDir_Deleted;
+    }
 }

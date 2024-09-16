@@ -4,14 +4,17 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 		xmlns:ae="clr-namespace:AvaloniaEdit;assembly=AvaloniaEdit"
 		xmlns:cb="using:CryBar"
+		xmlns:ce="using:CryBarEditor"
 		xmlns:cc="using:CryBarEditor.Classes"
+		xmlns:converters="using:CryBarEditor.Converters"
 		xmlns:micons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
 		mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="450"
         x:Class="CryBarEditor.MainWindow"
 		DataContext="{Binding RelativeSource={RelativeSource Self}}"
-        Title="CryBarEditor" 
+        Title="CryBarEditor" x:DataType="ce:MainWindow"
 		Foreground="#d9d9d9"
-		Background="#141414">
+		Background="#141414"
+		x:Name="mainWindow">
 	<Window.Styles>
 		<Style Selector="ListBox">
 			<Setter Property="Background" Value="#1c1c1c" />
@@ -36,6 +39,8 @@
 		</Style>
 	</Window.Styles>
 	<Window.Resources>
+		<converters:IsOverridenToBoolConverter x:Key="overridenConverter" />
+		
 		<ContextMenu x:Key="SharedContextMenu">
 			<MenuItem Header="Copy file name" 
 					  Icon="{micons:MaterialIconExt Kind=ContentCopy}"
@@ -46,7 +51,11 @@
 					  Click="MenuItem_CopyFilePath" />
 			
 			<Separator IsVisible="{Binding CanExport}" />
-
+			
+			<MenuItem Header="Open export directory"
+					IsVisible="{Binding CanExport}" Icon="{micons:MaterialIconExt Kind=OpenInNew}"
+					Click="MenuItem_ExportSelectedOpenDirectory" />
+			
 			<MenuItem Header="{Binding SelectedRootFileEntries.Count, StringFormat='Export {0} selected (copy)'}"
 					IsVisible="{Binding CanExport}" Icon="{micons:MaterialIconExt Kind=Export}"
 					Click="MenuItem_ExportSelectedRaw" />
@@ -128,6 +137,15 @@
 								<StackPanel Orientation="Horizontal">
 									<TextBlock Text="{Binding DirectoryPath}" Foreground="#808080"/>
 									<TextBlock Text="{Binding Name}" Classes.BAR="{Binding IsBAR}" />
+									<micons:MaterialIcon Kind="FileExportOutline" VerticalAlignment="Center"
+														 Margin="5,0,0,0" Foreground="#e3bd54" ToolTip.Tip="Overriden in export directory">
+										<micons:MaterialIcon.IsVisible>
+											<MultiBinding Converter="{StaticResource overridenConverter}">
+												<Binding Path="." />
+												<Binding Path="#mainWindow" />
+											</MultiBinding>
+										</micons:MaterialIcon.IsVisible>
+									</micons:MaterialIcon>
 								</StackPanel>
 							</DataTemplate>
 						</ListBox.ItemTemplate>
@@ -165,6 +183,15 @@
 								<StackPanel Orientation="Horizontal">
 									<TextBlock Text="{Binding DirectoryPath}" Foreground="#808080"/>
 									<TextBlock Text="{Binding Name}" />
+									<micons:MaterialIcon Kind="FileExportOutline" VerticalAlignment="Center" 
+														 Margin="5,0,0,0" Foreground="#e3bd54" ToolTip.Tip="Overriden in export directory">
+										<micons:MaterialIcon.IsVisible>
+											<MultiBinding Converter="{StaticResource overridenConverter}">
+												<Binding Path="." />
+												<Binding Path="#mainWindow" />
+											</MultiBinding>
+										</micons:MaterialIcon.IsVisible>
+									</micons:MaterialIcon>
 								</StackPanel>
 							</DataTemplate>
 						</ListBox.ItemTemplate>
