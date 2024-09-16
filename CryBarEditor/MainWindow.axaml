@@ -41,15 +41,15 @@
 			<MenuItem Header="Copy file path" Click="MenuItem_CopyFilePath" />
 			<Separator IsVisible="{Binding CanExport}" />
 
-			<MenuItem Header="{Binding SelectedFileEntries.Count, StringFormat='Export {0} selected (copy)'}"
+			<MenuItem Header="{Binding SelectedRootFileEntries.Count, StringFormat='Export {0} selected (copy)'}"
 						IsVisible="{Binding CanExport}"
 						Click="MenuItem_ExportSelectedRaw" />
 
-			<MenuItem Header="{Binding SelectedFileEntries.Count, StringFormat='Export {0} selected (converted)'}"
+			<MenuItem Header="{Binding SelectedRootFileEntries.Count, StringFormat='Export {0} selected (converted)'}"
 						IsVisible="{Binding CanExport}"
 						Click="MenuItem_ExportSelectedConverted" />
 
-			<MenuItem Header="{Binding SelectedFileEntries.Count, StringFormat='Export {0} selected (copy+converted)'}"
+			<MenuItem Header="{Binding SelectedRootFileEntries.Count, StringFormat='Export {0} selected (copy+converted)'}"
 						IsVisible="{Binding CanExport}"
 						Click="MenuItem_ExportSelectedRawConverted" />
 
@@ -111,13 +111,13 @@
 						<Run Text="Guessed Root: " FontWeight="Bold"/>
 						<Run Text="{Binding RootFileRootPath}"/>
 					</TextBlock>
-					<ListBox ItemsSource="{Binding FileEntries}" Margin="0,10,0,0"
+					<ListBox ItemsSource="{Binding RootFileEntries}" Margin="0,10,0,0"
 							 SelectionMode="Multiple"
-							 SelectedItems="{Binding SelectedFileEntries, Mode=TwoWay}"
-							 SelectedItem="{Binding SelectedFileEntry, Mode=TwoWay}"
+							 SelectedItems="{Binding SelectedRootFileEntries, Mode=TwoWay}"
+							 SelectedItem="{Binding SelectedRootFileEntry, Mode=TwoWay}"
 							 ContextMenu="{StaticResource SharedContextMenu}">
 						<ListBox.ItemTemplate>
-							<DataTemplate x:DataType="cc:FileEntry">
+							<DataTemplate x:DataType="cc:RootFileEntry">
 								<StackPanel Orientation="Horizontal">
 									<TextBlock Text="{Binding DirectoryPath}" Foreground="#808080"/>
 									<TextBlock Text="{Binding Name}" Classes.BAR="{Binding IsBAR}" />
@@ -148,11 +148,11 @@
 						</TextBlock>
 					</DockPanel>
 					
-					<ListBox ItemsSource="{Binding Entries}" Margin="0,10,0,0"
+					<ListBox ItemsSource="{Binding BarEntries}" Margin="0,10,0,0"
 							 SelectionMode="Multiple"
 							 SelectedItems="{Binding SelectedBarFileEntries, Mode=TwoWay}"
 							 SelectedItem="{Binding SelectedBarEntry, Mode=TwoWay}"
-							ContextMenu="{StaticResource SharedContextMenu}">
+							 ContextMenu="{StaticResource SharedContextMenu}">
 						<ListBox.ItemTemplate>
 							<DataTemplate x:DataType="cb:BarFileEntry">
 								<StackPanel Orientation="Horizontal">
@@ -193,7 +193,6 @@
 									   FontFamily="Cascadia Code,Consolas,Menlo,Monospace"
 								       Background="#1c1c1c"/>
 					</Grid>
-
 				</DockPanel>
 			</Grid>
 		</Border>

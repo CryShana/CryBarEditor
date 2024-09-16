@@ -44,12 +44,11 @@ public partial class MainWindow : SimpleWindow
     string _previewedFileData = "";
     BarFile? _barFile = null;
     FileStream? _barStream = null;
-    FileEntry? _selectedFileEntry = null;
-    List<FileEntry>? _loadedFiles = null;
+    RootFileEntry? _selectedRootFileEntry = null;
+    List<RootFileEntry>? _loadedRootFiles = null;
     FileSystemWatcher? _watcher = null;
     BarFileEntry? _selectedBarEntry = null;
     double _imageZoomLevel = 1.0;
-
 
     /// <summary>
     /// This is used to find relative path for Root directory files
@@ -65,10 +64,10 @@ public partial class MainWindow : SimpleWindow
     public BarFile? BarFile => _barFile;
     public FileStream? BarFileStream => _barStream;
 
-    public ObservableCollectionExtended<FileEntry> FileEntries { get; } = new();
-    public ObservableCollectionExtended<BarFileEntry> Entries { get; } = new();
+    public ObservableCollectionExtended<RootFileEntry> RootFileEntries { get; } = new();
+    public ObservableCollectionExtended<BarFileEntry> BarEntries { get; } = new();
 
-    public ObservableCollectionExtended<FileEntry> SelectedFileEntries { get; } = new();
+    public ObservableCollectionExtended<RootFileEntry> SelectedRootFileEntries { get; } = new();
     public ObservableCollectionExtended<BarFileEntry> SelectedBarFileEntries { get; } = new();
 
     public string LoadedBARFilePathOrRelative => _barStream == null ? "No BAR file loaded" :
@@ -106,20 +105,20 @@ public partial class MainWindow : SimpleWindow
     public string PreviewedFileNote { get => _previewedFileNote; set { _previewedFileNote = value; OnSelfChanged(); } }
     public string PreviewedFileData { get => _previewedFileData; set { _previewedFileData = value; OnSelfChanged(); } }
     public bool SelectedIsDDT =>
-        Path.GetExtension(SelectedFileEntry?.RelativePath ?? "").ToLower() == ".ddt" ||
+        Path.GetExtension(SelectedRootFileEntry?.RelativePath ?? "").ToLower() == ".ddt" ||
         Path.GetExtension(SelectedBarEntry?.RelativePath ?? "").ToLower() == ".ddt";
 
     public bool SelectedCanHaveAdditiveMod 
-        => AdditiveModding.IsSupportedFor(SelectedBarEntry?.RelativePath ?? SelectedFileEntry?.RelativePath, out _);
+        => AdditiveModding.IsSupportedFor(SelectedBarEntry?.RelativePath ?? SelectedRootFileEntry?.RelativePath, out _);
 
-    public FileEntry? SelectedFileEntry
+    public RootFileEntry? SelectedRootFileEntry
     {
-        get => _selectedFileEntry; set
+        get => _selectedRootFileEntry; set
         {
-            if (value == _selectedFileEntry)
+            if (value == _selectedRootFileEntry)
                 return;
 
-            _selectedFileEntry = value;
+            _selectedRootFileEntry = value;
             OnSelfChanged();
             RefreshSelectedProperties();
 
@@ -134,7 +133,6 @@ public partial class MainWindow : SimpleWindow
             });
         }
     }
-
     public BarFileEntry? SelectedBarEntry
     {
         get => _selectedBarEntry; set
@@ -159,13 +157,13 @@ public partial class MainWindow : SimpleWindow
     #endregion
 
     // export functions
-    readonly Func<FileEntry, string> F_GetFullRelativePathRoot;
+    readonly Func<RootFileEntry, string> F_GetFullRelativePathRoot;
     readonly Func<BarFileEntry, string> F_GetFullRelativePathBAR;
-    readonly Action<FileEntry, FileStream> F_CopyRoot;
+    readonly Action<RootFileEntry, FileStream> F_CopyRoot;
     readonly Action<BarFileEntry, FileStream> F_CopyBAR;
-    readonly Func<FileEntry, Memory<byte>> F_ReadRoot;
+    readonly Func<RootFileEntry, Memory<byte>> F_ReadRoot;
     readonly Func<BarFileEntry, Memory<byte>> F_ReadBAR;
-    readonly Func<FileEntry,long> F_ReadSizeRoot;
+    readonly Func<RootFileEntry,long> F_ReadSizeRoot;
     readonly Func<BarFileEntry, long> F_ReadSizeBAR;
 
     public MainWindow()
@@ -302,7 +300,7 @@ public partial class MainWindow : SimpleWindow
     #region File Watcher events
     void RootDir_Deleted(object sender, FileSystemEventArgs e)
     {
-        if (_loadedFiles == null || !Directory.Exists(_rootDirectory))
+        if (_loadedRootFiles == null || !Directory.Exists(_rootDirectory))
             return;
 
         var removed_file = e.FullPath;
@@ -311,22 +309,22 @@ public partial class MainWindow : SimpleWindow
 
         var relative_path = Path.GetRelativePath(_rootDirectory, removed_file);
 
-        FileEntry? entry_removed = null;
-        for (int i = 0; i < _loadedFiles.Count; i++)
+        RootFileEntry? entry_removed = null;
+        for (int i = 0; i < _loadedRootFiles.Count; i++)
         {
-            var f = _loadedFiles[i];
+            var f = _loadedRootFiles[i];
             if (f.RelativePath == relative_path)
             {
                 entry_removed = f;
-                _loadedFiles.RemoveAt(i);
+                _loadedRootFiles.RemoveAt(i);
                 break;
             }
         }
 
         if (entry_removed != null)
         {
-            if (SelectedFileEntry == entry_removed)
-                SelectedFileEntry = null;
+            if (SelectedRootFileEntry == entry_removed)
+                SelectedRootFileEntry = null;
 
             RefreshFileEntries();
         }
@@ -334,14 +332,14 @@ public partial class MainWindow : SimpleWindow
 
     void RootDir_Created(object sender, FileSystemEventArgs e)
     {
-        if (_loadedFiles == null || !Directory.Exists(_rootDirectory))
+        if (_loadedRootFiles == null || !Directory.Exists(_rootDirectory))
             return;
 
         var removed_file = e.FullPath;
         if (!removed_file.StartsWith(_rootDirectory))
             return;
 
-        var prev_file = SelectedFileEntry;
+        var prev_file = SelectedRootFileEntry;
 
         // reload files
         LoadFilesFromRoot();
@@ -349,11 +347,11 @@ public partial class MainWindow : SimpleWindow
         // re-select prev file
         if (prev_file != null)
         {
-            foreach (var f in _loadedFiles)
+            foreach (var f in _loadedRootFiles)
             {
                 if (f.RelativePath == prev_file.RelativePath)
                 {
-                    SelectedFileEntry = f;
+                    SelectedRootFileEntry = f;
                     break;
                 }
             }
@@ -362,7 +360,7 @@ public partial class MainWindow : SimpleWindow
 
     void RootDir_Renamed(object sender, RenamedEventArgs e)
     {
-        if (_loadedFiles == null || !Directory.Exists(_rootDirectory))
+        if (_loadedRootFiles == null || !Directory.Exists(_rootDirectory))
             return;
 
         var renamed_file = e.OldFullPath;
@@ -370,18 +368,18 @@ public partial class MainWindow : SimpleWindow
             !e.FullPath.StartsWith(_rootDirectory))
             return;
 
-        var new_entry = new FileEntry(_rootDirectory, e.FullPath);
+        var new_entry = new RootFileEntry(_rootDirectory, e.FullPath);
         var old_relative_path = Path.GetRelativePath(_rootDirectory, renamed_file);
 
-        for (int i = 0; i < _loadedFiles.Count; i++)
+        for (int i = 0; i < _loadedRootFiles.Count; i++)
         {
-            var f = _loadedFiles[i];
+            var f = _loadedRootFiles[i];
             if (f.RelativePath == old_relative_path)
             {
-                _loadedFiles[i] = new_entry;
-                if (f == SelectedFileEntry)
+                _loadedRootFiles[i] = new_entry;
+                if (f == SelectedRootFileEntry)
                 {
-                    SelectedFileEntry = new_entry;
+                    SelectedRootFileEntry = new_entry;
                 }
                 break;
             }
@@ -432,11 +430,11 @@ public partial class MainWindow : SimpleWindow
 
     void LoadFilesFromRoot()
     {
-        _loadedFiles = Directory.GetFiles(_rootDirectory, "*.*", SearchOption.AllDirectories)
-                .Select(x => new FileEntry(_rootDirectory, x))
+        _loadedRootFiles = Directory.GetFiles(_rootDirectory, "*.*", SearchOption.AllDirectories)
+                .Select(x => new RootFileEntry(_rootDirectory, x))
                 .ToList();
 
-        SelectedFileEntry = null;
+        SelectedRootFileEntry = null;
 
         RefreshFileEntries();
         OnPropertyChanged(nameof(LoadedBARFilePathOrRelative));
@@ -445,11 +443,11 @@ public partial class MainWindow : SimpleWindow
         if (_barFile != null && _barStream?.Name.StartsWith(_rootDirectory) == true)
         {
             var relative_path = Path.GetRelativePath(_rootDirectory, _barStream.Name);
-            foreach (var file in _loadedFiles)
+            foreach (var file in _loadedRootFiles)
             {
                 if (file.RelativePath == relative_path)
                 {
-                    SelectedFileEntry = file;
+                    SelectedRootFileEntry = file;
                     break;
                 }
             }
@@ -481,11 +479,11 @@ public partial class MainWindow : SimpleWindow
             if (Directory.Exists(_rootDirectory) && bar_file.StartsWith(_rootDirectory))
             {
                 var relative_path = Path.GetRelativePath(_rootDirectory, bar_file);
-                foreach (var f in FileEntries)
+                foreach (var f in RootFileEntries)
                 {
                     if (f.RelativePath == relative_path)
                     {
-                        SelectedFileEntry = f;
+                        SelectedRootFileEntry = f;
                         break;
                     }
                 }
@@ -505,7 +503,7 @@ public partial class MainWindow : SimpleWindow
 
     CancellationTokenSource? _previewCsc;
 
-    public async Task Preview(FileEntry? entry)
+    public async Task Preview(RootFileEntry? entry)
     {
         if (entry == null || !Directory.Exists(_rootDirectory))
             return;
@@ -851,20 +849,20 @@ public partial class MainWindow : SimpleWindow
 
     public void RefreshFileEntries()
     {
-        FileEntries.Clear();
-        if (_loadedFiles == null)
+        RootFileEntries.Clear();
+        if (_loadedRootFiles == null)
             return;
 
-        FileEntries.AddItems(FilterFile(_loadedFiles));
+        RootFileEntries.AddItems(FilterFile(_loadedRootFiles));
     }
 
     public void RefreshBAREntries()
     {
-        Entries.Clear();
+        BarEntries.Clear();
         if (_barFile?.Entries == null)
             return;
 
-        Entries.AddItems(FilterBAR(_barFile.Entries));
+        BarEntries.AddItems(FilterBAR(_barFile.Entries));
     }
 
     IEnumerable<BarFileEntry> FilterBAR(IEnumerable<BarFileEntry> entries)
@@ -880,7 +878,7 @@ public partial class MainWindow : SimpleWindow
         }
     }
 
-    IEnumerable<FileEntry> FilterFile(IEnumerable<FileEntry> entries)
+    IEnumerable<RootFileEntry> FilterFile(IEnumerable<RootFileEntry> entries)
     {
         var q = FilesQuery;
         foreach (var e in entries)
@@ -901,7 +899,7 @@ public partial class MainWindow : SimpleWindow
         var list = item.Parent?.Parent?.Parent as ListBox;
         if (list == null) return;
 
-        if (list.ItemsSource == Entries)
+        if (list.ItemsSource == BarEntries)
         {
             // BAR entry list
             var entry = SelectedBarEntry;
@@ -913,7 +911,7 @@ public partial class MainWindow : SimpleWindow
         else
         {
             // file entry list
-            var entry = SelectedFileEntry;
+            var entry = SelectedRootFileEntry;
             if (entry != null)
             {
                 Clipboard?.SetTextAsync(entry.Name);
@@ -927,7 +925,7 @@ public partial class MainWindow : SimpleWindow
         var list = item.Parent?.Parent?.Parent as ListBox;
         if (list == null) return;
 
-        if (list.ItemsSource == Entries)
+        if (list.ItemsSource == BarEntries)
         {
             // BAR entry list
             var entry = SelectedBarEntry;
@@ -940,7 +938,7 @@ public partial class MainWindow : SimpleWindow
         else
         {
             // file entry list
-            var entry = SelectedFileEntry;
+            var entry = SelectedRootFileEntry;
             if (entry != null)
             {
                 Clipboard?.SetTextAsync(GetRootFullRelativePath(entry));
@@ -962,14 +960,14 @@ public partial class MainWindow : SimpleWindow
 
         try
         {
-            if (list.ItemsSource == Entries)
+            if (list.ItemsSource == BarEntries)
             {
                 var to_export = SelectedBarFileEntries.ToArray();
                 await Export(to_export, false, F_GetFullRelativePathBAR, F_CopyBAR, F_ReadBAR);
             }
             else
             {
-                var to_export = SelectedFileEntries.ToArray();
+                var to_export = SelectedRootFileEntries.ToArray();
                 await Export(to_export, false, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
             }
         }
@@ -993,14 +991,14 @@ public partial class MainWindow : SimpleWindow
 
         try
         {
-            if (list.ItemsSource == Entries)
+            if (list.ItemsSource == BarEntries)
             {
                 var to_export = SelectedBarFileEntries.ToArray();
                 await Export(to_export, true, F_GetFullRelativePathBAR, F_CopyBAR, F_ReadBAR);
             }
             else
             {
-                var to_export = SelectedFileEntries.ToArray();
+                var to_export = SelectedRootFileEntries.ToArray();
                 await Export(to_export, true, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
             }
         }
@@ -1024,7 +1022,7 @@ public partial class MainWindow : SimpleWindow
 
         try
         {
-            if (list.ItemsSource == Entries)
+            if (list.ItemsSource == BarEntries)
             {
                 var to_export = SelectedBarFileEntries.ToArray();
                 await Export(to_export, false, F_GetFullRelativePathBAR, F_CopyBAR, F_ReadBAR);
@@ -1032,7 +1030,7 @@ public partial class MainWindow : SimpleWindow
             }
             else
             {
-                var to_export = SelectedFileEntries.ToArray();
+                var to_export = SelectedRootFileEntries.ToArray();
                 await Export(to_export, false, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
                 await Export(to_export, true, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
             }
@@ -1060,7 +1058,7 @@ public partial class MainWindow : SimpleWindow
             string relative_path_full = "";
             string title = "";
             Memory<byte> data;
-            if (list.ItemsSource == Entries)
+            if (list.ItemsSource == BarEntries)
             {
                 if (SelectedBarEntry == null || _barStream == null)
                     return;
@@ -1071,12 +1069,12 @@ public partial class MainWindow : SimpleWindow
             }
             else
             {
-                if (SelectedFileEntry == null || !Directory.Exists(_rootDirectory))
+                if (SelectedRootFileEntry == null || !Directory.Exists(_rootDirectory))
                     return;
 
-                relative_path_full = GetRootFullRelativePath(SelectedFileEntry);
-                data = BarCompression.EnsureDecompressed(File.ReadAllBytes(Path.Combine(_rootDirectory, SelectedFileEntry.RelativePath)), out _);
-                title = $"Pick image to replace {Path.GetFileName(SelectedFileEntry.RelativePath)}";
+                relative_path_full = GetRootFullRelativePath(SelectedRootFileEntry);
+                data = BarCompression.EnsureDecompressed(File.ReadAllBytes(Path.Combine(_rootDirectory, SelectedRootFileEntry.RelativePath)), out _);
+                title = $"Pick image to replace {Path.GetFileName(SelectedRootFileEntry.RelativePath)}";
             }
 
             var ddt = new DDTImage(data);
@@ -1147,7 +1145,7 @@ public partial class MainWindow : SimpleWindow
         try
         {
             string relative_path_full = "";
-            if (list.ItemsSource == Entries)
+            if (list.ItemsSource == BarEntries)
             {
                 if (SelectedBarEntry == null)
                     return;
@@ -1156,10 +1154,10 @@ public partial class MainWindow : SimpleWindow
             }
             else
             {
-                if (SelectedFileEntry == null)
+                if (SelectedRootFileEntry == null)
                     return;
 
-                relative_path_full = GetRootFullRelativePath(SelectedFileEntry);
+                relative_path_full = GetRootFullRelativePath(SelectedRootFileEntry);
             }
 
             if (!AdditiveModding.IsSupportedFor(relative_path_full, out var format))
@@ -1223,7 +1221,7 @@ public partial class MainWindow : SimpleWindow
         return relevant_path;
     }
 
-    public string GetRootFullRelativePath(FileEntry entry)
+    public string GetRootFullRelativePath(RootFileEntry entry)
     {
         if (!Directory.Exists(_rootDirectory))
             return entry.RelativePath;

@@ -31,7 +31,7 @@ public partial class SearchWindow : SimpleWindow
     public ObservableCollectionExtended<SearchResult> SearchResults { get; } = new();
 
     readonly string? _rootDirectory;
-    readonly List<FileEntry>? _rootEntries;
+    readonly List<RootFileEntry>? _rootEntries;
     readonly BarFile? _barFile;
     readonly FileStream? _barFileStream;
 
@@ -45,7 +45,7 @@ public partial class SearchWindow : SimpleWindow
     {
         _rootDirectory = owner.RootDirectory;
         if (Directory.Exists(_rootDirectory))
-            _rootEntries = owner.FileEntries.ToList();
+            _rootEntries = owner.RootFileEntries.ToList();
 
         _barFile = owner.BarFile;
         _barFileStream = owner.BarFileStream;
