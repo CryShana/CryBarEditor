@@ -17,8 +17,8 @@ namespace CryBar;
 
 public enum DDTVersion
 {
-    RTS3,
-    RTS4
+    RTS3 = 0,
+    RTS4 = 1
 };
 
 public enum DDTUsage : byte

@@ -382,9 +382,4 @@ public static class BarFormatConverter
 
         return await ddt.DecodeMipmapToImage(mipmap_index, token);
     }
-
-    public static Memory<byte> TGAtoDDT(Span<byte> tga_data)
-    {
-        throw new NotImplementedException();
-    }
 }

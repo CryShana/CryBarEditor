@@ -13,22 +13,24 @@ The purpose of this tool is to enable fast and easy modding of Age of Mythology 
 ## Features
 - **Read BAR archives**
 - Pick a **Root directory** (usually `\games` folder) for fast switching between BAR and other files
+- Pick an **Export root directory** for fast exporting either from BAR or from Root directory
 - Editor supports previewing various formats:
   - XMB
   - DDT
   - Any text or common image type
 - Syntax highlighting for common formats (json,xml,ini,xs,...)
-- Pick an **export Root directory** for fast exporting either from BAR or from Root directory
-- Replace any existing DDT image with custom image on export (all other params are copied)
+- Replace existing DDT image with custom image on export (params are copied)
 - Tools for direct file manipulation:
   - Convert XML -> XMB
   - Convert XMB -> XML
   - Convert DDT -> TGA
+  - Convert image -> DDT
   - Compress with Alz4/L33t
   - Decompress file with Alz4/L33t
-- Tool for converting XS trigger scripts to RM-friendly scripts for easy inclusion in random maps
+- Easily create additive mod for files that support it with right click
 - "**Search everything**" tool added that searches for query in all files and all BAR entries (useful for finding references)
-- Remembering last selected Root directory and export Root directory, so you can **easily return to where you left off**
+- Tool for converting XS trigger scripts to RM-friendly scripts for easy inclusion in random maps
+- Remembering last opened directories and files so you can easily resume where you left off
 
 ## Usage
 - **Load the Root directory** (usually `C:\Program Files (x86)\Steam\steamapps\common\Age of Mythology Retold\game`)

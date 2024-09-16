@@ -1,0 +1,131 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        x:Class="CryBarEditor.DDTCreateDialogue"
+		WindowStartupLocation="CenterOwner"
+		ExtendClientAreaChromeHints="NoChrome"
+		ExtendClientAreaToDecorationsHint="True"
+		Foreground="#d9d9d9"
+		Background="#141414"
+		DataContext="{Binding RelativeSource={RelativeSource Self}}"
+		CanResize="False" 
+		d:DesignWidth="340" d:DesignHeight="340"
+		Width="340" Height="340"
+        Title="Create DDT from image">
+	<Border Padding="15,10" BorderThickness="2" BorderBrush="#d9d9d9">
+		<StackPanel>
+			<TextBlock Text="Create DDT from image" FontWeight="Bold" Margin="0,0,0,10" />
+
+			<TextBlock Margin="0,0,0,16">
+				<Run Text="{Binding OutputFileShort}"  Foreground="Cyan" />
+			</TextBlock>
+			
+			<StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+				<TextBlock Text="Version: "  
+						   Margin="0,0,8,0"
+						   VerticalAlignment="Center" />
+				<ComboBox SelectedIndex="1" x:Name="_comboVersion"
+						  IsEnabled="{Binding !Busy}">
+					<ComboBox.Items>
+						<ComboBoxItem Content="RTS3" />
+						<ComboBoxItem Content="RTS4" />
+					</ComboBox.Items>
+				</ComboBox>
+			</StackPanel>
+
+			<StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+				<TextBlock Text="Usage Flag: "
+						   Margin="0,0,8,0"
+						   VerticalAlignment="Center" />
+				<ComboBox SelectedIndex="0" x:Name="_comboUsage"
+						  IsEnabled="{Binding !Busy}">
+					<ComboBox.Items>
+						<ComboBoxItem Content="0 (None)" />
+						<ComboBoxItem Content="1 (AlphaTest)" />
+						<ComboBoxItem Content="2 (LowDetail)" />
+						<ComboBoxItem Content="3" />
+						<ComboBoxItem Content="4 (Bump)" />
+						<ComboBoxItem Content="5" />
+						<ComboBoxItem Content="6" />
+						<ComboBoxItem Content="7" />
+						<ComboBoxItem Content="8 (Cube)" />
+					</ComboBox.Items>
+				</ComboBox>
+			</StackPanel>
+
+			<StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+				<TextBlock Text="Alpha Flag: "
+						   Margin="0,0,8,0"
+						   VerticalAlignment="Center" />
+				<ComboBox SelectedIndex="0" x:Name="_comboAlpha"
+						  IsEnabled="{Binding !Busy}">
+					<ComboBox.Items>
+						<ComboBoxItem Content="0 (None)" />
+						<ComboBoxItem Content="1 (Player)" />
+						<ComboBoxItem Content="2" />
+						<ComboBoxItem Content="3" />
+						<ComboBoxItem Content="4 (Transparent)" />
+						<ComboBoxItem Content="5" />
+						<ComboBoxItem Content="6" />
+						<ComboBoxItem Content="7" />
+						<ComboBoxItem Content="8 (Blend)" />
+					</ComboBox.Items>
+				</ComboBox>
+			</StackPanel>
+
+			<StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+				<TextBlock Text="Format Flag: "
+						   Margin="0,0,8,0"
+						   VerticalAlignment="Center" />
+				<ComboBox SelectedIndex="4" x:Name="_comboFormat"
+						  IsEnabled="{Binding !Busy}">
+					<ComboBox.Items>
+						<ComboBoxItem Content="0 (None)" />
+						<ComboBoxItem Content="1 (Bgra)" />
+						<ComboBoxItem Content="2" />
+						<ComboBoxItem Content="3" />
+						<ComboBoxItem Content="4 (DXT1)" />
+						<ComboBoxItem Content="5 (DXT1 Alpha)" />
+						<ComboBoxItem Content="6" />
+						<ComboBoxItem Content="7 (Grey)" />
+						<ComboBoxItem Content="8 (DXT3)" />
+						<ComboBoxItem Content="9 (DXT5)" />
+					</ComboBox.Items>
+				</ComboBox>
+			</StackPanel>
+
+			<StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+				<TextBlock Text="Generated mipmaps: "
+						   Margin="0,0,8,0"
+						   VerticalAlignment="Center" />
+				<NumericUpDown x:Name="_txtMipmapNumber"
+							   IsEnabled="{Binding !Busy}"
+							   Minimum="1" 
+							   Value="1" />
+			</StackPanel>
+
+			<DockPanel LastChildFill="False" Margin="0,18,0,0">
+				<Button DockPanel.Dock="Left" 
+						x:Name="_btnCreate"
+						Content="Create DDT" 
+						IsDefault="True"
+						IsEnabled="{Binding !Busy}"
+						Click="CreateDDTClick"/>
+				
+				<Button DockPanel.Dock="Right"
+						x:Name="_btnClose"
+						Content="Close" 
+						IsCancel="True"
+						IsEnabled="{Binding !Busy}"
+						Click="CloseClick" />
+			</DockPanel>
+			
+			<ProgressBar IsIndeterminate="True" 
+						 Height="6"
+						 IsVisible="{Binding Busy}"
+						 Margin="-10,8,-10,0" />
+		</StackPanel>
+	</Border>
+</Window>

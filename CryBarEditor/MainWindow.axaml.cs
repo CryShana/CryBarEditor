@@ -59,7 +59,7 @@ public partial class MainWindow : SimpleWindow
     FoldingManager? _foldingManager;
     readonly RegistryOptions _registryOptions;
     readonly TextMate.Installation _textMateInstallation;
-    
+
     #region Properties
     public BarFile? BarFile => _barFile;
     public FileStream? BarFileStream => _barStream;
@@ -108,7 +108,7 @@ public partial class MainWindow : SimpleWindow
         Path.GetExtension(SelectedRootFileEntry?.RelativePath ?? "").ToLower() == ".ddt" ||
         Path.GetExtension(SelectedBarEntry?.RelativePath ?? "").ToLower() == ".ddt";
 
-    public bool SelectedCanHaveAdditiveMod 
+    public bool SelectedCanHaveAdditiveMod
         => AdditiveModding.IsSupportedFor(SelectedBarEntry?.RelativePath ?? SelectedRootFileEntry?.RelativePath, out _);
 
     public RootFileEntry? SelectedRootFileEntry
@@ -163,7 +163,7 @@ public partial class MainWindow : SimpleWindow
     readonly Action<BarFileEntry, FileStream> F_CopyBAR;
     readonly Func<RootFileEntry, Memory<byte>> F_ReadRoot;
     readonly Func<BarFileEntry, Memory<byte>> F_ReadBAR;
-    readonly Func<RootFileEntry,long> F_ReadSizeRoot;
+    readonly Func<RootFileEntry, long> F_ReadSizeRoot;
     readonly Func<BarFileEntry, long> F_ReadSizeBAR;
 
     public MainWindow()
@@ -200,7 +200,7 @@ public partial class MainWindow : SimpleWindow
             Title = $"{Title} {v.Major}.{v.Minor}.{v.Build}";
         }
     }
- 
+
     #region UI events
     async void LoadBAR_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
@@ -268,7 +268,7 @@ public partial class MainWindow : SimpleWindow
     {
         // is going to be -1 or 1
         var delta = e.Delta.Y;
-        if (delta == 0) 
+        if (delta == 0)
             return;
 
         // just to make sure, don't want any surprises
@@ -276,9 +276,9 @@ public partial class MainWindow : SimpleWindow
         else if (delta > 0) delta = 1;
 
         // HANDLE IMAGE ZOOMING IN
-        if (!_imgPreview.IsVisible || _imgPreview.Source == null) 
+        if (!_imgPreview.IsVisible || _imgPreview.Source == null)
             return;
-     
+
         // only zoom in if pointer within preview grid
         var position = e.GetPosition(_gridPreview);
         if (position.X < 0 || position.Y < 0 ||
@@ -498,7 +498,7 @@ public partial class MainWindow : SimpleWindow
         {
             _barStream = null;
             _ = ShowError("Failed to load BAR archive:\n" + ex.Message);
-        } 
+        }
     }
 
     CancellationTokenSource? _previewCsc;
@@ -538,7 +538,7 @@ public partial class MainWindow : SimpleWindow
     {
         const int MAX_DATA_SIZE = 1_500_000_000;    // 1.5 GB
         const int MAX_DATA_TEXT_SIZE = 25_000_000; // 25 MB
-        
+
         var relative_path = get_rel_path(entry);
         var ext = Path.GetExtension(relative_path).ToLower();
         var text = "";
@@ -606,7 +606,9 @@ public partial class MainWindow : SimpleWindow
                     return;
                 }
 
-                var preview_note = $"(Converted to PNG) [{ddt.Version} {ddt.MipmapOffsets[0].Item3}x{ddt.MipmapOffsets[0].Item4}, {ddt.MipmapOffsets.Length} Mips] ";
+                var preview_note = $"[{ddt.Version} {ddt.MipmapOffsets[0].Item3}x{ddt.MipmapOffsets[0].Item4}, {ddt.MipmapOffsets.Length} Mips, " +
+                    $"Usage: {(int)ddt.UsageFlag}, Format: {(int)ddt.FormatFlag}, Alpha: {(int)ddt.AlphaFlag}] ";
+                
                 if (image.Width < ddt.BaseWidth || image.Height < ddt.BaseHeight)
                     preview_note += $"- Downscaled to {image.Width}x{image.Height}";
 
@@ -634,7 +636,7 @@ public partial class MainWindow : SimpleWindow
 
                 var xml_tags = GetXMLTagRegex().Count(text);
                 if (xml_tags > 0) ext = ".xml";
-            }        
+            }
         }
         catch (UnknownImageFormatException)
         {
@@ -648,7 +650,7 @@ public partial class MainWindow : SimpleWindow
         }
 
         await SetImagePreview(null);
-        SetEditorText(ext, text);   
+        SetEditorText(ext, text);
     }
 
     public async Task Export<T>(IList<T> files, bool should_convert,
@@ -750,7 +752,7 @@ public partial class MainWindow : SimpleWindow
             p.Report($"Finished in {sw.Elapsed.TotalSeconds:0.00} seconds");
         }
 
-        p.Report(null); 
+        p.Report(null);
     }
     #endregion
 
@@ -1097,7 +1099,7 @@ public partial class MainWindow : SimpleWindow
 
                 p.Report("Loading target image");
                 using var image = SixLabors.ImageSharp.Image.Load<Rgba32>(file);
-                
+
                 p.Report("Encoding image into DDT");
                 var modified_ddt_data = await DDTImage.EncodeImageToDDT(image, ddt.Version, ddt.UsageFlag, ddt.AlphaFlag, ddt.FormatFlag, ddt.MipmapLevels, ddt.ColorTable);
 
@@ -1129,7 +1131,7 @@ public partial class MainWindow : SimpleWindow
             item.IsEnabled = true;
         }
     }
-    
+
     void MenuItem_CreateNewAdditiveMod(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         if (!Directory.Exists(_exportRootDirectory))
@@ -1280,7 +1282,7 @@ public partial class MainWindow : SimpleWindow
         } while (File.Exists(new_file));
         return new_file;
     }
-    
+
     public static bool DetectIfUnicode(ReadOnlySpan<byte> data)
     {
         var length = Math.Min(data.Length, 1000);
@@ -1394,6 +1396,25 @@ public partial class MainWindow : SimpleWindow
         catch (Exception ex)
         {
             _ = ShowError("Failed to convert to TGA:\n" + ex.Message);
+        }
+    }
+
+    async void MenuItem_ConvertToDDT(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var in_file = await PickFile(sender, "Create DDT from image", [new("Image file") {
+            Patterns = ["*.tga", "*.png", "*.jpg", "*.jpeg", "*.webm", "*.bmp"] }]);
+
+        if (in_file == null) return;
+
+        var out_file = PickOutFile(in_file, new_extension: ".ddt", overwrite: true);   
+        try
+        {
+            var dialogue = new DDTCreateDialogue(in_file, out_file);
+            await dialogue.ShowDialog(this);
+        }
+        catch (Exception ex)
+        {
+            _ = ShowError(ex.Message);
         }
     }
 
@@ -1573,6 +1594,6 @@ public partial class MainWindow : SimpleWindow
     {
         var prompt = new Prompt(PromptType.Progress, title, progress_reporter: progress);
         await prompt.ShowDialog(this);
-    }  
+    }
     #endregion
 }
