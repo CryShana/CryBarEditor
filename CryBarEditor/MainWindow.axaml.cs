@@ -314,11 +314,7 @@ public partial class MainWindow : SimpleWindow
         if (!removed_path.StartsWith(_rootDirectory))
             return;
 
-        if (Directory.Exists(removed_path))
-        {
-            // TODO: handle all removed items under this directory...
-            return;
-        }
+        // TODO: check if it was a directory that was removed...
 
         var relative_path = Path.GetRelativePath(_rootDirectory, removed_path);
 
@@ -384,9 +380,9 @@ public partial class MainWindow : SimpleWindow
             !e.FullPath.StartsWith(_rootDirectory))
             return;
 
-        if (Directory.Exists(renamed_path))
+        if (Directory.Exists(e.FullPath))
         {
-            // TODO: handle all affected files under this directory...
+            // TODO: handle all moved files under this directory...
             return;
         }
 
@@ -419,15 +415,7 @@ public partial class MainWindow : SimpleWindow
         if (!removed_path.StartsWith(_exportRootDirectory))
             return;
 
-        if (Directory.Exists(removed_path))
-        {
-            // TODO: handle all removed files under this directory...
-            OnPropertyChanged(nameof(ShowOverridenIcons));
-            return;
-        }
-
-        var relative_path = Path.GetRelativePath(_exportRootDirectory, removed_path);
-        UpdateOverridenStatusFor(relative_path, false);
+        OnPropertyChanged(nameof(ShowOverridenIcons));
     }
 
     void ExportDir_Created(object sender, FileSystemEventArgs e)
@@ -439,11 +427,7 @@ public partial class MainWindow : SimpleWindow
         if (!created_path.StartsWith(_exportRootDirectory))
             return;
 
-        if (Directory.Exists(created_path))
-            return;
-
-        var relative_path = Path.GetRelativePath(_exportRootDirectory, created_path);
-        UpdateOverridenStatusFor(relative_path, true);
+        OnPropertyChanged(nameof(ShowOverridenIcons));
     }
 
     void ExportDir_Renamed(object sender, RenamedEventArgs e)
@@ -456,39 +440,7 @@ public partial class MainWindow : SimpleWindow
             !e.FullPath.StartsWith(_exportRootDirectory))
             return;
 
-        if (Directory.Exists(renamed_path))
-        {
-            // TODO: handle all moved files under this directory...
-            OnPropertyChanged(nameof(ShowOverridenIcons));
-            return;
-        }
-
-        var relative_path_old = Path.GetRelativePath(_exportRootDirectory, renamed_path);
-        var relative_path_new = Path.GetRelativePath(_exportRootDirectory, e.FullPath);
-        UpdateOverridenStatusFor(relative_path_old, false);
-        UpdateOverridenStatusFor(relative_path_new, true);    
-    }
-
-    /// <summary>
-    /// Should update overriden status either in root files or BAR entries, depending on relative path
-    /// </summary>
-    void UpdateOverridenStatusFor(string relative_path, bool wasCreated)
-    {
-        var bar_entry = BarFile?.Entries?.FirstOrDefault(x => relative_path.Contains(x.RelativePath));
-        if (bar_entry != null)
-        {
-            // ... can manually handle stuff
-            OnPropertyChanged(nameof(ShowOverridenIcons));
-            return;
-        }
-
-        var root_entry = _loadedRootFiles?.Find(x => relative_path.Contains(x.RelativePath));
-        if (root_entry != null)
-        {
-            // ... can manually handle stuff
-            OnPropertyChanged(nameof(ShowOverridenIcons));
-            return;
-        }
+        OnPropertyChanged(nameof(ShowOverridenIcons));
     }
 
     #endregion
