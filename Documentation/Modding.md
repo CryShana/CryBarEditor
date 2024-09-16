@@ -92,7 +92,7 @@ Only certain files support additive modding, I confirmed only the following:
 | --------- | ----------------- | -------------
 | `proto.xml` | `proto_mods.xml` | `<protomods>`
 | `techtree.xml` | `techtree_mods.xml` | `<techtreemods>`
-| `string_table.txt` | `stringmods.txt` | `Language = "LANGUAGE_NAME"`
+| `string_table.txt` | `stringmods.txt` | (Is not XML)
 
 
 ### How it works
@@ -154,7 +154,5 @@ To make an additive mod for this we need to create `\game\data\strings\English\s
 the following content:
 
 ```
-Language = "English"
-
 ID = "STR_UNIT_HOPLITE_NAME"   ;   Str = "MyNameForHoplite"
 ```
