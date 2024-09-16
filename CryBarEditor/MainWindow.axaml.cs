@@ -73,6 +73,9 @@ public partial class MainWindow : SimpleWindow
     public ObservableCollectionExtended<RootFileEntry> SelectedRootFileEntries { get; } = new();
     public ObservableCollectionExtended<BarFileEntry> SelectedBarFileEntries { get; } = new();
 
+    // this is used just to notify override icons to update
+    public bool ShowOverridenIcons => true;
+
     public string LoadedBARFilePathOrRelative => _barStream == null ? "No BAR file loaded" :
         (Directory.Exists(_rootDirectory) && _barStream.Name.StartsWith(_rootDirectory) ?
             Path.GetRelativePath(_rootDirectory, _barStream.Name) : _barStream.Name);
@@ -419,11 +422,12 @@ public partial class MainWindow : SimpleWindow
         if (Directory.Exists(removed_path))
         {
             // TODO: handle all removed files under this directory...
+            OnPropertyChanged(nameof(ShowOverridenIcons));
             return;
         }
 
         var relative_path = Path.GetRelativePath(_exportRootDirectory, removed_path);
-        UpdateOverridenStatus(relative_path, false);
+        UpdateOverridenStatusFor(relative_path, false);
     }
 
     void ExportDir_Created(object sender, FileSystemEventArgs e)
@@ -439,7 +443,7 @@ public partial class MainWindow : SimpleWindow
             return;
 
         var relative_path = Path.GetRelativePath(_exportRootDirectory, created_path);
-        UpdateOverridenStatus(relative_path, true);
+        UpdateOverridenStatusFor(relative_path, true);
     }
 
     void ExportDir_Renamed(object sender, RenamedEventArgs e)
@@ -455,28 +459,34 @@ public partial class MainWindow : SimpleWindow
         if (Directory.Exists(renamed_path))
         {
             // TODO: handle all moved files under this directory...
+            OnPropertyChanged(nameof(ShowOverridenIcons));
             return;
         }
 
         var relative_path_old = Path.GetRelativePath(_exportRootDirectory, renamed_path);
         var relative_path_new = Path.GetRelativePath(_exportRootDirectory, e.FullPath);
-        UpdateOverridenStatus(relative_path_old, false);
-        UpdateOverridenStatus(relative_path_new, true);    
+        UpdateOverridenStatusFor(relative_path_old, false);
+        UpdateOverridenStatusFor(relative_path_new, true);    
     }
 
-    void UpdateOverridenStatus(string relative_path, bool wasCreated)
+    /// <summary>
+    /// Should update overriden status either in root files or BAR entries, depending on relative path
+    /// </summary>
+    void UpdateOverridenStatusFor(string relative_path, bool wasCreated)
     {
         var bar_entry = BarFile?.Entries?.FirstOrDefault(x => relative_path.Contains(x.RelativePath));
         if (bar_entry != null)
         {
-            // TODO: update status
+            // ... can manually handle stuff
+            OnPropertyChanged(nameof(ShowOverridenIcons));
             return;
         }
 
         var root_entry = _loadedRootFiles?.Find(x => relative_path.Contains(x.RelativePath));
         if (root_entry != null)
         {
-            // TODO: update status
+            // ... can manually handle stuff
+            OnPropertyChanged(nameof(ShowOverridenIcons));
             return;
         }
     }

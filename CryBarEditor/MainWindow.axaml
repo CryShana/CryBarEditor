@@ -143,6 +143,7 @@
 											<MultiBinding Converter="{StaticResource overridenConverter}">
 												<Binding Path="." />
 												<Binding Path="#mainWindow" />
+												<Binding Path="#mainWindow.((ce:MainWindow)DataContext).ShowOverridenIcons" />
 											</MultiBinding>
 										</micons:MaterialIcon.IsVisible>
 									</micons:MaterialIcon>
@@ -189,6 +190,7 @@
 											<MultiBinding Converter="{StaticResource overridenConverter}">
 												<Binding Path="." />
 												<Binding Path="#mainWindow" />
+												<Binding Path="#mainWindow.((ce:MainWindow)DataContext).ShowOverridenIcons" />
 											</MultiBinding>
 										</micons:MaterialIcon.IsVisible>
 									</micons:MaterialIcon>

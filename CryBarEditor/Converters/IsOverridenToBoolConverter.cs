@@ -16,7 +16,7 @@ public class IsOverridenToBoolConverter : IMultiValueConverter
 {
     public object? Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)
     {
-        if (values.Count != 2) 
+        if (values.Count < 2) 
             return false;
 
         var main_window = values[1] as MainWindow;
