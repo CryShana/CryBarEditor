@@ -46,11 +46,9 @@ The purpose of this tool is to enable fast and easy modding of Age of Mythology 
    
 ## Planned features
 Currently planned:
-- Support for easily making additive mods with right clicking on supported files
-- Converting DDT -> TGA where user can specify custom params (right now we only have conversion of existing DDT file with copied params)
 - Creating BAR archive from selected files
 - Creating modified BAR archive by only replacing selected entries in existing BAR archive
-- (Support for other relevant formats, such as .TMA, .TMM and .DATA)
+- Decoding + Encoding TMA and TMM formats
 
 ## Modding Basics
 Please read [Modding Basics](Documentation/Modding.md) document to get started.
