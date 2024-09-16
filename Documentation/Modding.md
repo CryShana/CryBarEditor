@@ -92,6 +92,7 @@ Only certain files support additive modding, I confirmed only the following:
 | --------- | ----------------- | -------------
 | `proto.xml` | `proto_mods.xml` | `<protomods>`
 | `techtree.xml` | `techtree_mods.xml` | `<techtreemods>`
+| `string_table.txt` | `stringmods.txt` | `Language = "LANGUAGE_NAME"`
 
 
 ### How it works
@@ -145,4 +146,15 @@ Example of making Hera mythical age cheaper:
 		<cost mergeMode="replace" resourcetype="Gold">300.0000</cost>
 	</tech>
 </techtreemods>
+```
+
+### Example 3: Overriding/Adding strings
+The relevant file for overriding English strings is `\game\data\strings\English\string_table.txt`.
+To make an additive mod for this we need to create `\game\data\strings\English\stringmods.txt` with
+the following content:
+
+```
+Language = "English"
+
+ID = "STR_UNIT_HOPLITE_NAME"   ;   Str = "MyNameForHoplite"
 ```
