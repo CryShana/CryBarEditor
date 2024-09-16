@@ -109,6 +109,9 @@ public partial class MainWindow : SimpleWindow
         Path.GetExtension(SelectedFileEntry?.RelativePath ?? "").ToLower() == ".ddt" ||
         Path.GetExtension(SelectedBarEntry?.RelativePath ?? "").ToLower() == ".ddt";
 
+    public bool SelectedCanHaveAdditiveMod 
+        => AdditiveModding.IsSupportedFor(SelectedBarEntry?.RelativePath ?? SelectedFileEntry?.RelativePath, out _);
+
     public FileEntry? SelectedFileEntry
     {
         get => _selectedFileEntry; set
@@ -118,13 +121,13 @@ public partial class MainWindow : SimpleWindow
 
             _selectedFileEntry = value;
             OnSelfChanged();
-            OnPropertyChanged(nameof(SelectedIsDDT));
-            OnPropertyChanged(nameof(CanExportAndIsDDT));
+            RefreshSelectedProperties();
 
             // ensure BAR file is not already loaded
             if (value != null && _barStream?.Name == Path.Combine(_rootDirectory, value.RelativePath))
                 return;
 
+            // sometimes it can be called outside UI thread, so we use Dispatcher to be safe
             Dispatcher.UIThread.Post(() =>
             {
                 _ = Preview(value);
@@ -141,11 +144,17 @@ public partial class MainWindow : SimpleWindow
 
             _selectedBarEntry = value;
             OnSelfChanged();
-            OnPropertyChanged(nameof(SelectedIsDDT));
-            OnPropertyChanged(nameof(CanExportAndIsDDT));
+            RefreshSelectedProperties();
 
             _ = Preview(value);
         }
+    }
+
+    void RefreshSelectedProperties()
+    {
+        OnPropertyChanged(nameof(SelectedIsDDT));
+        OnPropertyChanged(nameof(CanExportAndIsDDT));
+        OnPropertyChanged(nameof(SelectedCanHaveAdditiveMod));
     }
     #endregion
 
@@ -1116,6 +1125,57 @@ public partial class MainWindow : SimpleWindow
             {
                 p.Report(null);
             }
+        }
+        finally
+        {
+            item.IsEnabled = true;
+        }
+    }
+    
+    void MenuItem_CreateNewAdditiveMod(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (!Directory.Exists(_exportRootDirectory))
+            return;
+
+        var item = (MenuItem)sender!;
+        var list = item.Parent?.Parent?.Parent as ListBox;
+        if (list == null)
+            return;
+
+        item.IsEnabled = false;
+
+        try
+        {
+            string relative_path_full = "";
+            if (list.ItemsSource == Entries)
+            {
+                if (SelectedBarEntry == null)
+                    return;
+
+                relative_path_full = GetBARFullRelativePath(SelectedBarEntry);
+            }
+            else
+            {
+                if (SelectedFileEntry == null)
+                    return;
+
+                relative_path_full = GetRootFullRelativePath(SelectedFileEntry);
+            }
+
+            if (!AdditiveModding.IsSupportedFor(relative_path_full, out var format))
+                return;
+
+            var output_dir = Path.Combine(_exportRootDirectory, Path.GetDirectoryName(relative_path_full) ?? "");
+            Directory.CreateDirectory(output_dir);
+
+            var output_path = Path.Combine(output_dir, format.FileName);
+            File.WriteAllText(output_path, format.Content);
+
+            _ = ShowSuccess("Additive mod created, new file:\n" + Path.GetFileName(output_path));
+        }
+        catch (Exception ex)
+        {
+            _ = ShowError("Failed to create additive mod:\n" + ex.Message);
         }
         finally
         {
