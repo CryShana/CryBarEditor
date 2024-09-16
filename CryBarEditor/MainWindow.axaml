@@ -37,33 +37,39 @@
 	</Window.Styles>
 	<Window.Resources>
 		<ContextMenu x:Key="SharedContextMenu">
-			<MenuItem Header="Copy file name" Click="MenuItem_CopyFileName" />
-			<MenuItem Header="Copy file path" Click="MenuItem_CopyFilePath" />
+			<MenuItem Header="Copy file name" 
+					  Icon="{micons:MaterialIconExt Kind=ContentCopy}"
+					  Click="MenuItem_CopyFileName" />
+			
+			<MenuItem Header="Copy file path" 
+					  Icon="{micons:MaterialIconExt Kind=ContentCopy}"
+					  Click="MenuItem_CopyFilePath" />
+			
 			<Separator IsVisible="{Binding CanExport}" />
 
 			<MenuItem Header="{Binding SelectedRootFileEntries.Count, StringFormat='Export {0} selected (copy)'}"
-						IsVisible="{Binding CanExport}"
-						Click="MenuItem_ExportSelectedRaw" />
+					IsVisible="{Binding CanExport}" Icon="{micons:MaterialIconExt Kind=Export}"
+					Click="MenuItem_ExportSelectedRaw" />
 
 			<MenuItem Header="{Binding SelectedRootFileEntries.Count, StringFormat='Export {0} selected (converted)'}"
-						IsVisible="{Binding CanExport}"
-						Click="MenuItem_ExportSelectedConverted" />
+					IsVisible="{Binding CanExport}" Icon="{micons:MaterialIconExt Kind=Export}"
+					Click="MenuItem_ExportSelectedConverted" />
 
 			<MenuItem Header="{Binding SelectedRootFileEntries.Count, StringFormat='Export {0} selected (copy+converted)'}"
-						IsVisible="{Binding CanExport}"
-						Click="MenuItem_ExportSelectedRawConverted" />
+					IsVisible="{Binding CanExport}" Icon="{micons:MaterialIconExt Kind=Export}"
+					Click="MenuItem_ExportSelectedRawConverted" />
 
 			<Separator IsVisible="{Binding SelectedIsDDT}"/>
 
 			<MenuItem Header="Replace image and export DDT"
-						IsVisible="{Binding SelectedIsDDT}"
-						Click="MenuItem_ReplaceImageAndExportDDT"/>
+					IsVisible="{Binding SelectedIsDDT}" Icon="{micons:MaterialIconExt Kind=FileReplaceOutline}"
+					Click="MenuItem_ReplaceImageAndExportDDT"/>
 
 			<Separator IsVisible="{Binding SelectedCanHaveAdditiveMod}"/>
 
-			<MenuItem Header="Create additive mod"
-						IsVisible="{Binding SelectedCanHaveAdditiveMod}"
-						Click="MenuItem_CreateNewAdditiveMod"/>	
+			<MenuItem Header="Create additive mod" Icon="{micons:MaterialIconExt Kind=FileEditOutline}"
+					IsVisible="{Binding SelectedCanHaveAdditiveMod}"
+					Click="MenuItem_CreateNewAdditiveMod"/>	
 		</ContextMenu>
 	</Window.Resources>
 
