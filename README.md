@@ -11,16 +11,19 @@ The purpose of this tool is to enable fast and easy modding of Age of Mythology 
 
 
 ## Features
+### Highlights
 - **Read BAR archives**
 - Pick a **Root directory** (usually `\games` folder) for fast switching between BAR and other files
 - Pick an **Export root directory** for fast exporting either from BAR or from Root directory
-- Editor supports previewing various formats:
-  - XMB
-  - DDT
-  - Any text or common image type
-- Syntax highlighting for common formats (json,xml,ini,xs,...)
-- Replace existing DDT image with custom image on export (params are copied)
-- Tools for direct file manipulation:
+- Supports following formats:
+    - BAR (decoding)
+    - XMB (decoding + encoding)
+    - DDT (decoding + encoding)
+- Syntax highlighting for common formats (json,xml,ini,xs,...) and folding support for XML
+
+### Extras
+- Replace existing DDT image with custom image on export (params are copied) for easy texture manipulation
+- Tools for file manipulation:
   - Convert XML -> XMB
   - Convert XMB -> XML
   - Convert DDT -> TGA
@@ -28,7 +31,7 @@ The purpose of this tool is to enable fast and easy modding of Age of Mythology 
   - Compress with Alz4/L33t
   - Decompress file with Alz4/L33t
 - Easily create additive mod for files that support it with right click
-- "**Search everything**" tool added that searches for query in all files and all BAR entries (useful for finding references)
+- "**Search everything**" tool added that searches text in all files, BAR entries and their contents (for finding references)
 - Tool for converting XS trigger scripts to RM-friendly scripts for easy inclusion in random maps
 - Remembering last opened directories and files so you can easily resume where you left off
 
@@ -64,9 +67,8 @@ You should always prefer the Additive method if possible
 ![CryBarEditor_3](https://assets.cryshana.me/okCtQiWGpAlx.png)
 ### Exporting selected files
 ![CryBarEditor_4](https://assets.cryshana.me/pOaZBwQHtRsN.png)
-
-When exporting, you can either `Copy` export it by just copying the data to export directory as is.
-Or you can `Convert` it by optionally converting data to readable format (such as DDT->TGA or XMB->XML)
+### Creating DDT from selected image
+![CryBarEditor_5](https://assets.cryshana.me/RueQpmx0q9L3.png)
 
 ## Thanks
 I wish to thank the developers of AoE3 Resource Manager, their code helped me with decoding of XMB and DDT files.
