@@ -54,6 +54,8 @@ Currently planned:
 - Creating BAR archive from selected files
 - Creating modified BAR archive by only replacing selected entries in existing BAR archive
 - Decoding + Encoding TMA and TMM formats
+- More features for additive modding (supporting more files, and generating some template)
+- Maybe another side panel for export directory for quickly editing/viewing exported files - all within same app
 
 ## Modding Basics
 Please read [Modding Basics](Documentation/Modding.md) document to get started.
