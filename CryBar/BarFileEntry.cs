@@ -41,8 +41,8 @@ public class BarFileEntry
 
         // copy [SizeInArchive] amount of bytes to [to] stream
         using var buffer = SpanOwner<byte>.Allocate(BufferSize);
-        var span = buffer.Span.Slice(0, BufferSize); 
         var size = SizeInArchive;
+        var span = buffer.Span;
 
         var copied_bytes = 0;
         do
@@ -53,8 +53,11 @@ public class BarFileEntry
                 throw new Exception("Failed to read more data while copying");
             }
 
-            to.Write(span.Slice(0, r));
-            copied_bytes += r;
+            var extra_bytes = Math.Max(0, (copied_bytes + r) - size);
+            var relevant_read_bytes = r - extra_bytes;
+
+            to.Write(span.Slice(0, relevant_read_bytes));
+            copied_bytes += relevant_read_bytes;
         } while (copied_bytes < size);
     }
 
