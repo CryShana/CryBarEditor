@@ -12,6 +12,7 @@ using System.IO;
 using System.Xml;
 using System.Linq;
 using System.Text;
+using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Diagnostics;
@@ -42,6 +43,7 @@ public partial class MainWindow : SimpleWindow
     string _previewedFileName = "";
     string _previewedFileNote = "";
     string _previewedFileData = "";
+    string? _latestVersion = null;
     int _contextSelectedItemsCount = 0;
 
     BarFile? _barFile = null;
@@ -53,7 +55,7 @@ public partial class MainWindow : SimpleWindow
     double _imageZoomLevel = 1.0;
     FileSystemWatcher? _rootWatcher = null;
     FileSystemWatcher? _exportWatcher = null;
-    
+
     /// <summary>
     /// This is used to find relative path for Root directory files
     /// </summary>
@@ -118,7 +120,7 @@ public partial class MainWindow : SimpleWindow
     public bool SelectedCanHaveAdditiveMod
         => AdditiveModding.IsSupportedFor(SelectedBarEntry?.RelativePath ?? SelectedRootFileEntry?.RelativePath, out _);
     public int ContextSelectedItemsCount { get => _contextSelectedItemsCount; set { _contextSelectedItemsCount = value; OnSelfChanged(); } }
-    
+
     public RootFileEntry? SelectedRootFileEntry
     {
         get => _selectedRootFileEntry; set
@@ -201,13 +203,81 @@ public partial class MainWindow : SimpleWindow
         // events
         PointerWheelChanged += ScrollChanged;
 
-        // append version
-        var v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-        if (v != null)
+        // append version to window title 
+        var v = GetCurrentVersion();
+        Title = $"{Title} {v.Major}.{v.Minor}.{v.Build}";
+
+        // check for newer version
+        _ = TryGetLatestVersion().ContinueWith(s =>
         {
-            Title = $"{Title} {v.Major}.{v.Minor}.{v.Build}";
-        }
+            if (!s.IsCompletedSuccessfully || s.Result.version == null) return;
+            _latestVersion = s.Result.version;
+
+            if (IsVersionNewer(s.Result.version))
+            {
+                // only show if we haven't shown yet for this version
+                var last_version_checked = _lastConfiguration?.LastVersionCheck;
+                var should_show = last_version_checked == null || s.Result.version != last_version_checked;
+                if (should_show)
+                {
+                    SaveConfiguration();
+
+                    Dispatcher.UIThread.Post(async () =>
+                    {
+                        var prompt = new Prompt(PromptType.Information, "Version " + s.Result.version, "New version is available for download:\n\n" + s.Result.link + "");
+                        await prompt.ShowDialog(this);
+                    });
+                }
+            }
+        });
     }
+
+    #region Version
+    [GeneratedRegex(@"href=""(?<link>[^""]+tag/(?<version>\d+\.\d+\.\d+))""")]
+    public static partial Regex ReleasesVersionRgx();
+    public async Task<(string? link, string? version)> TryGetLatestVersion()
+    {
+        const string ReleasesLink = @"https://github.com/CryShana/CryBarEditor/releases";
+        try
+        {
+            var response = await new HttpClient().GetAsync(ReleasesLink);
+            response.EnsureSuccessStatusCode();
+
+            var content = await response.Content.ReadAsStringAsync();
+            var matches = ReleasesVersionRgx().Matches(content);
+
+            // first version is valid
+            foreach (Match match in matches)
+            {
+                var link = "https://github.com" + match.Groups["link"].Value;
+                var version = match.Groups["version"].Value;
+                return (link, version);
+            }   
+        }
+        catch {}
+
+        return default;
+    }
+
+    public Version GetCurrentVersion() => System.Reflection.Assembly.GetExecutingAssembly().GetName().Version!;
+    [GeneratedRegex(@"(?<major>\d+)\.(?<minor>\d+)\.(?<build>\d+)")]
+    public static partial Regex VersionRgx();
+    public bool IsVersionNewer(string version)
+    {
+        var match = VersionRgx().Match(version);
+        if (!match.Success) return false;
+
+        var major = int.Parse(match.Groups["major"].Value);
+        var minor = int.Parse(match.Groups["minor"].Value);
+        var build = int.Parse(match.Groups["build"].Value);
+
+        var v = GetCurrentVersion();
+
+        return major > v.Major ||
+            (major == v.Major && minor > v.Minor) ||
+            (major == v.Major && minor == v.Minor && build > v.Build);
+    }
+    #endregion
 
     #region UI events
     async void LoadBAR_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
@@ -664,7 +734,7 @@ public partial class MainWindow : SimpleWindow
 
                 var preview_note = $"[{ddt.Version} {ddt.MipmapOffsets[0].Item3}x{ddt.MipmapOffsets[0].Item4}, {ddt.MipmapOffsets.Length} Mips, " +
                     $"Usage: {(int)ddt.UsageFlag}, Format: {(int)ddt.FormatFlag}, Alpha: {(int)ddt.AlphaFlag}] ";
-                
+
                 if (image.Width < ddt.BaseWidth || image.Height < ddt.BaseHeight)
                     preview_note += $"- Downscaled to {image.Width}x{image.Height}";
 
@@ -1296,7 +1366,7 @@ public partial class MainWindow : SimpleWindow
             return true;
 
         // also check files that work without the XMB extension
-        if (exported_path.EndsWith(".xmb", StringComparison.OrdinalIgnoreCase) && 
+        if (exported_path.EndsWith(".xmb", StringComparison.OrdinalIgnoreCase) &&
             File.Exists(exported_path[..^4]))
             return true;
 
@@ -1522,7 +1592,7 @@ public partial class MainWindow : SimpleWindow
 
         if (in_file == null) return;
 
-        var out_file = PickOutFile(in_file, new_extension: ".ddt", overwrite: true);   
+        var out_file = PickOutFile(in_file, new_extension: ".ddt", overwrite: true);
         try
         {
             var dialogue = new DDTCreateDialogue(in_file, out_file);
@@ -1680,7 +1750,8 @@ public partial class MainWindow : SimpleWindow
             {
                 RootDirectory = _rootDirectory,
                 ExportRootDirectory = _exportRootDirectory,
-                BarFile = _barStream?.Name
+                BarFile = _barStream?.Name,
+                LastVersionCheck = _latestVersion
             };
 
             File.WriteAllText(config_path, JsonSerializer.Serialize(_lastConfiguration, CryBarJsonContext.Default.Configuration));
