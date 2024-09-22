@@ -42,6 +42,7 @@ public partial class MainWindow : SimpleWindow
     string _previewedFileName = "";
     string _previewedFileNote = "";
     string _previewedFileData = "";
+    int _contextSelectedItemsCount = 0;
 
     BarFile? _barFile = null;
     FileStream? _barStream = null;
@@ -114,10 +115,10 @@ public partial class MainWindow : SimpleWindow
     public bool SelectedIsDDT =>
         Path.GetExtension(SelectedRootFileEntry?.RelativePath ?? "").ToLower() == ".ddt" ||
         Path.GetExtension(SelectedBarEntry?.RelativePath ?? "").ToLower() == ".ddt";
-
     public bool SelectedCanHaveAdditiveMod
         => AdditiveModding.IsSupportedFor(SelectedBarEntry?.RelativePath ?? SelectedRootFileEntry?.RelativePath, out _);
-
+    public int ContextSelectedItemsCount { get => _contextSelectedItemsCount; set { _contextSelectedItemsCount = value; OnSelfChanged(); } }
+    
     public RootFileEntry? SelectedRootFileEntry
     {
         get => _selectedRootFileEntry; set
@@ -1735,5 +1736,11 @@ public partial class MainWindow : SimpleWindow
         _exportWatcher.Renamed += ExportDir_Renamed;
         _exportWatcher.Created += ExportDir_Created;
         _exportWatcher.Deleted += ExportDir_Deleted;
+    }
+
+    void ContextMenu_Opened(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var listbox = (ListBox)((ContextMenu)sender!).Parent!.Parent!;
+        ContextSelectedItemsCount = listbox.SelectedItems!.Count;
     }
 }

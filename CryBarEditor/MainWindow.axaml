@@ -41,7 +41,7 @@
 	<Window.Resources>
 		<converters:IsOverridenToBoolConverter x:Key="overridenConverter" />
 		
-		<ContextMenu x:Key="SharedContextMenu">
+		<ContextMenu x:Key="SharedContextMenu" Opened="ContextMenu_Opened">
 			<MenuItem Header="Copy file name" 
 					  Icon="{micons:MaterialIconExt Kind=ContentCopy}"
 					  Click="MenuItem_CopyFileName" />
@@ -56,15 +56,15 @@
 					IsVisible="{Binding CanExport}" Icon="{micons:MaterialIconExt Kind=OpenInNew}"
 					Click="MenuItem_ExportSelectedOpenDirectory" />
 			
-			<MenuItem Header="{Binding SelectedRootFileEntries.Count, StringFormat='Export {0} selected (copy)'}"
+			<MenuItem Header="{Binding ContextSelectedItemsCount, StringFormat='Export {0} selected (copy)'}"
 					IsVisible="{Binding CanExport}" Icon="{micons:MaterialIconExt Kind=Export}"
 					Click="MenuItem_ExportSelectedRaw" />
 
-			<MenuItem Header="{Binding SelectedRootFileEntries.Count, StringFormat='Export {0} selected (converted)'}"
+			<MenuItem Header="{Binding ContextSelectedItemsCount, StringFormat='Export {0} selected (converted)'}"
 					IsVisible="{Binding CanExport}" Icon="{micons:MaterialIconExt Kind=Export}"
 					Click="MenuItem_ExportSelectedConverted" />
 
-			<MenuItem Header="{Binding SelectedRootFileEntries.Count, StringFormat='Export {0} selected (copy+converted)'}"
+			<MenuItem Header="{Binding ContextSelectedItemsCount, StringFormat='Export {0} selected (copy+converted)'}"
 					IsVisible="{Binding CanExport}" Icon="{micons:MaterialIconExt Kind=Export}"
 					Click="MenuItem_ExportSelectedRawConverted" />
 

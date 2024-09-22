@@ -5,10 +5,8 @@ using CryBar;
 using CryBarEditor.Classes;
 
 using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
-
+using System.Collections.Generic;
 
 namespace CryBarEditor.Converters;
 
