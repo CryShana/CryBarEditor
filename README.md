@@ -43,12 +43,19 @@ The purpose of this tool is to enable fast and easy modding of Age of Mythology 
   - you can select entries from inside .BAR file too, they will be previewed the same
 - Any file/BAR entry you wish to modify, **right click and export it**, for most cases you will use `Export X selected (convert)`
   - Relative paths are retained! This also works for exporting from Root directory as long as it contains `\game` in it's path
-   
+
+## Download
+For people new to GitHub - the releases are located [here](https://github.com/CryShana/CryBarEditor/releases).
+
+Just download the latest version .zip and extract it into a folder, run the .exe file and that will open the app.
+
 ## Planned features
 Currently planned:
 - Creating BAR archive from selected files
 - Creating modified BAR archive by only replacing selected entries in existing BAR archive
 - Decoding + Encoding TMA and TMM formats
+- More features for additive modding (supporting more files, and generating some template)
+- Maybe another side panel for export directory for quickly editing/viewing exported files - all within same app
 
 ## Modding Basics
 Please read [Modding Basics](Documentation/Modding.md) document to get started.
