@@ -76,10 +76,10 @@ public class DDTImage
     [MemberNotNullWhen(true, nameof(MipmapOffsets))]
     public bool ParseHeader()
     {
-        var data_span = _data.Span;
+        var data = _data.Span;
 
-        var rts4 = data_span is [0x52, 0x54, 0x53, 0x34, ..];
-        var rts3 = data_span is [0x52, 0x54, 0x53, 0x33, ..];
+        var rts4 = data is [0x52, 0x54, 0x53, 0x34, ..];
+        var rts3 = data is [0x52, 0x54, 0x53, 0x33, ..];
 
         if (rts4) Version = DDTVersion.RTS4;
         else if (rts3) Version = DDTVersion.RTS3;
@@ -88,13 +88,13 @@ public class DDTImage
         var offset = 4;
 
         // image info
-        var usage = data_span[offset++];
-        var alpha = data_span[offset++];
-        var format = data_span[offset++]; 
-        var mipmap_levels = data_span[offset++]; 
+        var usage = data[offset++];
+        var alpha = data[offset++];
+        var format = data[offset++]; 
+        var mipmap_levels = data[offset++]; 
 
-        var width = (ushort)BinaryPrimitives.ReadInt32LittleEndian(data_span.Slice(offset, 4)); offset += 4;
-        var height = (ushort)BinaryPrimitives.ReadInt32LittleEndian(data_span.Slice(offset, 4)); offset += 4;
+        var width = (ushort)BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
+        var height = (ushort)BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
 
         UsageFlag = (DDTUsage)usage;
         AlphaFlag = (DDTAlpha)alpha;
@@ -106,7 +106,7 @@ public class DDTImage
         // color table (RTS4 only):
         if (rts4)
         {
-            int color_table_size = BinaryPrimitives.ReadInt32LittleEndian(data_span.Slice(offset, 4)); offset += 4;
+            int color_table_size = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
             var color_table = _data.Slice(offset, color_table_size); offset += color_table_size;
             ColorTable = color_table;
         }
@@ -120,8 +120,8 @@ public class DDTImage
             var level = i / images_per_level;
             var image_width = (ushort)Math.Max(1, width >> level);
             var image_height = (ushort)Math.Max(1, height >> level);
-            var image_offset = BinaryPrimitives.ReadInt32LittleEndian(data_span.Slice(offset, 4)); offset += 4;
-            var image_length = BinaryPrimitives.ReadInt32LittleEndian(data_span.Slice(offset, 4)); offset += 4;
+            var image_offset = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
+            var image_length = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
             mipmap_offsets[i] = (image_offset, image_length, image_width, image_height);
         }
         MipmapOffsets = mipmap_offsets;

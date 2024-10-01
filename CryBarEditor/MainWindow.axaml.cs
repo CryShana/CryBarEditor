@@ -742,6 +742,26 @@ public partial class MainWindow : SimpleWindow
                 await SetImagePreview(image, token);
                 return;
             }
+            else if (ext == ".tmm")
+            {
+                var tmm = new TmmModel(data);
+                if (!tmm.ParseHeader())
+                {
+                    PreviewedFileNote = "(Failed to parse TMM)";
+                    return;
+                }
+
+                if (tmm.ModelNames.Length == 0)
+                {
+                    PreviewedFileNote = "(TMM contains 0 models)";
+                    return;
+                }
+
+                // TODO: show
+                tmm.ParseModel(0);
+
+                PreviewedFileNote = "(Preview not yet supported)";
+            }
             else
             {
                 if (data_size > MAX_DATA_TEXT_SIZE)
