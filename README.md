@@ -64,7 +64,7 @@ I describe the **Standard** and **Additive** modding method.
 You should always prefer the Additive method if possible
 
 ## XS scripting reference
-If you are writing XS scripts, you can also checkout my personal reference I wrote [here](XSScriptingReference.md) 
+If you are writing XS scripts, you can also checkout my personal reference I wrote [here](Documentation/XSScriptingReference.md) 
 
 ## Screenshots
 ### Previewing XMB content
