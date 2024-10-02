@@ -94,6 +94,8 @@ Only certain files support additive modding, I confirmed only the following:
 | `techtree.xml` | `techtree_mods.xml` | `<techtreemods>`
 | `string_table.txt` | `stringmods.txt` | (Is not XML)
 
+See also "Check the result"-section, most of the files you find there are changeable additive (not all (yet?)).
+
 
 ### How it works
 - The additive mod **usually** is just the original file name suffixed with `_mods`
@@ -109,6 +111,7 @@ The idea is that whatever you define in this additive mod file, will be merged t
 
 ### Example 1: Adding/Modifying unit
 Before we needed to export the entire `proto.xml` file and edit just a small portion of it. Now, we don't export anything, we just create a `proto_mods.xml` file in the SAME DIRECTORY as `proto.xml` is in --- this means `game\data\gameplay\`.
+(but you still could export the original xml files to check what is written in there, to know what you want to change or how the structure should look like. You can use this tool https://forums.ageofempires.com/t/v-0-7-resource-manager-age-of-myth-retold-bar-extractor/260136 to eg extract the Data.bar file in "Age of Mythology Retold\game\data" folder)
 
 - To add a new unit called `CoolerHoplite`, the file would have the following content:
 ```xml
@@ -156,3 +159,95 @@ the following content:
 ```
 ID = "STR_UNIT_HOPLITE_NAME"   ;   Str = "MyNameForHoplite"
 ```
+
+### Special note how mergeMode checks for existing:
+
+According to my tests (so may be partly wrong, feel free to add more info), most often it only checks for the xml attributes (the words within `<>`).  
+**modify**  
+So if you want to add your new effect to a tech eg. to enable your new unit and use:
+```xml
+<effect type="Data" amount="1.00" subtype="Enable" relativity="Absolute">
+  <target type="ProtoUnit">MyNewUnit</target>
+</effect>
+```
+The game defaults to "modify" since we did not mention any mergeMode. And now the game compares the existing effects of this tech with yours.
+But many techs (especially techs about the age) already include effects which enable new units and their attributes look 100% identical.
+Therefore if you add your effect without mergeMode="add" here, it is very likely that you will overwrite a vanilla effect, instead of simply adding yours.
+
+**remove**  
+This seems to work a little different than modify, because something like:
+```xml
+<flag mergeMode="remove">NotSelectable</flag>
+```  
+works as intendend and does not remove the very first flag found, but the one with "NotSelectable".  
+And with remove it also seems to be possible to leave out up to one attribute. Eg. we want to change the following effect from RelicAnkhofRa tech:
+```xml
+<effect type="Data" amount="0.05" subtype="ResourceTrickleRate" resource="Favor" relativity="Absolute">
+  <target type="Player">
+  </target>
+</effect>
+```
+We only want to change eg. the amount, nothing more.  
+I think "replace" can only change the content of xml, not the attributes (correct me if I'm wrong). Therefore the only way to change the value in this case is to remove this effect entirely and add a new one.
+To remove this specific effect one would usually do:  
+```xml
+<effect mergeMode="remove" type="Data" amount="0.05" subtype="ResourceTrickleRate" resource="Favor" relativity="Absolute" />
+```
+But what if the devs themself change the value in a future update? Then this remove command will no longer work, since it is looking for an amount of 0.05.
+Luckily remove also work when dismissing one of the attributes, so this also works and continues to work if the amount was changed:
+```xml
+<effect mergeMode="remove" type="Data" subtype="ResourceTrickleRate" resource="Favor" relativity="Absolute" />
+```
+And now we can use mergeMode="add" to add the effect with our adjusted amount.
+
+### Repetitive xml elements
+
+It seems the devs added some way to make additive modding work for repetitive elements, like `<protoaction>`. In this case if you want to change a specific protoaction, you have no attribute to tell the game which one you want to modify.  
+In this case it always worked to mention the name of the protoaction and then the values you want to add/change, eg. here changing the maxrange of RangedAttack:
+```xml
+<unit name="VillagerEgyptian">
+  <protoaction>
+    <name>RangedAttack</name>
+    <maxrange>0.300000</maxrange>
+  </protoaction>
+</unit>
+```
+(we dont need any mergeMode here, because "modify" is exactly what we want it to do)  
+You can confirm that this is a special behavior the devs had to implement, because this behaviour does not (yet?) exist for the major_gods.xml file. There we have the same problem of repetitive elements, but it is currently impossible to change a specific civ, it always only changes the first civ found.
+
+(It of course would be much better if the devs would extend the modding commands, so we can exactly define which xml element we want to modify.. eg. like Anno1800: https://github.com/jakobharder/anno1800-mod-loader/blob/main/doc/modop-guide.md#modop-guide )
+
+
+### Add/change tactics/abilities/godpowers
+
+These files are formatted like xml files, while the extension is not xml but tactics/abilities/godpowers.
+I assume they are not changeable additive, since they are not generated by DebugOutputGameData (not tested though).
+You can overwrite files in the standard way or if you only want to add something (not change existing), you do it by simply creating a new file with the correct extension, put at the same folder structure like the original with your custom unique name.
+Tactics already work this way, while for abilities/godpowers you have to include your filenames in god_power.xml. This can be done additive by creating a powers_mods.xml eg with this content:
+```xml
+<powersmod>
+	<include mergeMode="add">god_powers\MyCustomGodPowers.godpowers</include>
+	<include mergeMode="add">abilities\MyCustomAbilities.abilities</include>
+</powersmod>
+```
+
+### Check the result
+
+To check if your additive code resulted in the intended changes, you can open "[installfolder eg. steam]..\Age of Mythology Retold\game\config\production.cfg" (could also be possible to create a user.cfg file instead of changing production.cfg, think both works) and add the following line to it and save:  
+`DebugOutputGameData`  
+After that, whenever you start the game with mods already enabled, you will find many additive-changeable files at this location: "...AppData\Local\Temp\Age of Mythology Retold\Data". Then you can eg compare this generated proto.xml with the vanilla one, to check if you additive changes were applied correctly.  
+
+There are more commands you can add to this cfg file, most are helpful for AI, trigger and map scripting like:
+```
+aiDebug
+showAIEchoes
+developer
+showAIOutput
+generateAIConstants
+AIShowBPValueText
+```
+And one command helpful for normal modding:  
+`generateTRConstants`  
+generateTRConstants creates a MythTRConstants file also in the Temp folder mentioned above and contains eg. all valid flags for units or effecttypes for techtree and so on. It is not complete and does not include an explanation unfortunately, but still better than nothing.
+
+
