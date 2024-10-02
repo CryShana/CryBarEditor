@@ -12,6 +12,7 @@ public static class AdditiveModding
     {
         { "proto.xml", new("proto_mods.xml", "<protomods>\n</protomods>") },
         { "techtree.xml", new("techtree_mods.xml", "<techtreemods>\n</techtreemods>") },
+        { "powers.xml", new("powers_mods.xml", "<powersmod>\n</powersmod>") },
         { "string_table.txt", new("stringmods.txt", "") }
         // TODO: add more here if they exist
     }).ToFrozenDictionary();
