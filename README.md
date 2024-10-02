@@ -63,6 +63,9 @@ Please read [Modding Basics](Documentation/Modding.md) document to get started.
 I describe the **Standard** and **Additive** modding method.
 You should always prefer the Additive method if possible
 
+## XS scripting reference
+If you are writing XS scripts, you can also checkout my personal reference I wrote [here](XSScriptingReference.md) 
+
 ## Screenshots
 ### Previewing XMB content
 ![CryBarEditor_1](https://assets.cryshana.me/34Cmg3iPHLA9.png)

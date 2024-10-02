@@ -266,3 +266,6 @@ And one command helpful for normal modding:
 ```
 generateTRConstants
 ``` 
+
+## XS scripting reference
+If you are writing XS scripts, you can also checkout my personal reference I wrote [here](XSScriptingReference.md) 
