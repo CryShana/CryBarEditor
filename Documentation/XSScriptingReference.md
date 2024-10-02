@@ -18,6 +18,10 @@ This file is usually located in `[USER]\Games\Age of Mythology Retold\[UID]\trig
 
 If there is a function `doSomething(id, param1, param2)` you can simply do `doSomething(id)` and the rest will use default values. This will be useful for functions with a ton of parameters you don't really need to touch.
 
+### Other references
+- [https://jehathor.github.io/AoM-Retold/RetoldFunctions.html](https://jehathor.github.io/AoM-Retold/RetoldFunctions.html) - contains functions extracted from AoMRetold executable
+- [Extracted Editor Triggers](triggers_reference.xml) (XML file with all triggers that the editor uses and which functions they map to in XS script)
+
 ---
 
 ## XS functions
@@ -183,6 +187,7 @@ I haven't used this much, so I don't have much notes here. Some relevant functio
 |void|rmSetPlayerResource(int PLAYER_ID, int RESOURCE_ID, float AMOUNT)|sets player's resources to given amount
 |void|rmTriggerAddScriptLine(string TRIGGER_CODE)|adds trigger code to random map (this is how you can include your custom scenario XS scripts in random maps - CryBarEditor has functionality to wrap your XS scripts for random map usage)
 
+Also check [this part](#using-xs-scripts-in-random-maps) on how to easily use scripts in random maps.
 
 ## TR functions
 Trigger functions. Same functions that triggers use in the editor. They can cheat and run game changing events. This is where most of the fun is.
@@ -697,3 +702,50 @@ int my_function(ref int[] array) {}
 // usage:
 my_function(my_array);
 ```
+
+### Using XS scripts in random maps
+You will quickly notice that rules and TR functions do not work in random map scripts.
+
+As mentioned earlier, you need to add your script code to the map by using the
+`rmTriggerAddScriptLine(string code)` function.
+
+Because this is a hassle to do for large scripts that may also have external includes. I made a tool for this available [here](https://github.com/CryShana/XStoRM), but also CryBarEditor itself has this functionality built it.
+
+You simply select your main XS script and the tool will find all includes, merge it all into a single big file, then read it line by line and wrap it all in `rmTriggerAddScriptLine` function calls.
+
+A class is then generated in following format:
+```c
+class MyMod {
+void _c(string l = ""){rmTriggerAddScriptLine(l);}
+void RegisterTriggers()
+{
+// your wrapped XS script goes here (auto generated)
+_c("rule SomeRole");
+_c("inactive");
+_c("highFrequency");
+_c("priority 10");
+_c("group curse");
+_c("{");
+// ...
+}
+};
+```
+
+Then you simply include this generated file in `rm_core.xs`:
+```c
+include "lib/MyMod.xs"; // copied it to lib dir and included it here
+
+// ...
+
+
+mutable void main()
+{
+   // ... other code is here ...
+
+   // I add the following:
+   MyMod mymod;
+   mymod.RegisterTriggers();  // this adds the code to the map
+}
+```
+
+This will then make your custom scenario XS script work in ALL random maps. (I have not tried this in multiplayer yet, you may need to make a mod for that that overrides the `rm_core.xs` and includes your exported script)

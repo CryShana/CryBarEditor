@@ -1,0 +1,3101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<trigger version="2">
+  <conditions>
+    <condition name="Always">
+      <expression>true</expression>
+    </condition>
+    <condition name="Army: Distance to Point">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="DstPoint" dispname="" vartype="area" dispradius="">0</param>
+      <param name="Op" dispname="Operator" vartype="operator">==</param>
+      <param name="Dist" dispname="Distance" vartype="float" dispradius="">0</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <expression>trUnitDistanceToPoint(%DstPoint%) %Op% %Dist%</expression>
+    </condition>
+    <condition name="Army: Distance to Unit">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="DstObject" dispname="Target Unit" vartype="unit" dispradius="">-1</param>
+      <param name="Op" dispname="Operator" vartype="operator">==</param>
+      <param name="Dist" dispname="Distance" vartype="float" dispradius="">0</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <expression>trUnitDistanceToUnitID(%DstObject%) %Op% %Dist%</expression>
+    </condition>
+    <condition name="Army: Is In Player Line-of-Sight">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <expression>trUnitHasLOS(%PlayerID%)</expression>
+    </condition>
+    <condition name="Army: Is Alive">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <expression>trUnitAlive()==true</expression>
+    </condition>
+    <condition name="Army: Is Dead">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <expression>trUnitDead()==true</expression>
+    </condition>
+    <condition name="Army: Is Owned by Player">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <expression>trUnitIsOwnedBy(%Player%)</expression>
+    </condition>
+    <condition name="Army: Is Visible to Player">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <expression>trUnitVisibleToPlayer()==true</expression>
+    </condition>
+    <condition name="Chat: Is Dialogue Done Playing">
+      <expression>trIsDialogueNotPlaying()</expression>
+    </condition>
+    <condition name="Chat: History Contains">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="Text" dispname="Text" vartype="string">
+      </param>
+      <expression>trChatHistoryContains("%Text%", %Player%)</expression>
+    </condition>
+    <condition name="Cinematic: Is Skipped">
+      <expression>trCinematicIsAborted()</expression>
+    </condition>
+    <condition name="Counter: Value">
+      <param name="Name" dispname="Name" vartype="string">countdown</param>
+      <param name="Op" dispname="Operator" vartype="operator">==</param>
+      <param name="Value" dispname="Value" vartype="long">0</param>
+      <expression>trCounterGetValue("%Name%") %Op% %Value%</expression>
+    </condition>
+    <condition name="Building: On Cursor">
+      <param name="ProtoUnit" dispname="Building Unit" vartype="protounit">default</param>
+      <expression>trBuildingIsOnCursor("%ProtoUnit%")</expression>
+    </condition>
+    <condition name="Building: Town Bell Rung">
+      <param name="SrcObject" dispname="Source Building" vartype="unit">-1</param>
+      <expression>trTownBellRung(%SrcObject%)</expression>
+    </condition>
+    <condition name="Building: Town Bell Unrung">
+      <param name="SrcObject" dispname="Source Building" vartype="unit">-1</param>
+      <expression>trTownBellUnrung(%SrcObject%)</expression>
+    </condition>
+    <condition name="Scenario: Difficulty Level">
+      <param name="Op" dispname="Operator" vartype="operator">==</param>
+      <param name="Level" dispname="Level" vartype="difficulty">0</param>
+      <expression>trGetWorldDifficulty() %Op% %Level%</expression>
+    </condition>
+    <condition name="Player: All Buildings Dead">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <expression>kbUnitTypeCount("LogicalTypeBuildingsNotWalls", %PlayerID%, cUnitStateAlive)==0</expression>
+    </condition>
+    <condition name="Player: All Units And Buildings Dead">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <expression>kbUnitTypeCount("LogicalTypeValidSPCUnitsDeadCondition", %PlayerID%, cUnitStateAlive, true)+kbUnitTypeCount("LogicalTypeBuildingsNotWalls", %PlayerID%, cUnitStateAlive)==0</expression>
+    </condition>
+    <condition name="Player: All Units Dead">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <expression>kbUnitTypeCount("LogicalTypeValidSPCUnitsDeadCondition", %PlayerID%, cUnitStateAlive, true)==0</expression>
+    </condition>
+    <condition name="Player: All Valid Units and Buildings Dead">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <expression>kbUnitTypeCount("LogicalTypeNeededForVictory", %PlayerID%, cUnitStateAlive, true)==0</expression>
+    </condition>
+    <condition name="Player: Current Population">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Op" dispname="Operator" vartype="operator">==</param>
+      <param name="Count" dispname="Number" vartype="long">1</param>
+      <expression>kbPlayerGetPop(%PlayerID%) %Op% %Count%</expression>
+    </condition>
+    <condition name="Player: Diplomacy Changed">
+      <param name="Player1" dispname="Player" vartype="player">1</param>
+      <param name="Status" dispname="Status" vartype="alliance">ally</param>
+      <param name="Player2" dispname="Player" vartype="player">2</param>
+      <expression>trPlayerGetDiplomacy(%Player1%, %Player2%) == "%Status%"</expression>
+    </condition>
+    <condition name="Player: Has Free Population">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Op" dispname="Operator" vartype="operator">==</param>
+      <param name="Count" dispname="Number" vartype="long">1</param>
+      <expression>(kbPlayerGetPopCap(%PlayerID%) - kbPlayerGetPop(%PlayerID%)) %Op% %Count%</expression>
+    </condition>
+    <condition name="Player: Has Major God">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Civilization" dispname="Civilization" vartype="civilization">Default</param>
+      <expression>trPlayerGetCivilization(%PlayerID%, "%Civilization%")</expression>
+    </condition>
+    <condition name="Player: Unit/Building In Progress Count">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="ProtoUnit" dispname="Unit" vartype="protounit">default</param>
+      <param name="Op" dispname="Operator" vartype="operator">==</param>
+      <param name="Count" dispname="Number" vartype="long">1</param>
+      <expression>kbUnitTypeCount("%ProtoUnit%", %PlayerID%, cUnitStateBuilding+cUnitStateQueued) %Op% %Count%</expression>
+    </condition>
+    <condition name="Player: Has Queued Units">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <expression>kbUnitTypeCount("Unit", %PlayerID%, cUnitStateQueued) &gt; 0</expression>
+    </condition>
+    <condition name="Player: Has Reached Population Capacity">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <expression>trPlayerAtPopCap(%PlayerID%)</expression>
+    </condition>
+    <condition name="Player: Is Defeated">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <expression>trPlayerIsDefeated(%PlayerID%)</expression>
+    </condition>
+    <condition name="Player: Is Defeated or Resigned">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <expression>trPlayerIsDefeatedOrResigned(%PlayerID%)</expression>
+    </condition>
+    <condition name="Player: Is Human or Computer">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="PlayerType" dispname="Player Type" vartype="playerType">0</param>
+      <expression>trPlayerGetType(%PlayerID%)==%PlayerType%</expression>
+    </condition>
+    <condition name="Player: Is Undefeated">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <expression>trPlayerIsActive(%PlayerID%)</expression>
+    </condition>
+    <condition name="Player: Resources Gathered in Total">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Resource" dispname="Resource" vartype="resource">food</param>
+      <param name="Op" dispname="Operator" vartype="operator">==</param>
+      <param name="Count" dispname="Number" vartype="long">1</param>
+      <expression>kbGetTotalResourceAmount(%PlayerID%, kbGetResourceID("%Resource%")) %Op% %Count%</expression>
+    </condition>
+    <condition name="Player: Resource Gatherer Count">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Resource" dispname="Resource" vartype="resource">food</param>
+      <param name="Op" dispname="Operator" vartype="operator">==</param>
+      <param name="Count" dispname="Number" vartype="long">1</param>
+      <expression>kbGetNumberResourceGatherers(%PlayerID%, "%Resource%") %Op% %Count%</expression>
+    </condition>
+    <condition name="Player: Resources Stockpiled">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Resource" dispname="Resource" vartype="resource">food</param>
+      <param name="Op" dispname="Operator" vartype="operator">==</param>
+      <param name="Count" dispname="Number" vartype="long">1</param>
+      <expression>kbGetResourceAmount(%PlayerID%, kbGetResourceID("%Resource%")) %Op% %Count%</expression>
+    </condition>
+    <condition name="Player: Statistic Value">
+      <param name="PlayerID" dispname="Fake Player" vartype="player">1</param>
+      <param name="StatID" dispname="Stat Type" vartype="kbstat">0</param>
+      <param name="Op" dispname="Operator" vartype="operator">==</param>
+      <param name="Value" dispname="Value" vartype="long">0</param>
+      <expression>kbGetStatValueInt(%PlayerID%, %StatID%) %Op% %Value%</expression>
+    </condition>
+    <condition name="Player: Tech Is Active">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="TechID" dispname="Tech" vartype="tech">0</param>
+      <expression>trTechStatusActive(%PlayerID%, %TechID%)</expression>
+    </condition>
+    <condition name="Player: Tech Is Researching">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="TechID" dispname="Tech" vartype="tech">0</param>
+      <expression>trTechStatusResearching(%PlayerID%, %TechID%)</expression>
+    </condition>
+    <condition name="Player: Tech Status">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="TechID" dispname="Tech" vartype="tech">0</param>
+      <param name="Status" dispname="Status" vartype="techstatus">2</param>
+      <expression>trTechStatusCheck(%PlayerID%, %TechID%, %Status%)</expression>
+    </condition>
+    <condition name="Player: Unit Count">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="ProtoUnit" dispname="Unit" vartype="protounit">default</param>
+      <param name="Op" dispname="Operator" vartype="operator">==</param>
+      <param name="Count" dispname="Number" vartype="long">1</param>
+      <expression>kbUnitTypeCount("%ProtoUnit%", %PlayerID%, cUnitStateAlive) %Op% %Count%</expression>
+    </condition>
+    <condition name="Player: Unit Type Count">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="ProtoUnit" dispname="Unit" vartype="unittype">default</param>
+      <param name="Op" dispname="Operator" vartype="operator">==</param>
+      <param name="Count" dispname="Number" vartype="long">1</param>
+      <expression>kbUnitTypeCount("%ProtoUnit%", %PlayerID%, cUnitStateAlive) %Op% %Count%</expression>
+    </condition>
+    <condition name="Player: Villager Priority Changed">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="VPPreset" dispname="Preset" vartype="vppreset">0</param>
+      <expression>trPlayerGetVillagerPriority(%PlayerID%) == %VPPreset%</expression>
+    </condition>
+    <condition name="Quest Variable: Check">
+      <param name="QuestVar" dispname="Var Name" vartype="string">QV1</param>
+      <param name="Op" dispname="Operator" vartype="operator">==</param>
+      <param name="Value" dispname="Value" vartype="float">1</param>
+      <expression>trQuestVarGet("%QuestVar%") %Op% %Value%</expression>
+    </condition>
+    <condition name="Quest Variable: Compare">
+      <param name="QuestVar" dispname="Var Name 1" vartype="string">QV1</param>
+      <param name="Op" dispname="Operator" vartype="operator">==</param>
+      <param name="QuestVar2" dispname="Var Name 2" vartype="string">QV2</param>
+      <expression>trQuestVarGet("%QuestVar%") %Op% trQuestVarGet("%QuestVar2%")</expression>
+    </condition>
+    <condition name="Quest Variable: Distance">
+      <param name="QuestVar" dispname="Var Name 1" vartype="string">QV1</param>
+      <param name="QuestVar2" dispname="Var Name 2" vartype="string">QV2</param>
+      <param name="Op" dispname="Operator" vartype="operator">==</param>
+      <param name="Value" dispname="Distance" vartype="float">1</param>
+      <expression>abs(trQuestVarGet("%QuestVar%") - trQuestVarGet("%QuestVar2%")) %Op% %Value%</expression>
+    </condition>
+    <condition name="Socket: Controlled by Player">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Socket" dispname="Socket" vartype="unit">-1</param>
+      <expression>trPlayerControlsSocket(%PlayerID%, %Socket%)</expression>
+    </condition>
+    <condition name="Socket: Empty">
+      <param name="Socket" dispname="Socket" vartype="unit">-1</param>
+      <expression>trSocketIsEmpty(%Socket%)</expression>
+    </condition>
+    <condition name="Terrain: Height at Position">
+      <param name="Position" dispname="" vartype="area" dispradius="">0, 0, 0</param>
+      <param name="Op" dispname="Operator" vartype="operator">==</param>
+      <param name="Value" dispname="Value" vartype="float">1</param>
+      <expression>trGetTerrainHeight(vector(%Position%)) %Op% %Value%</expression>
+    </condition>
+    <condition name="Terrain: Subtype at Position">
+      <param name="Subtype" dispname="Terrain" vartype="terrainsubtype">
+      </param>
+      <param name="Position" dispname="" vartype="area" dispradius="">0, 0, 0</param>
+      <expression>trTerrainAtPosition("%Subtype%", vector(%Position%))</expression>
+    </condition>
+    <condition name="Terrain: Water at Position">
+      <param name="Water" dispname="Water" vartype="water">
+      </param>
+      <param name="Position" dispname="" vartype="area" dispradius="">0, 0, 0</param>
+      <expression>trWaterAtPosition("%Water%", vector(%Position%))</expression>
+    </condition>
+    <condition name="Timer: Milliseconds">
+      <param name="Param1" dispname="Milliseconds" vartype="long">0</param>
+      <expression>(xsGetTimeMS() - cActivationTime) &gt;= %Param1%</expression>
+    </condition>
+    <condition name="Timer: Seconds">
+      <param name="Param1" dispname="Seconds" vartype="long">0</param>
+      <expression>(xsGetTime() - (cActivationTime / 1000)) &gt;= %Param1%</expression>
+    </condition>
+    <condition name="Unit: Being Worked On">
+      <param name="Object" dispname="Object" vartype="unit">-1</param>
+      <expression>trObjectGettingWorked(%Object%)</expression>
+    </condition>
+    <condition name="Unit: Contains Garrisoned Units">
+      <param name="SrcObject" dispname="Source Unit" vartype="unit">-1</param>
+      <param name="Op" dispname="Operator" vartype="operator">==</param>
+      <param name="Count" dispname="Number" vartype="long">1</param>
+      <expression>kbUnitGetNumberContained(%SrcObject%) %Op% %Count%</expression>
+    </condition>
+    <condition name="Unit: Contains Garrisoned Unit Type">
+      <param name="SrcObject" dispname="Source Unit" vartype="unit">-1</param>
+      <param name="UnitType" dispname="Unit Type" vartype="unittype">Unit</param>
+      <param name="Op" dispname="Operator" vartype="operator">==</param>
+      <param name="Count" dispname="Number" vartype="long">1</param>
+      <command>trUnitSelectClear();</command>
+      <command>trUnitSelectByID(%SrcObject%);</command>
+      <expression>kbUnitGetNumberContainedOfType(%SrcObject%, kbGetUnitTypeID("%UnitType%")) %Op% %Count%</expression>
+    </condition>
+    <condition name="Unit: Distance to Point">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <param name="DstPoint" dispname="" vartype="area" dispradius="">0</param>
+      <param name="Op" dispname="Operator" vartype="operator">==</param>
+      <param name="Dist" dispname="Distance" vartype="float" dispradius="">0</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <expression>trUnitDistanceToPoint(%DstPoint%) %Op% %Dist%</expression>
+    </condition>
+    <condition name="Unit: Distance to Unit">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <param name="DstObject" dispname="Target Unit" vartype="unit" dispradius="">-1</param>
+      <param name="Op" dispname="Operator" vartype="operator">==</param>
+      <param name="Dist" dispname="Distance" vartype="float" dispradius="">0</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <expression>trUnitDistanceToUnitID(%DstObject%) %Op% %Dist%</expression>
+    </condition>
+    <condition name="Unit: Has Target">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <param name="ActionOnly" dispname="Action Only" vartype="bool">false</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <expression>trUnitHasTarget(%ActionOnly%)==true</expression>
+    </condition>
+    <condition name="Unit: In Player's Line-of-Sight">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <expression>trUnitHasLOS(%PlayerID%)</expression>
+    </condition>
+    <condition name="Unit: Is Alive">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <expression>trUnitAlive()==true</expression>
+    </condition>
+    <condition name="Unit: Is Attacking">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <expression>trUnitIsAttacking()==true</expression>
+    </condition>
+    <condition name="Unit: Is Dead">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <expression>trUnitDead()==true</expression>
+    </condition>
+    <condition name="Unit: Is Garrisoned inside Unit">
+      <param name="SrcObject" dispname="Source Unit" vartype="unit">-1</param>
+      <param name="ProtoUnit" dispname="Unit" vartype="protounit">default</param>
+      <expression>kbUnitIsContainedBy(%SrcObject%, kbGetUnitTypeID("%ProtoUnit%"))</expression>
+    </condition>
+    <condition name="Unit: Is Immobilized">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <expression>trUnitImmobilized()==true</expression>
+    </condition>
+    <condition name="Unit: Is Playing Animation">
+      <param name="SrcObject" dispname="Source Unit" vartype="unit">-1</param>
+      <param name="AnimName" dispname="Animation" vartype="animname">
+      </param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <expression>kbUnitGetCurAnimationID(%SrcObject%) == kbGetAnimationID("%AnimName%")</expression>
+    </condition>
+    <condition name="Unit: Is Selected">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <expression>trUnitIsSelected()</expression>
+    </condition>
+    <condition name="Unit: Is Anything Selected">
+      <expression>trAnythingIsSelected()</expression>
+    </condition>
+    <condition name="Unit: Is On Lush">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <expression>trUnitInLush(%PlayerID%)==true</expression>
+    </condition>
+    <condition name="Unit: Not Owned By Player">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <expression>trUnitIsNotOwnedBy(%Player%)</expression>
+    </condition>
+    <condition name="Unit: Owned By Player">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <expression>trUnitIsOwnedBy(%Player%)</expression>
+    </condition>
+    <condition name="Unit: Percent Complete">
+      <param name="SrcObject" dispname="Source Unit" vartype="unit">-1</param>
+      <param name="Op" dispname="Operator" vartype="operator">==</param>
+      <param name="Percent" dispname="Percent" vartype="long">100</param>
+      <command>trUnitSelectClear();</command>
+      <command>trUnitSelectByID(%SrcObject%);</command>
+      <expression>trUnitPercentComplete() %Op% %Percent%</expression>
+    </condition>
+    <condition name="Unit: Percent Damaged">
+      <param name="SrcObject" dispname="Source Unit" vartype="unit">-1</param>
+      <param name="Op" dispname="Operator" vartype="operator">==</param>
+      <param name="Percent" dispname="Percent" vartype="long">100</param>
+      <command>trUnitSelectClear();</command>
+      <command>trUnitSelectByID(%SrcObject%);</command>
+      <expression>trUnitPercentDamaged() %Op% %Percent%</expression>
+    </condition>
+    <condition name="Unit: Visible On Screen">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <expression>trUnitVisibleToPlayer()==true</expression>
+    </condition>
+    <condition name="Unit Type: In Area">
+      <param name="DstObject" dispname="Center Unit" vartype="unit" dispradius="">-1</param>
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="UnitType" dispname="Unit Type" vartype="unittype">Unit</param>
+      <param name="Dist" dispname="Radius" vartype="float" dispradius="">10</param>
+      <param name="Op" dispname="Operator" vartype="operator">==</param>
+      <param name="Count" dispname="Count" vartype="float">1</param>
+      <expression>kbUnitTypeCountInArea("%UnitType%", %Player%, cUnitStateAlive, %DstObject%, %Dist%) %Op% %Count%</expression>
+    </condition>
+    <condition name="Unit Type: Is Selected">
+      <param name="ProtoUnit" dispname="Unit" vartype="protounit">default</param>
+      <param name="CheckIdle" dispname="Check for Idle:" vartype="bool">false</param>
+      <expression>trUnitTypeIsSelected("%ProtoUnit%", %CheckIdle%)</expression>
+    </condition>
+    <condition name="Proto Unit: Is Hovered">
+      <param name="ProtoUnit" dispname="Unit" vartype="protounit">default</param>
+      <expression>trUnitTypeIsHovered("%ProtoUnit%")</expression>
+    </condition>
+    <condition name="God Power: In Effect">
+      <param name="PowerName" dispname="Power" vartype="godpower">default</param>
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <expression>kbGodPowerCheckActive(kbGodPowerGetID("%PowerName%"), %Player%)</expression>
+    </condition>
+    <condition name="God Power: In Effect for any Player">
+      <param name="PowerName" dispname="Power" vartype="godpower">default</param>
+      <expression>kbGodPowerCheckActiveForAnyPlayer(kbGodPowerGetID("%PowerName%"))</expression>
+    </condition>
+    <condition name="God Power: Has Been Used">
+      <param name="PowerName" dispname="Power" vartype="godpower">default</param>
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <expression>kbGodPowerGetNumUsedTimes(kbGodPowerGetID("%PowerName%"), %Player%) &gt; 0</expression>
+    </condition>
+    <condition name="God Power: Is Available for Player">
+      <param name="PowerName" dispname="Power" vartype="godpower">default</param>
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <command>int powerID = kbGodPowerGetID("%PowerName%");</command>
+      <expression>(kbGodPowerGetNumCharges(powerID, %Player%) &gt; 0 || kbGodPowerIsRepeatable(powerID, %Player%)) &amp;&amp; kbGodPowerIsOnCooldown(powerID, %Player%) == false</expression>
+    </condition>
+    <condition name="God Power: Is Repeatable">
+      <param name="PowerName" dispname="Power" vartype="godpower">default</param>
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <expression>kbGodPowerIsRepeatable(kbGodPowerGetID("%PowerName%"), %Player%) == true</expression>
+    </condition>
+    <condition name="God Power: Remaining Uses">
+      <param name="PowerName" dispname="Power" vartype="godpower">default</param>
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="Op" dispname="Operator" vartype="operator">==</param>
+      <param name="Value" dispname="Value" vartype="long">0</param>
+      <expression>kbGodPowerGetNumCharges(kbGodPowerGetID("%PowerName%"), %Player%) %Op% %Value%</expression>
+    </condition>
+    <condition name="UI: Is Dialog Open">
+      <param name="Dialog" dispname="Dialog" vartype="wpfdialog">0</param>
+      <expression>trWPFDialogOpen(%Dialog%)</expression>
+    </condition>
+    <condition name="UI: Is In Gamepad Mode">
+      <expression>trInGamepadMode()</expression>
+    </condition>
+    <condition name="UI: Is Radial Menu Page Open">
+      <param name="Menu" dispname="Menu" vartype="wpfradialmenu">0</param>
+      <expression>trInRadialMenuPage(%Menu%)</expression>
+    </condition>
+    <condition name="UI: Is In Input Context">
+      <param name="Context" dispname="Context" vartype="inputcontext">world</param>
+      <expression>trInInputContext("%Context%")</expression>
+    </condition>
+    <condition name="UI: Is Minimap Expanded">
+      <expression>trIsMinimapExpanded()</expression>
+    </condition>
+    <condition name="XS: Code Snippet" directcode="">
+      <param name="CommandSnippet" dispname="Command" vartype="snippetsmall">
+      </param>
+      <param name="ExpressionSnippet" dispname="Expression" vartype="snippetsmall">
+      </param>
+      <command>%CommandSnippet%</command>
+      <expression>%ExpressionSnippet%</expression>
+    </condition>
+  </conditions>
+  <effects>
+    <effect name="Trigger: Activate">
+      <param name="EventID" dispname="Trigger" vartype="event">-1</param>
+      <command>trEventFire(%EventID%);</command>
+    </effect>
+    <effect name="Trigger: Deactivate">
+      <param name="EventID" dispname="Trigger" vartype="event">-1</param>
+      <command>trDisableTrigger(%EventID%);</command>
+    </effect>
+    <effect name="AI: Activate">
+      <param name="Player" dispname="Player" vartype="player">2</param>
+      <command>trExecuteOnAI(%Player%, "scenarioAIRemoveInactive()");</command>
+    </effect>
+    <effect name="AI: Start Inactive">
+      <param name="Player" dispname="Player" vartype="player">2</param>
+      <command>trExecuteOnAI(%Player%, "scenarioAIStartInactive()");</command>
+    </effect>
+    <effect name="AI: Disable">
+      <param name="Player" dispname="Player" vartype="player">2</param>
+      <command>trExecuteOnAI(%Player%, "scenarioDisableAI()");</command>
+    </effect>
+    <effect name="AI: Add Army to Plan">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="PlanName" dispname="Plan Name" vartype="string">PlanName</param>
+      <command>trAddArmyToPlan("%SrcArmy%", "%PlanName%");</command>
+    </effect>
+    <effect name="AI: Create Attack Plan">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="PlanName" dispname="Plan Name" vartype="string">AttackPoint</param>
+      <param name="Player" dispname="Attack Player" vartype="player">1</param>
+      <param name="Area" dispname="" vartype="area">0, 0, 0</param>
+      <param name="EngageRange" dispname="Engage Range" vartype="float">50</param>
+      <param name="EvaluationFrequency" dispname="Frequency" vartype="long">5000</param>
+      <param name="Priority" dispname="Priority" vartype="long">50</param>
+      <command>if (true)</command>
+      <command>{</command>
+      <command>void(int, int, string, int, vector, float, int, int) wrapper = [](</command>
+      <command>int playerIdentifier = 2,</command>
+      <command>int armyID = -1,</command>
+      <command>string planName = "",</command>
+      <command>int playerToAttack = 1,</command>
+      <command>vector location = cOriginVector,</command>
+      <command>float engageRange = 50.0,</command>
+      <command>int evaluationFrequency = 5000,</command>
+      <command>int pri = 50)</command>
+      <command>{</command>
+      <command>trExecuteOnAI(playerIdentifier, "scenarioCreateAttackPlan("+armyID+", "+planName+", "+playerToAttack+", vector"+location+", "+engageRange+", "+evaluationFrequency+", "+pri+")");</command>
+      <command>};</command>
+      <command>wrapper(%SrcArmy%, "%PlanName%", %Player%, vector(%Area%), %EngageRange%, %EvaluationFrequency%, %Priority%);</command>
+      <command>}</command>
+    </effect>
+    <effect name="AI: Create Defend Plan">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="PlanName" dispname="Plan Name" vartype="string">DefendPoint</param>
+      <param name="Area" dispname="" vartype="area">0, 0, 0</param>
+      <param name="EngageRange" dispname="Engage Range" vartype="float">50</param>
+      <param name="EvaluationFrequency" dispname="Frequency" vartype="long">5000</param>
+      <param name="GatherDistance" dispname="Gather Distance" vartype="float">25</param>
+      <param name="Priority" dispname="Priority" vartype="long">50</param>
+      <command>if (true)</command>
+      <command>{</command>
+      <command>void(int, int, string, vector, float, int, float, int) wrapper = [](</command>
+      <command>int playerIdentifier = 2,</command>
+      <command>int armyID = -1,</command>
+      <command>string planName = "",</command>
+      <command>vector location = cOriginVector,</command>
+      <command>float engageRange = 50.0,</command>
+      <command>int evaluationFrequency = 5000,</command>
+      <command>float gatherDistance = 25.0,</command>
+      <command>int pri = 50)</command>
+      <command>{</command>
+      <command>trExecuteOnAI(playerIdentifier, "scenarioCreateDefendPlan("+armyID+", "+planName+", vector"+location+", "+engageRange+", "+evaluationFrequency+", "+gatherDistance+", "+pri+")");</command>
+      <command>};</command>
+      <command>wrapper(%SrcArmy%, "%PlanName%", vector(%Area%), %EngageRange%, %EvaluationFrequency%, %GatherDistance%, %Priority%);</command>
+      <command>}</command>
+    </effect>
+    <effect name="AI: Call Function/Syscall/Rule">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="Command" dispname="Command" vartype="string">
+      </param>
+      <command>trExecuteOnAI(%Player%, "%Command%");</command>
+    </effect>
+    <effect name="AI: Kill Plan">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="PlanName" dispname="Plan Name" vartype="string">PlanName</param>
+      <command>trKillAIPlan(%Player%, "%PlanName%");</command>
+    </effect>
+    <effect name="AI: Set Attack Response Distance">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="Distance" dispname="Distance" vartype="float">0.0</param>
+      <command>trAISetAttackResponseDistance(%Player%, %Distance%);</command>
+    </effect>
+    <effect name="Area: Convert Units">
+      <param name="SrcObject" dispname="Center Unit" vartype="unit" dispradius="">-1</param>
+      <param name="SrcPlayer" dispname="Source Player" vartype="player">1</param>
+      <param name="TrgPlayer" dispname="Target Player" vartype="player">1</param>
+      <param name="UnitType" dispname="Unit Type" vartype="unittype">Unit</param>
+      <param name="Dist" dispname="Radius" vartype="float" dispradius="">10</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trConvertUnitsInArea(%SrcPlayer%,%TrgPlayer%,"%UnitType%",%Dist%);</command>
+    </effect>
+    <effect name="Area: Damage Units">
+      <param name="SrcObject" dispname="Center Unit" vartype="unit" dispradius="">-1</param>
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="UnitType" dispname="Unit Type" vartype="unittype">Unit</param>
+      <param name="Dist" dispname="Radius" vartype="float" dispradius="">10</param>
+      <param name="Damage" dispname="Damage" vartype="float">50</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trDamageUnitsInArea(%Player%,"%UnitType%",%Dist%,%Damage%);</command>
+    </effect>
+    <effect name="Area: Damage Units by Percentage">
+      <param name="SrcObject" dispname="Center Unit" vartype="unit" dispradius="">-1</param>
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="UnitType" dispname="Unit Type" vartype="unittype">Unit</param>
+      <param name="Dist" dispname="Radius" vartype="float" dispradius="">10</param>
+      <param name="DamagePct" dispname="DamagePct" vartype="float">50</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trDamageUnitsPercentInArea(%Player%,"%UnitType%",%Dist%,%DamagePct%);</command>
+    </effect>
+    <effect name="Area: Heal Units">
+      <param name="SrcObject" dispname="Center Unit" vartype="unit" dispradius="">-1</param>
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="UnitType" dispname="Unit Type" vartype="unittype">Unit</param>
+      <param name="Dist" dispname="Radius" vartype="float" dispradius="">10</param>
+      <param name="HealAmt" dispname="Amount" vartype="float">50</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trHealUnitsInArea(%Player%,"%UnitType%",%Dist%,%HealAmt%);</command>
+    </effect>
+    <effect name="Area: Heal Units by Percentage">
+      <param name="SrcObject" dispname="Center Unit" vartype="unit" dispradius="">-1</param>
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="UnitType" dispname="Unit Type" vartype="unittype">Unit</param>
+      <param name="Dist" dispname="Radius" vartype="float" dispradius="">10</param>
+      <param name="HealPct" dispname="HealPct" vartype="float">50</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trHealUnitsPercentInArea(%Player%,"%UnitType%",%Dist%,%HealPct%);</command>
+    </effect>
+    <effect name="Area: Kill Units">
+      <param name="SrcObject" dispname="Center Unit" vartype="unit" dispradius="">-1</param>
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="UnitType" dispname="Unit Type" vartype="unittype">Unit</param>
+      <param name="Dist" dispname="Radius" vartype="float" dispradius="">10</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trKillUnitsInArea(%Player%,"%UnitType%",%Dist%);</command>
+    </effect>
+    <effect name="Area: Remove Units">
+      <param name="SrcObject" dispname="Center Unit" vartype="unit" dispradius="">-1</param>
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="UnitType" dispname="Unit Type" vartype="unittype">Unit</param>
+      <param name="Dist" dispname="Radius" vartype="float" dispradius="">10</param>
+      <param name="EjectContained" dispname="Eject Contained:" vartype="bool">false</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trRemoveUnitsInArea(%Player%,"%UnitType%",%Dist%,%EjectContained%);</command>
+    </effect>
+    <effect name="Area: Change Type">
+      <param name="SrcObject" dispname="Center Unit" vartype="unit" dispradius="">-1</param>
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="UnitType" dispname="Unit Type" vartype="unittype">Unit</param>
+      <param name="Dist" dispname="Radius" vartype="float" dispradius="">10</param>
+      <param name="DstProtoUnit" dispname="ProtoUnit" vartype="protounit">
+      </param>
+      <param name="SkipBirth" dispname="Skip Birth Anim:" vartype="bool">false</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trChangeProtoUnitInArea(%Player%,"%UnitType%",%Dist%,"%DstProtoUnit%", %SkipBirth%);</command>
+    </effect>
+    <effect name="Army: Apply Effect">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="Effect" dispname="Effect" vartype="uniteffect">0</param>
+      <param name="Duration" dispname="Duration (s)" vartype="float">0</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitApplyEffect(%Effect%, %Duration%);</command>
+    </effect>
+    <effect name="Army: Apply Effect with Damage">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="Effect" dispname="Effect" vartype="uniteffectdamage">0</param>
+      <param name="Duration" dispname="Duration (s)" vartype="float">0</param>
+      <param name="DmgType" dispname="Damage Type" vartype="damagetype">-1</param>
+      <param name="Amount" dispname="Amount" vartype="float">1.0</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitApplyEffectDamage(%Effect%, %Duration%, %Amount%, %DmgType%);</command>
+    </effect>
+    <effect name="Army: Apply Effect by ProtoUnit">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="Effect" dispname="Effect" vartype="uniteffectprotounit">0</param>
+      <param name="Duration" dispname="Duration (s)" vartype="float">0</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="ProtoName" dispname="ProtoName" vartype="protounit">Villager</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitApplyEffectProtoUnit(%Effect%, %Duration%, %PlayerID%, "%ProtoName%");</command>
+    </effect>
+    <effect name="Army: Add Modifier">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="ModifyType" dispname="Modify Type" vartype="modifytype">0</param>
+      <param name="DmgType" dispname="Damage Type" vartype="damagetype">-1</param>
+      <param name="Amount" dispname="Amount" vartype="float">1.0</param>
+      <param name="Duration" dispname="Duration (s)" vartype="float">0</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitAddModifier(%ModifyType%, %DmgType%, %Amount%, %Duration%);</command>
+    </effect>
+    <effect name="Army: Adjust Modifier">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="ModifyType" dispname="Modify Type" vartype="modifytype">0</param>
+      <param name="DmgType" dispname="Damage Type" vartype="damagetype">-1</param>
+      <param name="Delta" dispname="Delta" vartype="float">1.0</param>
+      <param name="Relativity" dispname="Relativity" vartype="purelativity">0</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitAdjustModifier(%ModifyType%, %DmgType%, %Delta%, %Relativity%);</command>
+    </effect>
+    <effect name="Army: Change Unit Name">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="NewName" dispname="Name" vartype="stringid">Name</param>
+      <param name="ProtoName" dispname="ProtoName" vartype="protounit">Villager</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trArmyUnitChangeName("%NewName%", "%ProtoName%");</command>
+    </effect>
+    <effect name="Army: Change Unit Type">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">Villager</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitChangeProtoUnit("%ProtoUnit%");</command>
+    </effect>
+    <effect name="Army: Construct Building">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="ProtoUnit" dispname="ProtoUnit To Build" vartype="protounit">default</param>
+      <param name="DstPoint" dispname="Build Location" vartype="area">0</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitBuildUnit("%ProtoUnit%", vector(%DstPoint%));</command>
+    </effect>
+    <effect name="Army: Convert">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitConvert(%PlayerID%);</command>
+    </effect>
+    <effect name="Army: Flash">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="Duration" dispname="Seconds" vartype="float">2.5</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitHighlight(%Duration%, true);</command>
+    </effect>
+    <effect name="Army: Garrison">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="DstObject" dispname="Target Unit" vartype="unit">-1</param>
+      <param name="EventID" dispname="Trigger" vartype="event">-1</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitGarrison(%DstObject%, %EventID%);</command>
+    </effect>
+    <effect name="Army: Highlight">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="Duration" dispname="Seconds" vartype="float">2.5</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitHighlight(%Duration%, false);</command>
+    </effect>
+    <effect name="Army: Kill">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitDelete(false);</command>
+    </effect>
+    <effect name="Army: Make Invulnerable">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="Enable" dispname="Enable" vartype="bool">true</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitMakeInvulnerable(%Enable%);</command>
+    </effect>
+    <effect name="Army: Move to Point">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="DstPoint" dispname="X" vartype="area">0</param>
+      <param name="EventID" dispname="Trigger" vartype="event">-1</param>
+      <param name="AttackMove" dispname="Attack Move" vartype="bool">false</param>
+      <param name="Run" dispname="Run" vartype="bool">false</param>
+      <param name="RunSpeed" dispname="Run Speed" vartype="float">1.0</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitMoveToPoint(%DstPoint%, %EventID%, %AttackMove%, %Run%, %RunSpeed%);</command>
+    </effect>
+    <effect name="Army: Move to Unit">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="DstObject" dispname="Target Unit" vartype="unit">-1</param>
+      <param name="EventID" dispname="Trigger" vartype="event">-1</param>
+      <param name="AttackMove" dispname="Attack Move" vartype="bool">false</param>
+      <param name="Run" dispname="Run" vartype="bool">false</param>
+      <param name="RunSpeed" dispname="Run Speed" vartype="float">1.0</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitMoveToUnit(%DstObject%, %EventID%, %AttackMove%, %Run%, %RunSpeed%);</command>
+    </effect>
+    <effect name="Army: Mutate">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">Villager</param>
+      <param name="FullHitpoints" dispname="Force Full Hitpoints" vartype="bool">false</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitMutate("%ProtoUnit%", %FullHitpoints%);</command>
+    </effect>
+    <effect name="Army: Patrol to Point">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="DstPoint" dispname="X" vartype="area">0</param>
+      <param name="Run" dispname="Run" vartype="bool">false</param>
+      <param name="RunSpeed" dispname="Run Speed" vartype="float">1.0</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitPatrolToPoint(%DstPoint%, %Run%, %RunSpeed%);</command>
+    </effect>
+    <effect name="Army: Perform Action">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">Villager</param>
+      <param name="Action" dispname="Action" vartype="protoaction">
+      </param>
+      <param name="DstObject" dispname="Target Unit" vartype="unit" dispradius="">-1</param>
+      <param name="DstPoint" dispname="X" vartype="area">-1,-1,-1</param>
+      <param name="BypassCharge" dispname="Bypass Charge" vartype="bool">false</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitPerformAction("%Action%", %DstObject%, vector(%DstPoint%), %BypassCharge%);</command>
+    </effect>
+    <effect name="Army: Remove">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitDelete();</command>
+    </effect>
+    <effect name="Army: Reveal">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Reveal" dispname="Reveal" vartype="bool">true</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitReveal(%PlayerID%, %Reveal%);</command>
+    </effect>
+    <effect name="Army: Reposition">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="Area" dispname="" vartype="area">0, 0, 0</param>
+      <param name="DisableTie" dispname="Disable Tying" vartype="bool">false</param>
+      <param name="Immediate" dispname="Immediate" vartype="bool">false</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitReposition(%Area%, %DisableTie%, %Immediate%);</command>
+    </effect>
+    <effect name="Army: Reposition To Unit">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="DstObject" dispname="Target Unit" vartype="unit">-1</param>
+      <param name="DisableTie" dispname="Disable Tying" vartype="bool">false</param>
+      <param name="Immediate" dispname="Immediate" vartype="bool">false</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitRepositionToUnit(%DstObject%, %DisableTie%, %Immediate%);</command>
+    </effect>
+    <effect name="Army: Set Animation">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="ProtoName" dispname="ProtoName" vartype="protounit">default</param>
+      <param name="AnimName" dispname="Animation" vartype="animname">
+      </param>
+      <param name="AnimVersion" dispname="Variation" vartype="animvariation">0</param>
+      <param name="LoopIt" dispname="Loop:" vartype="bool">false</param>
+      <param name="EventID" dispname="Trigger" vartype="event">-1</param>
+      <param name="NoIdlePop" dispname="No Idle Pop:" vartype="bool">false</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitSetAnimationPath("%AnimName%","%AnimVersion%",%LoopIt%,%EventID%,%NoIdlePop%);</command>
+    </effect>
+    <effect name="Army: Rotate Around X Axis">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="Angle" dispname="Angle (0-359)" vartype="long">0</param>
+      <param name="DisableTie" dispname="Disable Tying" vartype="bool">false</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitRotateX(%Angle%, %DisableTie%);</command>
+    </effect>
+    <effect name="Army: Rotate Around Y Axis">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="Angle" dispname="Angle (0-359)" vartype="long">0</param>
+      <param name="DisableTie" dispname="Disable Tying" vartype="bool">false</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitRotateY(%Angle%, %DisableTie%);</command>
+    </effect>
+    <effect name="Army: Rotate Around Z Axis">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="Angle" dispname="Angle (0-359)" vartype="long">0</param>
+      <param name="DisableTie" dispname="Disable Tying" vartype="bool">false</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitRotateZ(%Angle%, %DisableTie%);</command>
+    </effect>
+    <effect name="Army: Set Orientation Forward" hidden="">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="Forward" dispname="Forward (0-359)" vartype="long">0</param>
+      <param name="DisableTie" dispname="Disable Tying" vartype="bool">false</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitSetOrientationForward(%Forward%, %DisableTie%);</command>
+    </effect>
+    <effect name="Army: Set Orientation Up" hidden="">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="Up" dispname="Up (0-359)" vartype="long">0</param>
+      <param name="DisableTie" dispname="Disable Tying" vartype="bool">false</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitSetOrientationUp(%Up%, %DisableTie%);</command>
+    </effect>
+    <effect name="Army: Set Orientation Right" hidden="">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="Right" dispname="Right (0-359)" vartype="long">0</param>
+      <param name="DisableTie" dispname="Disable Tying" vartype="bool">false</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitSetOrientationRight(%Right%, %DisableTie%);</command>
+    </effect>
+    <effect name="Army: Set Variation">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="Variation" dispname="Variation" vartype="long">0</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitSetVariation(%Variation%);</command>
+    </effect>
+    <effect name="Army: Set Stance">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="Stance" dispname="Stance" vartype="unitstance">Aggressive</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitSetStance("%Stance%");</command>
+    </effect>
+    <effect name="Army: Set Shading">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="Shading" dispname="Shading Type" vartype="shadingtype">-1</param>
+      <param name="Opacity" dispname="Opacity (0-100)" vartype="float">100</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitSetShading(%Shading%, %Opacity%);</command>
+    </effect>
+    <effect name="Army: Spawn">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="ProtoName" dispname="ProtoName" vartype="protounit">Villager</param>
+      <param name="Location" dispname="" vartype="area">0,0,0</param>
+      <param name="Count" dispname="Count" vartype="long">0</param>
+      <param name="Heading" dispname="Heading (0-359)" vartype="long">0</param>
+      <param name="Clear" dispname="Clear Existing Units:" vartype="bool">true</param>
+      <param name="SkipBirth" dispname="Skip Birth Anim:" vartype="bool">false</param>
+      <command>trArmyDispatch("%SrcArmy%", "%ProtoName%", %Count%, %Location%, %Heading%, %Clear%, %SkipBirth%);</command>
+    </effect>
+    <effect name="Army: Spawn at Unit">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="ProtoName" dispname="ProtoName" vartype="protounit">Villager</param>
+      <param name="TrgUnit" dispname="Target Unit" vartype="unit">-1</param>
+      <param name="Count" dispname="Count" vartype="long">0</param>
+      <param name="Heading" dispname="Heading (0-359)" vartype="long">0</param>
+      <param name="Clear" dispname="Clear Existing Units:" vartype="bool">true</param>
+      <param name="SkipBirth" dispname="Skip Birth Anim:" vartype="bool">false</param>
+      <command>trArmyDispatchAtUnit("%SrcArmy%", "%ProtoName%", %Count%, %TrgUnit%, %Heading%, %Clear%, %SkipBirth%);</command>
+    </effect>
+    <effect name="Army: Clear">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <command>trArmyClear("%SrcArmy%");</command>
+    </effect>
+    <effect name="Army: Task">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="DstObject" dispname="Target Unit" vartype="unit">-1</param>
+      <param name="EventID" dispname="Trigger" vartype="event">-1</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitDoWorkOnUnit(%DstObject%,%EventID%);</command>
+    </effect>
+    <effect name="Army: Task to Army">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="TrgArmy" dispname="Target Army" vartype="group">default</param>
+      <param name="EventID" dispname="Trigger" vartype="event">-1</param>
+      <command>trArmyDoWorkOnArmy("%SrcArmy%", "%TrgArmy%", %EventID%);</command>
+    </effect>
+    <effect name="Army: Teleport to Point">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="Area" dispname="" vartype="area">0, 0, 0</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitTeleport(%Area%);</command>
+    </effect>
+    <effect name="Army: Throw">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="Direction" dispname="Direction (0-359)" vartype="long">0</param>
+      <param name="Distance" dispname="Distance" vartype="float">15</param>
+      <param name="NumBounces" dispname="Number of Bounces" vartype="long">1</param>
+      <param name="MaxHeight" dispname="Max. Height" vartype="float">6</param>
+      <param name="MaxVelocity" dispname="Max. Velocity" vartype="float">10</param>
+      <param name="SpinPeriod" dispname="Spin Period" vartype="float">0.1</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitThrow(%Direction%, %Distance%, %NumBounces%, %MaxHeight%, %MaxVelocity%, %SpinPeriod%);</command>
+    </effect>
+    <effect name="Army: Turn to Face Direction">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="Heading" dispname="Heading (0-359)" vartype="long">0</param>
+      <command>trArmySelect("%SrcArmy%");</command>
+      <command>trUnitSetHeading(%Heading%);</command>
+    </effect>
+    <effect name="Camera: Cut to Camera State View">
+      <param name="CamStateID" dispname="Camera State" vartype="camstate">
+      </param>
+      <command>trCameraStateView(%CamStateID%);</command>
+    </effect>
+    <effect name="Camera: Cut to Camera State View for Player">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="CamStateID" dispname="Camera State" vartype="camstate">
+      </param>
+      <command>trCameraStateView(%CamStateID%, %Player%);</command>
+    </effect>
+    <effect name="Camera: Cut to View">
+      <param name="CameraInfo" dispname="Set Cut" vartype="camerainfo">
+      </param>
+      <command>trCameraCut(%CameraInfo%);</command>
+    </effect>
+    <effect name="Camera: Cut to View for Player">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="CameraInfo" dispname="Set Cut" vartype="camerainfo">
+      </param>
+      <command>trCameraCutPlayer(%Player%, %CameraInfo%);</command>
+    </effect>
+    <effect name="Camera: Face Unit">
+      <param name="DstObject" dispname="Target Unit" vartype="unit">-1</param>
+      <param name="Timer_ms" dispname="Panning duration in Milliseconds" vartype="long">0</param>
+      <param name="Enable" dispname="Enable" vartype="bool">true</param>
+      <param name="EventID" dispname="Trigger" vartype="event">-1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="DstObject">trUnitSelectByID(%DstObject%);</command>
+      <command>trCameraLockOnUnit(%Enable%,%Timer_ms%,%EventID%);</command>
+    </effect>
+    <effect name="Camera: Follow Unit">
+      <param name="DstObject" dispname="Target Unit" vartype="unit">-1</param>
+      <param name="Enable" dispname="Enable" vartype="bool">true</param>
+      <param name="EventID" dispname="Trigger" vartype="event">-1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="DstObject">trUnitSelectByID(%DstObject%);</command>
+      <command>trCameraPanWithUnit(%Enable%, %EventID%);</command>
+    </effect>
+    <effect name="Camera: Lock">
+      <param name="Lock" dispname="Lock" vartype="bool">true</param>
+      <command>trCameraLock(%Lock%);</command>
+    </effect>
+    <effect name="Camera: Play Track">
+      <param name="TrackName" dispname="Name" vartype="camtrack">default</param>
+      <param name="EventID" dispname="Trigger" vartype="event">-1</param>
+      <param name="BlendWithGameCamera" dispname="BlendWithGameCamera" vartype="bool">false</param>
+      <param name="BlendTime" dispname="BlendTime" vartype="float">5000</param>
+      <command>trCameraTrackLoad("%TrackName%");</command>
+      <command>trCameraTrackPlay(-1, %EventID%, %BlendWithGameCamera%, %BlendTime%);</command>
+    </effect>
+    <effect name="Camera: Play Track for Player">
+      <param name="TrackName" dispname="Name" vartype="camtrack">default</param>
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="BlendWithGameCamera" dispname="BlendWithGameCamera" vartype="bool">false</param>
+      <param name="BlendTime" dispname="BlendTime" vartype="float">5000</param>
+      <command>trCameraTrackPlayPlayer("%TrackName%", %Player%, %BlendWithGameCamera%, %BlendTime%);</command>
+    </effect>
+    <effect name="Camera: Shake">
+      <param name="Duration" dispname="Duration" vartype="float">5.0</param>
+      <param name="Strength" dispname="Strength" vartype="float">0.25</param>
+      <command>trCameraShake(%Duration%, %Strength%);</command>
+    </effect>
+    <effect name="Campaign: Start New Campaign">
+      <param name="Campaign" dispname="Next Campaign Path" vartype="string">default</param>
+      <param name="Text" dispname="Message" vartype="stringid">Advance</param>
+      <command>trCampaignStartNew("%Text%", "%Campaign%");</command>
+    </effect>
+    <effect name="Campaign: Lose Mission">
+      <command>trCampaignLoseMission();</command>
+    </effect>
+    <effect name="Campaign: Advance to the Next Mission">
+      <command>trCampaignProgress();</command>
+    </effect>
+    <effect name="Campaign: Advance to the Next Mission Prompt">
+      <command>trCampaignProgressChoice();</command>
+    </effect>
+    <effect name="Tutorial: Advance to Fall Of The Trident Campaign Prompt">
+      <command>trTutorialEndChoice();</command>
+    </effect>
+    <effect name="Campaign: Advance to the Next Mission Prompt Skip">
+      <param name="Text" dispname="Text" vartype="stringid">
+      </param>
+      <param name="Prompt" dispname="Display Prompt" vartype="bool">true</param>
+      <command>trCampaignBranchChoice("%Text%", %Prompt%);</command>
+    </effect>
+    <effect name="Chat: Character Dialogue">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="MsgStrID" dispname="Message" vartype="stringid">
+      </param>
+      <param name="SpeakerStrID" dispname="Speaker" vartype="stringid">
+      </param>
+      <param name="PortraitStrID" dispname="Portrait Path" vartype="stringid">
+      </param>
+      <param name="Sound" dispname="Sound" vartype="sound">default</param>
+      <param name="EventID" dispname="Trigger" vartype="event">-1</param>
+      <param name="Ignore" dispname="Ignore Event on Sound Abort" vartype="bool">false</param>
+      <param name="Seconds" dispname="Event Delay (ms)" vartype="long">1</param>
+      <param name="OverrideSoundLength" dispname="Override Sound Duration" vartype="bool">false</param>
+      <command>trSoundPlayDialogue(%PlayerID%, "%MsgStrID%", "%SpeakerStrID%", "%PortraitStrID%", "%Sound%", %EventID%, %Ignore%, %Seconds%, %OverrideSoundLength%);</command>
+    </effect>
+    <effect name="Chat: Talking Heads Dialog">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="MsgStrID" dispname="Message" vartype="stringid">
+      </param>
+      <param name="SpeakerStrID" dispname="Speaker" vartype="stringid">
+      </param>
+      <param name="PortraitPathLeft" dispname="Portrait Path Left" vartype="stringid">
+      </param>
+      <param name="PortraitPathRight" dispname="Portrait Path Right" vartype="stringid">
+      </param>
+      <param name="SpeakerIsLeftSide" dispname="Speaker is Left Side" vartype="bool">true</param>
+      <param name="Sound" dispname="Sound" vartype="sound">default</param>
+      <param name="EventID" dispname="Trigger" vartype="event">-1</param>
+      <param name="Ignore" dispname="Ignore Event on Sound Abort" vartype="bool">false</param>
+      <param name="Seconds" dispname="Event Delay (ms)" vartype="long">1</param>
+      <command>trSoundPlayDialogueTalkingHeads(%PlayerID%, "%MsgStrID%", "%SpeakerStrID%", "%PortraitPathLeft%", "%PortraitPathRight%", %SpeakerIsLeftSide%, "%Sound%", %EventID%, %Ignore%, %Seconds%);</command>
+    </effect>
+    <effect name="Chat: Clear Chat History">
+      <command>trChatHistoryClear();</command>
+    </effect>
+    <effect name="Chat: Send Chat">
+      <param name="PlayerID" dispname="From Player" vartype="player">1</param>
+      <param name="Message" dispname="Message" vartype="stringid">default</param>
+      <command>trChatSend(%PlayerID%, "%Message%");</command>
+    </effect>
+    <effect name="Chat: Send Chat to Player">
+      <param name="PlayerID" dispname="From Player" vartype="player">1</param>
+      <param name="ToPlayerID" dispname="To Player" vartype="player">1</param>
+      <param name="Message" dispname="Message" vartype="stringid">default</param>
+      <command>trChatSendToPlayer(%PlayerID%, %ToPlayerID%, "%Message%");</command>
+    </effect>
+    <effect name="Chat: Send Spoofed Chat">
+      <param name="PlayerID" dispname="Fake Player" vartype="player">1</param>
+      <param name="Message" dispname="Message" vartype="stringid">default</param>
+      <command>trChatSendSpoofed(%PlayerID%, "%Message%");</command>
+    </effect>
+    <effect name="Chat: Send Spoofed Chat to Player">
+      <param name="PlayerID" dispname="Fake Player" vartype="player">1</param>
+      <param name="ToPlayerID" dispname="To Player" vartype="player">1</param>
+      <param name="Message" dispname="Message" vartype="stringid">default</param>
+      <command>trChatSendSpoofedToPlayer(%PlayerID%, %ToPlayerID%, "%Message%");</command>
+    </effect>
+    <effect name="Chat: Toggle Chat On/Off">
+      <param name="Active" dispname="Status:" vartype="bool">true</param>
+      <command>trChatSetStatus(%Active%);</command>
+    </effect>
+    <effect name="Chat: Keep Last Messages On Screen">
+      <param name="Active" dispname="Status:" vartype="bool">true</param>
+      <command>trChatKeepLastMessagesOnScreen(%Active%);</command>
+    </effect>
+    <effect name="Chat: Clear HUD Messages">
+      <command>trChatClearHudMessages();</command>
+    </effect>
+    <effect name="Cinematic: Fade Screen">
+      <param name="R" dispname="Red" vartype="long">0</param>
+      <param name="G" dispname="Green" vartype="long">0</param>
+      <param name="B" dispname="Blue" vartype="long">0</param>
+      <param name="Duration" dispname="Duration(ms)" vartype="long">1000</param>
+      <param name="Delay" dispname="Delay(ms)" vartype="long">1000</param>
+      <param name="Fade" dispname="Fade" vartype="bool">true</param>
+      <param name="EventID" dispname="Trigger" vartype="event">-1</param>
+      <command>trUIFadeToColor(%R%,%G%,%B%,%Duration%,%Delay%,%Fade%,%EventID%);</command>
+    </effect>
+    <effect name="Cinematic: Toggle Cinematic Mode">
+      <param name="Enter" dispname="Mode:" vartype="bool">true</param>
+      <param name="Letterbox" dispname="Letterbox:" vartype="bool">true</param>
+      <command>trLetterBox(%Enter%, %Letterbox%);</command>
+    </effect>
+    <effect name="Cinematic: Toggle Obscured Unit Outlines">
+      <param name="IdleProc" dispname="Obscure Units:" vartype="bool">false</param>
+      <command>trSetObscuredUnits(%IdleProc%);</command>
+    </effect>
+    <effect name="Counter: Custom: Add">
+      <param name="Name" dispname="Name" vartype="string">countdown</param>
+      <param name="Min" dispname="Initial Value" vartype="long">0</param>
+      <param name="Count" dispname="Total" vartype="long">0</param>
+      <param name="Msg" dispname="Message" vartype="stringid">The End is Near</param>
+      <param name="Event" dispname="Trigger" vartype="event">-1</param>
+      <param name="ShowCount" dispname="Show Total" vartype="bool">false</param>
+      <param name="Reverse" dispname="Reverse Count" vartype="bool">false</param>
+      <command>trCounterAddGenericXS("%Name%", "%Msg%", "", "", %Event%, %Min%, %Count%, %Reverse%, %ShowCount%);</command>
+    </effect>
+    <effect name="Counter: Custom: Increment">
+      <param name="Name" dispname="Name" vartype="string">countdown</param>
+      <param name="Amount" dispname="Amount" vartype="long">1</param>
+      <command>trCounterIncrementManual("%Name%", %Amount%);</command>
+    </effect>
+    <effect name="Counter: Custom: Decrement">
+      <param name="Name" dispname="Name" vartype="string">countdown</param>
+      <param name="Amount" dispname="Amount" vartype="long">1</param>
+      <command>trCounterDecrementManual("%Name%", %Amount%);</command>
+    </effect>
+    <effect name="Counter: Custom: Set">
+      <param name="Name" dispname="Name" vartype="string">countdown</param>
+      <param name="Value" dispname="Value" vartype="long">0</param>
+      <command>trCounterSetManual("%Name%", %Value%);</command>
+    </effect>
+    <effect name="Counter: String: Set">
+      <param name="Name" dispname="Name" vartype="string">countdown</param>
+      <param name="Value" dispname="Message" vartype="stringid">The End is Near</param>
+      <command>trCounterSetManualString("%Name%", "%Value%");</command>
+    </effect>
+    <effect name="Counter: Player Name: Add">
+      <param name="Name" dispname="Name" vartype="string">countdown</param>
+      <param name="Msg" dispname="Message" vartype="stringid">The End is Near</param>
+      <param name="Player" dispname="Player" vartype="player">0</param>
+      <command>trCounterAddPlayerName("%Name%", "%Msg%", %Player%);</command>
+    </effect>
+    <effect name="Counter: String: Add">
+      <param name="Name" dispname="Name" vartype="string">countdown</param>
+      <param name="Msg" dispname="Message" vartype="stringid">The End is Near</param>
+      <command>trCounterAddString("%Name%", "%Msg%");</command>
+    </effect>
+    <effect name="Counter: Player Name: Set">
+      <param name="Name" dispname="Name" vartype="string">countdown</param>
+      <param name="Player" dispname="Player" vartype="player">0</param>
+      <command>trCounterSetPlayerName("%Name%", %Player%);</command>
+    </effect>
+    <effect name="Counter: Countdown: Add">
+      <param name="Name" dispname="Name" vartype="string">countdown</param>
+      <param name="Start" dispname="Start" vartype="long">30</param>
+      <param name="Stop" dispname="Stop" vartype="long">0</param>
+      <param name="Msg" dispname="Message" vartype="stringid">The End is Near</param>
+      <param name="Event" dispname="Trigger" vartype="event">0</param>
+      <command>trCounterAddTime("%Name%", %Start%, %Stop%, "%Msg%", %Event%);</command>
+    </effect>
+    <effect name="Counter: Countdown: Set">
+      <param name="Name" dispname="Name" vartype="string">countdown</param>
+      <param name="Value" dispname="Value" vartype="long">0</param>
+      <command>trCounterTimeSetValue("%Name%", %Value%);</command>
+    </effect>
+    <effect name="Counter: Gatherers: Add">
+      <param name="Name" dispname="Name" vartype="string">countdown</param>
+      <param name="Player" dispname="Player" vartype="player">0</param>
+      <param name="ResName" dispname="Resource" vartype="resource">food</param>
+      <param name="Count" dispname="Total" vartype="long">0</param>
+      <param name="Msg" dispname="Message" vartype="stringid">The End is Near</param>
+      <param name="Event" dispname="Trigger" vartype="event">-1</param>
+      <command>trCounterAddGenericXS("%Name%", "%Msg%", "", "kbGetNumberResourceGatherers(%Player%, \"%ResName%\")", %Event%, -1, %Count%);</command>
+    </effect>
+    <effect name="Counter: Units Owned: Add">
+      <param name="Name" dispname="Name" vartype="string">countdown</param>
+      <param name="Player" dispname="Player" vartype="player">0</param>
+      <param name="UnitType" dispname="UnitType" vartype="unittype">Villager</param>
+      <param name="Count" dispname="Total" vartype="long">0</param>
+      <param name="Msg" dispname="Message" vartype="stringid">The End is Near</param>
+      <param name="Event" dispname="Trigger" vartype="event">-1</param>
+      <param name="ShowCount" dispname="Show Total" vartype="bool">false</param>
+      <param name="ReverseCount" dispname="Reverse Count" vartype="bool">false</param>
+      <command>trCounterAddGenericXS("%Name%", "%Msg%", "", "kbUnitTypeCount(\"%UnitType%\", %Player%, cUnitStateAlive)", %Event%, -1, %Count%, false, %ShowCount%, %ReverseCount%);</command>
+    </effect>
+    <effect name="Counter: Units in Area: Add">
+      <param name="Name" dispname="Name" vartype="string">default</param>
+      <param name="Player" dispname="Player" vartype="player">0</param>
+      <param name="UnitType" dispname="Unit Type" vartype="unittype">Unit</param>
+      <param name="CenterUnit" dispname="Center Unit" vartype="unit" dispradius="">-1</param>
+      <param name="Dist" dispname="Radius" vartype="float" dispradius="">10</param>
+      <param name="Count" dispname="Total" vartype="long">0</param>
+      <param name="Msg" dispname="Message" vartype="stringid">The End is Near</param>
+      <param name="Event" dispname="Trigger" vartype="event">-1</param>
+      <command>trCounterAddGenericXS("%Name%", "%Msg%", "", "kbUnitTypeCountInArea(\"%UnitType%\", %Player%, cUnitStateAlive, %CenterUnit%, %Dist%)", %Event%, -1, %Count%);</command>
+    </effect>
+    <effect name="Counter: Units Killed: Add">
+      <param name="Name" dispname="Name" vartype="string">countdown</param>
+      <param name="Player" dispname="Player" vartype="player">0</param>
+      <param name="Count" dispname="Total" vartype="long">0</param>
+      <param name="Msg" dispname="Message" vartype="stringid">The End is Near</param>
+      <param name="Event" dispname="Trigger" vartype="event">-1</param>
+      <command>trCounterAddGenericXS("%Name%", "%Msg%", "", "kbGetStatValueInt(%Player%, cStatTypeEnemyUnitsKilled)", %Event%, -1, %Count%);</command>
+    </effect>
+    <effect name="Counter: Units Lost: Add">
+      <param name="Name" dispname="Name" vartype="string">countdown</param>
+      <param name="Player" dispname="Player" vartype="player">0</param>
+      <param name="Count" dispname="Total" vartype="long">0</param>
+      <param name="Msg" dispname="Message" vartype="stringid">The End is Near</param>
+      <param name="Event" dispname="Trigger" vartype="event">-1</param>
+      <command>trCounterAddGenericXS("%Name%", "%Msg%", "", "kbGetStatValueInt(%Player%, cStatTypeUnitsLost)", %Event%, -1, %Count%);</command>
+    </effect>
+    <effect name="Counter: Unit Type Killed: Add">
+      <param name="Name" dispname="Name" vartype="string">countdown</param>
+      <param name="Player" dispname="Player" vartype="player">0</param>
+      <param name="UnitType" dispname="UnitType" vartype="unittype">Villager</param>
+      <param name="Count" dispname="Total" vartype="long">0</param>
+      <param name="Msg" dispname="Message" vartype="stringid">The End is Near</param>
+      <param name="Event" dispname="Trigger" vartype="event">-1</param>
+      <param name="ShowCount" dispname="Show Total" vartype="bool">false</param>
+      <param name="ReverseCount" dispname="Reverse Count" vartype="bool">false</param>
+      <command>trCounterAddGenericXS("%Name%", "%Msg%", "", "kbGetNumberUnitTypeKilled(\"%UnitType%\", %Player%)", %Event%, -1, %Count%, false, %ShowCount%, %ReverseCount%, true);</command>
+    </effect>
+    <effect name="Counter: Unit Type Lost: Add">
+      <param name="Name" dispname="Name" vartype="string">countdown</param>
+      <param name="Player" dispname="Player" vartype="player">0</param>
+      <param name="UnitType" dispname="UnitType" vartype="unittype">Villager</param>
+      <param name="Count" dispname="Total" vartype="long">0</param>
+      <param name="Msg" dispname="Message" vartype="stringid">The End is Near</param>
+      <param name="Event" dispname="Trigger" vartype="event">-1</param>
+      <param name="ShowCount" dispname="Show Total" vartype="bool">false</param>
+      <param name="ReverseCount" dispname="Reverse Count" vartype="bool">false</param>
+      <command>trCounterAddGenericXS("%Name%", "%Msg%", "", "kbUnitTypeCount(\"%UnitType%\", %Player%, cUnitStateDead)", %Event%, -1, %Count%, false, %ShowCount%, %ReverseCount%, true);</command>
+    </effect>
+    <effect name="Counter: Unit Hitpoints">
+      <param name="Name" dispname="Name" vartype="string">countdown</param>
+      <param name="SrcObject" dispname="Unit" vartype="unit">-1</param>
+      <param name="Msg" dispname="Message" vartype="stringid">The End is Near</param>
+      <param name="Event" dispname="Trigger" vartype="event">-1</param>
+      <param name="ShowCount" dispname="Show Max HP" vartype="bool">false</param>
+      <param name="CountDamage" dispname="Count Damaged HP" vartype="bool">true</param>
+      <command>if (%CountDamage% == false)</command>
+      <command>{</command>
+      <command>trCounterAddGenericXS("%Name%", "%Msg%", "", "kbUnitGetStatFloat(%SrcObject%, cUnitStatCurrHP)", %Event%, -1, kbUnitGetStatFloat(%SrcObject%, cUnitStatMaxHP), false, %ShowCount%, true);</command>
+      <command>}</command>
+      <command>else</command>
+      <command>{</command>
+      <command>trCounterAddGenericXS("%Name%", "%Msg%", "", "kbUnitGetStatFloat(%SrcObject%, cUnitStatCurrHP)", %Event%, kbUnitGetStatFloat(%SrcObject%, cUnitStatMaxHP), 0, true, %ShowCount%);</command>
+      <command>}</command>
+    </effect>
+    <effect name="Counter: Unit Hitpoint Percent">
+      <param name="Name" dispname="Name" vartype="string">countdown</param>
+      <param name="SrcObject" dispname="Unit" vartype="unit">-1</param>
+      <param name="Msg" dispname="Message" vartype="stringid">The End is Near</param>
+      <param name="Event" dispname="Trigger" vartype="event">-1</param>
+      <param name="CountDamage" dispname="Count Damaged Percent" vartype="bool">true</param>
+      <command>if (%CountDamage% == false)</command>
+      <command>{</command>
+      <command>trCounterAddGenericXS("%Name%", "%Msg%", "{STR_TIMER_PERCENT}", "kbUnitGetStatInt(%SrcObject%, cUnitStatHPRatioPercent)", %Event%, -1, 100, false, false, true);</command>
+      <command>}</command>
+      <command>else</command>
+      <command>{</command>
+      <command>trCounterAddGenericXS("%Name%", "%Msg%", "{STR_TIMER_PERCENT}", "kbUnitGetStatInt(%SrcObject%, cUnitStatHPRatioPercent)", %Event%, 100, 0, true, false);</command>
+      <command>}</command>
+    </effect>
+    <effect name="Counter: Building Progress">
+      <param name="Name" dispname="Name" vartype="string">countdown</param>
+      <param name="SrcObject" dispname="Building" vartype="unit">-1</param>
+      <param name="Msg" dispname="Message" vartype="stringid">The End is Near</param>
+      <param name="Event" dispname="Trigger" vartype="event">-1</param>
+      <command>trCounterAddGenericXS("%Name%", "%Msg%", "{STR_TIMER_PERCENT}", "kbUnitGetStatInt(%SrcObject%, cUnitStatBuildProgressPercent)", %Event%, -1, 100, false, false);</command>
+    </effect>
+    <effect name="Counter: Resource Stockpile">
+      <param name="Name" dispname="Name" vartype="string">countdown</param>
+      <param name="Player" dispname="Player" vartype="player">0</param>
+      <param name="ResourceID" dispname="Resource" vartype="resourceid">0</param>
+      <param name="Count" dispname="Total" vartype="long">0</param>
+      <param name="Msg" dispname="Message" vartype="stringid">The End is Near</param>
+      <param name="Event" dispname="Trigger" vartype="event">-1</param>
+      <param name="ShowCount" dispname="Show Total" vartype="bool">false</param>
+      <command>trCounterAddGenericXS("%Name%", "%Msg%", "", "kbGetResourceAmount(%Player%, %ResourceID%)", %Event%, -1, %Count%, false, %ShowCount%);</command>
+    </effect>
+    <effect name="Counter: Make Player Specific">
+      <param name="Name" dispname="Name" vartype="string">countdown</param>
+      <param name="PlayerSpecific" dispname="Player Specific:" vartype="bool">true</param>
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <command>trCounterPlayerSpecific("%Name%", %PlayerSpecific%, %Player%);</command>
+    </effect>
+    <effect name="Counter: Pause">
+      <param name="Name" dispname="Name" vartype="string">countdown</param>
+      <param name="Pause" dispname="Pause:" vartype="bool">true</param>
+      <command>trCounterPause("%Name%", %Pause%);</command>
+    </effect>
+    <effect name="Counter: Make Persistent">
+      <param name="Name" dispname="Name" vartype="string">countdown</param>
+      <param name="Persistent" dispname="Persistent:" vartype="bool">true</param>
+      <command>trCounterPersistent("%Name%", %Persistent%);</command>
+    </effect>
+    <effect name="Counter: Set Visibility">
+      <param name="Name" dispname="Name" vartype="string">countdown</param>
+      <param name="Visible" dispname="Visible:" vartype="bool">true</param>
+      <command>trCounterSetVisibility("%Name%", %Visible%);</command>
+    </effect>
+    <effect name="Counter: Remove">
+      <param name="Name" dispname="Name" vartype="string">countdown</param>
+      <command>trCounterAbort("%Name%");</command>
+    </effect>
+    <effect name="Display: Flare Minimap">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Duration" dispname="Duration" vartype="float">1.0</param>
+      <param name="Position" dispname="X" vartype="area">0,0,0</param>
+      <param name="Flash" dispname="Flash" vartype="bool">true</param>
+      <command>trMinimapFlare(%PlayerID%, %Duration%, vector(%Position%), %Flash%);</command>
+    </effect>
+    <effect name="Display: Message Box">
+      <param name="Text" dispname="Text" vartype="stringid">default</param>
+      <param name="Timeout" dispname="Timeout (s)" vartype="long">-1</param>
+      <command>trMessageSetText("%Text%", %Timeout%);</command>
+    </effect>
+    <effect name="Display: Image Box">
+      <param name="ArtName" dispname="Image Path" vartype="string">default</param>
+      <param name="Subtitle" dispname="Subtitle" vartype="stringid">
+      </param>
+      <command>trShowImageDialog("%ArtName%", "%Subtitle%");</command>
+    </effect>
+    <effect name="Display: Overlay Text">
+      <param name="Text" dispname="Text" vartype="stringid">Default</param>
+      <param name="Duration" dispname="Duration" vartype="float">3.0</param>
+      <param name="Size" dispname="Text Size" vartype="float">60</param>
+      <param name="Red" dispname="Red (0-255)" vartype="long">247</param>
+      <param name="Green" dispname="Green (0-255)" vartype="long">214</param>
+      <param name="Blue" dispname="Blue (0-255)" vartype="long">177</param>
+      <command>trOverlayText("%Text%", %Duration%, %Size%, %Red%, %Green%, %Blue%);</command>
+    </effect>
+    <effect name="Display: Text Message">
+      <param name="Title" dispname="Title" vartype="stringid">Default</param>
+      <param name="Text" dispname="Text" vartype="stringid">Default</param>
+      <command>trShowTextMessage("%Title%", "%Text%");</command>
+    </effect>
+    <effect name="Display: Victory Message">
+      <param name="Text" dispname="ID" vartype="stringid">You Win</param>
+      <param name="Sound" dispname="Sound" vartype="sound">default</param>
+      <param name="IgnoreUserControls" dispname="Ignore User Controls" vartype="bool">true</param>
+      <command>trShowWinPopup("%Text%", "%Sound%", %IgnoreUserControls%);</command>
+    </effect>
+    <effect name="Display: Objective Message">
+      <param name="Title" dispname="Title" vartype="stringid">default</param>
+      <param name="Text" dispname="Text" vartype="stringid">default</param>
+      <param name="Sound" dispname="Sound" vartype="sound">default</param>
+      <param name="Timeout" dispname="Timeout (s)" vartype="long">-1</param>
+      <command>trObjectivesTracker("%Title%", "%Text%", "%Sound%", %Timeout%);</command>
+    </effect>
+    <effect name="Display: Show or Hide Popup">
+      <param name="Type" dispname="Type" vartype="popuptype">0</param>
+      <param name="Display" dispname="Display" vartype="bool">true</param>
+      <command>trShowHidePopup(%Type%, %Display%);</command>
+    </effect>
+    <effect name="Display: In Game Prompt Show Unit">
+      <param name="ID" dispname="ID" vartype="string">default id</param>
+      <param name="SrcObject" dispname="Unit" vartype="unit">-1</param>
+      <param name="ShowColor" dispname="ShowColor" vartype="bool">true</param>
+      <param name="Text" dispname="Text" vartype="stringid">default</param>
+      <param name="OffsetX" dispname="Offset X" vartype="float">0</param>
+      <param name="OffsetY" dispname="Offset Y" vartype="float">0</param>
+      <param name="OffsetZ" dispname="Offset Z" vartype="float">0</param>
+      <param name="Attachment" dispname="Attachment" vartype="string">vfx_top</param>
+      <command>trWorldSpacePrompt("%ID%", %SrcObject%, %ShowColor%, "%Text%", vector(%OffsetX%,%OffsetY%,%OffsetZ%), "%Attachment%");</command>
+    </effect>
+    <effect name="Display: In Game Prompt Show Army">
+      <param name="ID" dispname="ID" vartype="string">default id</param>
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="ShowColor" dispname="ShowColor" vartype="bool">true</param>
+      <param name="Text" dispname="Text" vartype="stringid">default</param>
+      <param name="OffsetX" dispname="Offset X" vartype="float">0</param>
+      <param name="OffsetY" dispname="Offset Y" vartype="float">0</param>
+      <param name="OffsetZ" dispname="Offset Z" vartype="float">0</param>
+      <command>trWorldSpacePromptArmy("%ID%", "%SrcArmy%", %ShowColor%, "%Text%", vector(%OffsetX%,%OffsetY%,%OffsetZ%));</command>
+    </effect>
+    <effect name="Display: In Game Prompt Show Area">
+      <param name="ID" dispname="ID" vartype="string">default id</param>
+      <param name="Area" dispname="Area" vartype="area">0</param>
+      <param name="Text" dispname="Text" vartype="stringid">default</param>
+      <param name="OffsetX" dispname="Offset X" vartype="float">0</param>
+      <param name="OffsetY" dispname="Offset Y" vartype="float">0</param>
+      <param name="OffsetZ" dispname="Offset Z" vartype="float">0</param>
+      <command>trWorldSpacePromptArea("%ID%", vector(%Area%), "%Text%", vector(%OffsetX%,%OffsetY%,%OffsetZ%));</command>
+    </effect>
+    <effect name="Display: In Game Prompt Hide">
+      <param name="ID" dispname="ID" vartype="string">default id</param>
+      <command>trWorldSpacePromptHide("%ID%");</command>
+    </effect>
+    <effect name="Fake Counter: Clear">
+      <command>trClearCounterDisplay();</command>
+    </effect>
+    <effect name="Fake Counter: Set Text">
+      <param name="Text" dispname="Text" vartype="stringid">Default</param>
+      <command>trSetCounterDisplay("%Text%");</command>
+    </effect>
+    <effect name="Fake Player: De-Fakify">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trDefakifySelection();</command>
+    </effect>
+    <effect name="Fake Player: De-Fakify Army">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <command>trDefakifyArmy("%SrcArmy%");</command>
+    </effect>
+    <effect name="Fake Player: Fakify">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="FakePlayerIndex" dispname="Fake Player (0-7)" vartype="fakeplayerid">0</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trFakifySelection(%FakePlayerIndex%);</command>
+    </effect>
+    <effect name="Fake Player: Fakify in Area">
+      <param name="SrcObject" dispname="Center Unit" vartype="unit" dispradius="">-1</param>
+      <param name="FakePlayerIndex" dispname="Fake Player (0-7)" vartype="fakeplayerid">0</param>
+      <param name="SrcPlayer" dispname="Source Player" vartype="player">0</param>
+      <param name="UnitType" dispname="Unit Type" vartype="unittype">Unit</param>
+      <param name="Dist" dispname="Radius" vartype="float" dispradius="">10</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitPlayerFakifyInArea(%FakePlayerIndex%, %SrcPlayer%, "%UnitType%", %Dist%);</command>
+    </effect>
+    <effect name="Fake Player: Fakify Army">
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="FakePlayerIndex" dispname="Fake Player (0-7)" vartype="fakeplayerid">0</param>
+      <command>trFakifyArmy("%SrcArmy%", %FakePlayerIndex%);</command>
+    </effect>
+    <effect name="Fake Player: Fakify SubModel">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="SubModelName" dispname="SubModel Override Name" vartype="string">default</param>
+      <param name="FakePlayerIndex" dispname="Fake Player (0-7)" vartype="fakeplayerid">0</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trFakifySelectionSubModelByOverrideName("%SubModelName%", %FakePlayerIndex%);</command>
+    </effect>
+    <effect name="Fake Player: De-Fakify All SubModels">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trDefakifySelectionSubModels("%SubModelName%", %FakePlayerIndex%);</command>
+    </effect>
+    <effect name="Flash User Interface: Age Up Button">
+      <param name="Flash" dispname="Flash" vartype="bool">true</param>
+      <command>trUIFlashAgeUp(%Flash%);</command>
+    </effect>
+    <effect name="Flash User Interface: Idle Banner">
+      <param name="BannerIndex" dispname="Banner Type" vartype="wpfidlebanner">0</param>
+      <param name="Flash" dispname="Flash" vartype="bool">true</param>
+      <command>trUIIdleBannerFlash(%BannerIndex%, %Flash%);</command>
+    </effect>
+    <effect name="Flash User Interface: Tech">
+      <param name="TechID" dispname="Tech" vartype="tech">0</param>
+      <param name="Flash" dispname="Flash" vartype="bool">true</param>
+      <command>trUIFlashTech(%TechID%, %Flash%);</command>
+    </effect>
+    <effect name="Flash User Interface: Train">
+      <param name="ProtoName" dispname="ProtoName" vartype="protounit">Villager</param>
+      <param name="Flash" dispname="Flash" vartype="bool">true</param>
+      <command>trUIFlashTrain("%ProtoName%", %Flash%);</command>
+    </effect>
+    <effect name="Flash User Interface: Unit Command">
+      <param name="Command" dispname="Command" vartype="protounitcommand">
+      </param>
+      <param name="Flash" dispname="Flash" vartype="bool">true</param>
+      <command>trUIFlashCommand("%Command%", %Flash%);</command>
+    </effect>
+    <effect name="Flash User Interface: Unit Ability">
+      <param name="Ability" dispname="Ability" vartype="ability">
+      </param>
+      <param name="Flash" dispname="Flash" vartype="bool">true</param>
+      <command>trUIFlashAbility("%Ability%", %Flash%);</command>
+    </effect>
+    <effect name="Flash User Interface: God Power At Position">
+      <param name="Position" dispname="Position" vartype="long">0</param>
+      <param name="Flash" dispname="Flash" vartype="bool">true</param>
+      <command>trUIFlashGodPowerAtSlot(%Position%, %Flash%);</command>
+    </effect>
+    <effect name="Flash User Interface: Minimap">
+      <param name="Flash" dispname="Flash" vartype="bool">true</param>
+      <command>trUIMinimapFlash(%Flash%);</command>
+    </effect>
+    <effect name="Flash User Interface: Panel">
+      <param name="Panel" dispname="Panel" vartype="wpfpanel">0</param>
+      <param name="Flash" dispname="Flash" vartype="bool">true</param>
+      <command>trUIPanelFlash(%Panel%, %Flash%);</command>
+    </effect>
+    <effect name="Flash User Interface: Resource Entry">
+      <param name="EntryIndex" dispname="Resource Entry" vartype="wpfresourceentry">0</param>
+      <param name="Flash" dispname="Flash" vartype="bool">true</param>
+      <command>trUIResourceEntryFlash(%EntryIndex%, %Flash%);</command>
+    </effect>
+    <effect name="Flash User Interface: Villager Priority">
+      <param name="ButtonIndex" dispname="Banner Type" vartype="wpfvpbutton">0</param>
+      <param name="Flash" dispname="Flash" vartype="bool">true</param>
+      <command>trUIVillagerPriorityButtonFlash(%ButtonIndex%, %Flash%);</command>
+    </effect>
+    <effect name="Flash User Interface: Villager Priority HUD">
+      <param name="Flash" dispname="Flash" vartype="bool">true</param>
+      <command>trUIVillagerPriorityButtonHUDFlash(%Flash%);</command>
+    </effect>
+    <effect name="Flash User Interface: Gamepad Prompt">
+      <param name="Prompt" dispname="Prompt" vartype="wpfgamepadprompt">0</param>
+      <param name="Flash" dispname="Flash" vartype="bool">true</param>
+      <command>trUIGamepadPromptFlash(%Prompt%, %Flash%);</command>
+    </effect>
+    <effect name="Scenario: End Challenge">
+      <command>trEndChallenge("%NextParm%");</command>
+    </effect>
+    <effect name="Scenario: End Game">
+      <command>trEndGame();</command>
+    </effect>
+    <effect name="Scenario: Enforce AI Assist">
+      <param name="Enforce" dispname="Enforce:" vartype="bool">true</param>
+      <command>trEnforceAIAssist(%Enforce%);</command>
+    </effect>
+    <effect name="Scenario: Go to Main Menu">
+      <command>trLeaveGame();</command>
+    </effect>
+    <effect name="Scenario: Hide Scoreboard">
+      <command>trHideScoreboard();</command>
+    </effect>
+    <effect name="Scenario: Pause Game">
+      <param name="Pause" dispname="Pause:" vartype="bool">true</param>
+      <command>trGamePause(%Pause%);</command>
+    </effect>
+    <effect name="Scenario: Reset Blackmap for All Players">
+      <command>trPlayerResetBlackMapForAllPlayers();</command>
+    </effect>
+    <effect name="Scenario: Reveal Map for All Players">
+      <command>trRevealEntireMap();</command>
+    </effect>
+    <effect name="Scenario: Set Idle Processing">
+      <param name="IdleProc" dispname="Process Idle:" vartype="bool">true</param>
+      <command>trSetUnitIdleProcessing(%IdleProc%);</command>
+    </effect>
+    <effect name="Scenario: Reset Recent Units" hidden="">
+      <command>trResetRecentUnits();</command>
+    </effect>
+    <effect name="Scenario: Auto Reset Recent Units" hidden="">
+      <param name="Enable" dispname="Auto Reset:" vartype="bool">true</param>
+      <command>trSetAutoResetRecentUnits(%Enable%);</command>
+    </effect>
+    <effect name="Scenario: Mutate Units">
+      <param name="SrcUnitType" dispname="Source Unit Type" vartype="unittype">
+      </param>
+      <param name="TrgProto" dispname="Target Protounit" vartype="protounit">
+      </param>
+      <param name="FullHitpoints" dispname="Force Full Hitpoints" vartype="bool">false</param>
+      <command>trMapMutateUnits("%SrcUnitType%", "%TrgProto%", %FullHitpoints%);</command>
+    </effect>
+    <effect name="Scenario: Toggle Mouse Cursor Visibility">
+      <param name="Active" dispname="Show Mouse:" vartype="bool">true</param>
+      <command>trSetShowCursor(%Active%);</command>
+    </effect>
+    <effect name="Scenario: Toggle Pausing in Minor God Window">
+      <param name="Pause" dispname="Enable" vartype="bool">true</param>
+      <command>trSetPauseOnAgeUpgrade(%Pause%);</command>
+    </effect>
+    <effect name="Scenario: Toggle Pausing in Objective Window">
+      <param name="Pause" dispname="Enable" vartype="bool">true</param>
+      <command>trSetPauseInObjectiveWindow(%Pause%);</command>
+    </effect>
+    <effect name="Scenario: Toggle User Controls">
+      <param name="Active" dispname="Control:" vartype="bool">false</param>
+      <command>trSetUserControls(%Active%);</command>
+    </effect>
+    <effect name="Scenario: Toggle Disable Conquest Check">
+      <param name="Disable" dispname="Disable" vartype="bool">true</param>
+      <command>trDisableConquestCheck(%Disable%);</command>
+    </effect>
+    <effect name="Scenario: Toggle Disable Popcap Notifications">
+      <param name="Disable" dispname="Disable" vartype="bool">true</param>
+      <command>trDisablePopCapNotifications(%Disable%);</command>
+    </effect>
+    <effect name="Scenario: Toggle Disable Power Notifications">
+      <param name="Disable" dispname="Disable" vartype="bool">true</param>
+      <command>trDisablePowerNotifications(%Disable%);</command>
+    </effect>
+    <effect name="Scenario: Toggle Disable Power Timers">
+      <param name="Disable" dispname="Disable" vartype="bool">true</param>
+      <command>trDisablePowerTimers(%Disable%);</command>
+    </effect>
+    <effect name="Map Revealer: Create">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="RevealerName" dispname="Revealer Name" vartype="string">default</param>
+      <param name="RevealerLoc" dispname="Revealer Location" vartype="area">0</param>
+      <param name="RevealerLOS" dispname="Revealer LOS" vartype="float">10.0</param>
+      <param name="BlackmapOnly" dispname="Blackmap Only" vartype="bool">false</param>
+      <command>trCreateRevealer(%PlayerID%, "%RevealerName%", vector(%RevealerLoc%), %RevealerLOS%, %BlackmapOnly%);</command>
+    </effect>
+    <effect name="Map Revealer: Set Active State">
+      <param name="RevealerName" dispname="Revealer Name" vartype="string">default</param>
+      <param name="ActiveState" dispname="Active State" vartype="bool">true</param>
+      <command>trSetRevealerActiveState("%RevealerName%", %ActiveState%);</command>
+    </effect>
+    <effect name="Music: Fade Out">
+      <param name="Duration" dispname="Fade Duration" vartype="float">3.0</param>
+      <command>trFadeOutMusic(%Duration%);</command>
+    </effect>
+    <effect name="Music: Play">
+      <command>trMusicPlayCurrent();</command>
+    </effect>
+    <effect name="Music: Play Music File">
+      <param name="Music" dispname="Music File" vartype="sound">default</param>
+      <param name="Duration" dispname="Fade Duration" vartype="float">4.0</param>
+      <command>trMusicPlay("%Music%", %Duration%);</command>
+    </effect>
+    <effect name="Music: Play Next Track">
+      <command>trPlayNextMusicTrack();</command>
+    </effect>
+    <effect name="Music: Set Current Track">
+      <param name="SetID" dispname="Music Set Index" vartype="musictrackid">0</param>
+      <command>trMusicSetCurrentMusicSet(%SetID%);</command>
+    </effect>
+    <effect name="Music: Set Mood">
+      <param name="MoodID" dispname="Mood ID" vartype="musicmood">0</param>
+      <command>trMusicSetMood(%MoodID%);</command>
+    </effect>
+    <effect name="Music: Stop">
+      <command>trMusicStop();</command>
+    </effect>
+    <effect name="Objective: Complete">
+      <param name="Objective" dispname="Objective" vartype="objective">-1</param>
+      <param name="ForceComplete" dispname="Force Complete:" vartype="bool">false</param>
+      <param name="PlaySound" dispname="PlaySound" vartype="bool">true</param>
+      <command>trObjectiveComplete(%Objective%, %ForceComplete%, %PlaySound%);</command>
+    </effect>
+    <effect name="Objective: Failed">
+      <param name="Objective" dispname="Objective" vartype="objective">-1</param>
+      <param name="PlaySound" dispname="PlaySound" vartype="bool">true</param>
+      <command>trObjectiveFailed(%Objective%, %PlaySound%);</command>
+    </effect>
+    <effect name="Objective: Hide">
+      <param name="Objective" dispname="Objective" vartype="objective">-1</param>
+      <command>trObjectiveHide(%Objective%);</command>
+    </effect>
+    <effect name="Objective: Incomplete">
+      <param name="Objective" dispname="Objective" vartype="objective">-1</param>
+      <param name="PlaySound" dispname="PlaySound" vartype="bool">true</param>
+      <command>trObjectiveIncomplete(%Objective%, %PlaySound%);</command>
+    </effect>
+    <effect name="Objective: Show">
+      <param name="Objective" dispname="Objective" vartype="objective">-1</param>
+      <param name="PlaySound" dispname="PlaySound" vartype="bool">true</param>
+      <command>trObjectiveShow(%Objective%, %PlaySound%);</command>
+    </effect>
+    <effect name="Objective: Create Marker">
+      <param name="Objective" dispname="Objective" vartype="objective">-1</param>
+      <param name="Name" dispname="Name" vartype="string">default</param>
+      <param name="Pos" dispname="Marker Location" vartype="area">0</param>
+      <command>trObjectiveCreateMarker(%Objective%, "%Name%", vector(%Pos%));</command>
+    </effect>
+    <effect name="Objective: Remove Marker">
+      <param name="Objective" dispname="Objective" vartype="objective">-1</param>
+      <param name="Name" dispname="Name" vartype="string">default</param>
+      <command>trObjectiveRemoveMarker(%Objective%, "%Name%");</command>
+    </effect>
+    <effect name="Objective: Force Show Panel">
+      <param name="Value" dispname="Value" vartype="bool">true</param>
+      <command>trForceShowObjectivePanel(%Value%);</command>
+    </effect>
+    <effect name="Player: Activate Cheat">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="Command" dispname="Command" vartype="string">
+      </param>
+      <command>trActivateCheat(%Player%, "%Command%");</command>
+    </effect>
+    <effect name="Player: Allied Victory">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="EndGame" dispname="End Game" vartype="bool">false</param>
+      <command>trPlayerSetWon(%Player%, %EndGame%);</command>
+    </effect>
+    <effect name="Player: Change Type for Units">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="SrcUnitType" dispname="Source Unit Type" vartype="unittype">
+      </param>
+      <param name="TrgProto" dispname="Target Protounit" vartype="protounit">
+      </param>
+      <param name="FullHitpoints" dispname="Force Full Hitpoints" vartype="bool">false</param>
+      <command>trPlayerChangeProtoUnit(%PlayerID%, "%SrcUnitType%", "%TrgProto%", %FullHitpoints%);</command>
+    </effect>
+    <effect name="Player: Defeat">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <command>trPlayerSetDefeated(%Player%);</command>
+    </effect>
+    <effect name="Player: Disable Tech and Remove From Protounit">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="ProtoUnit" dispname="Unit" vartype="protounit">default</param>
+      <param name="TechID" dispname="Tech" vartype="tech">0</param>
+      <command>trTechRemove(%PlayerID%, "%ProtoUnit%", %TechID%);</command>
+    </effect>
+    <effect name="Player: Echo Statistic in Chat">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="StatID" dispname="Stat Type" vartype="kbstat">0</param>
+      <command>trEchoStatValue(%PlayerID%, %StatID%);</command>
+    </effect>
+    <effect name="Player: Grant Resources">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="ResName" dispname="Resource" vartype="resource">food</param>
+      <param name="Amount" dispname="Amount" vartype="long">100</param>
+      <command>trPlayerGrantResources(%PlayerID%, "%ResName%", %Amount%);</command>
+    </effect>
+    <effect name="Player: Individual Victory">
+      <param name="Player" dispname="Player" vartype="player">0</param>
+      <command>trPlayerSetVictorious(%Player%);</command>
+    </effect>
+    <effect name="Player: Modify Data">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Field" dispname="Field" vartype="playerdatafield">0</param>
+      <param name="Delta" dispname="Delta" vartype="float">1.0</param>
+      <param name="Relativity" dispname="Relativity" vartype="purelativity">0</param>
+      <command>trPlayerModifyData(%PlayerID%, %Field%, -1, %Delta%, %Relativity%);</command>
+    </effect>
+    <effect name="Player: Modify Resource Data">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Field" dispname="Field" vartype="playerresourcedata">0</param>
+      <param name="ResourceID" dispname="Resource" vartype="resourceid">0</param>
+      <param name="Delta" dispname="Delta" vartype="float">1.0</param>
+      <param name="Relativity" dispname="Relativity" vartype="purelativity">0</param>
+      <command>trPlayerModifyResourceData(%PlayerID%, %Field%, %ResourceID%, %Delta%, %Relativity%);</command>
+    </effect>
+    <effect name="Player: Mutate Units">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="SrcUnitType" dispname="Source Unit Type" vartype="unittype">
+      </param>
+      <param name="TrgProto" dispname="Target Protounit" vartype="protounit">
+      </param>
+      <param name="FullHitpoints" dispname="Force Full Hitpoints" vartype="bool">false</param>
+      <command>trPlayerMutateUnits(%PlayerID%, "%SrcUnitType%", "%TrgProto%", %FullHitpoints%);</command>
+    </effect>
+    <effect name="Player: Override Architectural Style">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="Culture" dispname="Culture" vartype="culture">WesternEurope</param>
+      <command>trPlayerOverrideArtCulture(%Player%, "%Culture%");</command>
+    </effect>
+    <effect name="Player: Override Major God Name">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="StringID" dispname="New Name" vartype="stringid">
+      </param>
+      <command>trPlayerOverrideCivName(%Player%, "%StringID%");</command>
+    </effect>
+    <effect name="Player: Set Civilization">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="Civilization" dispname="Civilization" vartype="civilization">
+      </param>
+      <command>trPlayerSetCiv(%Player%, "%Civilization%");</command>
+    </effect>
+    <effect name="Player: Set Name">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="Name" dispname="New Name" vartype="stringid">
+      </param>
+      <command>trPlayerSetName(%Player%, "%Name%");</command>
+    </effect>
+    <effect name="Player: Set Color">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="ColorType" dispname="Color Type" vartype="playercolortype">
+      </param>
+      <param name="R" dispname="R (0-255)" vartype="long">0</param>
+      <param name="G" dispname="G (0-255)" vartype="long">0</param>
+      <param name="B" dispname="B (0-255)" vartype="long">0</param>
+      <command>trPlayerSetColor(%Player%, %ColorType%, %R%, %G%, %B%);</command>
+    </effect>
+    <effect name="Player: Set Score">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="Score" dispname="Score" vartype="long">
+      </param>
+      <command>trPlayerSetScore(%Player%, %Score%);</command>
+    </effect>
+    <effect name="Player: Adjust Score">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="Delta" dispname="Delta" vartype="long">
+      </param>
+      <command>trPlayerAdjustScore(%Player%, %Delta%);</command>
+    </effect>
+    <effect name="Player: Remove All Buildings">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <command>trPlayerKillAllBuildings(%Player%);</command>
+    </effect>
+    <effect name="Player: Remove All Units">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <command>trPlayerRemoveAllUnits(%Player%);</command>
+    </effect>
+    <effect name="Player: Reset Blackmap">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <command>trPlayerResetBlackMap(%Player%);</command>
+    </effect>
+    <effect name="Player: Send Tribute">
+      <param name="FromPlayerID" dispname="From Player" vartype="player">1</param>
+      <param name="ToPlayerID" dispname="To Player" vartype="player">2</param>
+      <param name="ResName" dispname="Resource" vartype="resource">food</param>
+      <param name="Amount" dispname="Amount" vartype="long">100</param>
+      <command>trPlayerTribute(%FromPlayerID%, "%ResName%", %Amount%, %ToPlayerID%);</command>
+    </effect>
+    <effect name="Player: Set Diplomacy">
+      <param name="Player1" dispname="Player" vartype="player">1</param>
+      <param name="Status" dispname="Status" vartype="alliance">ally</param>
+      <param name="Player2" dispname="Player" vartype="player">2</param>
+      <param name="Mutual" dispname="Mutual" vartype="bool">true</param>
+      <command>trPlayerSetDiplomacy(%Player1%, %Player2%, "%Status%", %Mutual%);</command>
+    </effect>
+    <effect name="Player: Set Tech Status">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="TechID" dispname="Tech" vartype="tech">0</param>
+      <param name="Status" dispname="Status" vartype="techstatus">2</param>
+      <command>trTechSetStatus(%PlayerID%, %TechID%, %Status%);</command>
+    </effect>
+    <effect name="Player: Take Control of Player">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <command>trPlayerSetActive(%Player%);</command>
+    </effect>
+    <effect name="Player: Toggle Visibility of Player">
+      <param name="Player1" dispname="Player" vartype="player">1</param>
+      <param name="CanSee" dispname="Has LOS" vartype="bool">true</param>
+      <param name="Player2" dispname="Player" vartype="player">2</param>
+      <command>trPlayerModifyLOS(%Player1%, %CanSee%, %Player2%);</command>
+    </effect>
+    <effect name="Player: Starting Units">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="AllowSpawning" dispname="Enable" vartype="bool">true</param>
+      <command>trPlayerAllowStartingUnitsSpawning(%Player%, %AllowSpawning%);</command>
+      <command>if (%AllowSpawning% == false)</command>
+      <command>{</command>
+      <command>trTechSetStatus(%Player%, cTechPharaohFirstSpawn, cTechStatusUnobtainable);</command>
+      <command>}</command>
+    </effect>
+    <effect name="Player: Age Up Spawning">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="AllowSpawning" dispname="Enable" vartype="bool">true</param>
+      <command>trPlayerAllowAgeUpSpawning(%Player%, %AllowSpawning%);</command>
+    </effect>
+    <effect name="Player: Shade Spawning">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="AllowSpawning" dispname="Enable" vartype="bool">true</param>
+      <command>trPlayerAllowShades(%Player%, %AllowSpawning%);</command>
+    </effect>
+    <effect name="Player: Partisans">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="AllowSpawning" dispname="Enable" vartype="bool">true</param>
+      <command>trPlayerEnablePartisans(%Player%, %AllowSpawning%);</command>
+    </effect>
+    <effect name="Player: Timeshifting">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="Enable" dispname="Enable" vartype="bool">true</param>
+      <command>trPlayerEnableTimeshift(%Player%, %Enable%);</command>
+    </effect>
+    <effect name="Player: Timeshifting Modify Cost">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">House</param>
+      <param name="Delta" dispname="Delta" vartype="float">1.0</param>
+      <param name="Relativity" dispname="Relativity" vartype="purelativity">0</param>
+      <command>trPlayerTimeshiftModifyCost(%Player%, "%ProtoUnit%", %Delta%, %Relativity%);</command>
+    </effect>
+    <effect name="Player: Timeshifting Add Entry">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">House</param>
+      <param name="CostRatio" dispname="Cost Ratio" vartype="float">1.0</param>
+      <param name="TimeRatio" dispname="Time Ratio" vartype="float">1.0</param>
+      <command>trPlayerTimeshiftAddEntry(%Player%, "%ProtoUnit%", %CostRatio%, %TimeRatio%);</command>
+    </effect>
+    <effect name="Prompt: Two Options">
+      <param name="MainText" dispname="Main Text" vartype="stringid">default</param>
+      <param name="Text1" dispname="Choice 1" vartype="stringid">default</param>
+      <param name="Event1" dispname="Trigger 1" vartype="event">-1</param>
+      <param name="Text2" dispname="Choice 2" vartype="stringid">default</param>
+      <param name="Event2" dispname="Trigger 2" vartype="event">-1</param>
+      <command>trShowChoiceDialog("%MainText%", "%Text1%", %Event1%, "%Text2%", %Event2%);</command>
+    </effect>
+    <effect name="Prompt: Two Options for Player">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="MainText" dispname="Main Text" vartype="stringid">default</param>
+      <param name="Text1" dispname="Choice 1" vartype="stringid">default</param>
+      <param name="Event1" dispname="Trigger 1" vartype="event">-1</param>
+      <param name="Text2" dispname="Choice 2" vartype="stringid">default</param>
+      <param name="Event2" dispname="Trigger 2" vartype="event">-1</param>
+      <command>trShowChoiceDialogForPlayer(%Player%, "%MainText%", "%Text1%", %Event1%, "%Text2%", %Event2%);</command>
+    </effect>
+    <effect name="Protounit: Add Train">
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">Villager</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="TrainProtoUnit" dispname="Train ProtoUnit" vartype="protounit">
+      </param>
+      <param name="Row" dispname="Row (0-3)" vartype="long">0</param>
+      <param name="Column" dispname="Column (0-5)" vartype="long">0</param>
+      <command>trProtounitAddTrain("%ProtoUnit%", %PlayerID%, "%TrainProtoUnit%", %Row%, %Column%);</command>
+    </effect>
+    <effect name="Protounit: Add Tech">
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">Villager</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="TechID" dispname="Tech" vartype="tech">
+      </param>
+      <param name="Row" dispname="Row (0-3)" vartype="long">0</param>
+      <param name="Column" dispname="Column (0-5)" vartype="long">0</param>
+      <command>trProtounitAddTech("%ProtoUnit%", %PlayerID%, %TechID%, %Row%, %Column%);</command>
+    </effect>
+    <effect name="Protounit: Add Unit Command">
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">Villager</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Command" dispname="Command" vartype="protounitcommand">
+      </param>
+      <param name="Row" dispname="Row (0-3)" vartype="long">0</param>
+      <param name="Column" dispname="Column (0-5)" vartype="long">0</param>
+      <command>trProtounitAddCommand("%ProtoUnit%", %PlayerID%, "%Command%", %Row%, %Column%);</command>
+    </effect>
+    <effect name="Protounit: Flash">
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">Villager</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Duration" dispname="Seconds" vartype="float">2.5</param>
+      <command>trProtoUnitHighlight(%PlayerID%, "%ProtoUnit%", %Duration%, true);</command>
+    </effect>
+    <effect name="Protounit: Change Name">
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">Villager</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="NewNameId" dispname="Name" vartype="stringid">
+      </param>
+      <param name="NewRolloverId" dispname="Rollover" vartype="stringid">
+      </param>
+      <param name="NewShortRolloverId" dispname="ShortRollover" vartype="stringid">
+      </param>
+      <command>trProtoUnitChangeName("%ProtoUnit%", %PlayerID%, "%NewNameId%", "%NewRolloverId%", "%NewShortRolloverId%");</command>
+    </effect>
+    <effect name="Protounit: Enable/Disable Action">
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">Settler</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Action" dispname="Action" vartype="protoaction">
+      </param>
+      <param name="Enable" dispname="Enable" vartype="bool">true</param>
+      <command>trProtoUnitActionSetEnabled("%ProtoUnit%", %PlayerID%, "%Action%", %Enable%);</command>
+    </effect>
+    <effect name="Protounit: Forbid and Disable">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="ProtoUnit" dispname="Unit" vartype="protounit">default</param>
+      <command>trForbidProtounit(%PlayerID%, "%ProtoUnit%");</command>
+    </effect>
+    <effect name="Protounit: Action Special Effect">
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">Villager</param>
+      <param name="ProtoUnitAction" dispname="Action" vartype="protoaction">
+      </param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Effect" dispname="Effect" vartype="onhiteffectsimple">0</param>
+      <param name="TargetType" dispname="Target Unit Type" vartype="unittype">All</param>
+      <param name="DmgType" dispname="Damage Type" vartype="damagetype">-1</param>
+      <param name="Duration" dispname="Duration" vartype="float">1.0</param>
+      <param name="Value" dispname="Value" vartype="float">0.0</param>
+      <command>trProtounitActionSpecialEffect("%ProtoUnit%", "%ProtoUnitAction%", %PlayerID%, %Effect%, "%TargetType%", %DmgType%, %Duration%, %Value%);</command>
+    </effect>
+    <effect name="Protounit: Action Special Effect Active">
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">Villager</param>
+      <param name="ProtoUnitAction" dispname="Action" vartype="protoaction">
+      </param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Effect" dispname="Effect" vartype="onhiteffectall">0</param>
+      <param name="TargetType" dispname="Target Unit Type" vartype="unittype">All</param>
+      <param name="DmgType" dispname="Damage Type" vartype="damagetype">-1</param>
+      <param name="Active" dispname="Active" vartype="bool">true</param>
+      <command>trProtounitActionSpecialEffectActive("%ProtoUnit%", "%ProtoUnitAction%", %PlayerID%, %Effect%, "%TargetType%", %DmgType%, %Active%);</command>
+    </effect>
+    <effect name="Protounit: Action Special Effect Freeze">
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">Villager</param>
+      <param name="ProtoUnitAction" dispname="Action" vartype="protoaction">
+      </param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="FreezeType" dispname="Freeze Type" vartype="freezetype">0</param>
+      <param name="TargetType" dispname="Target Unit Type" vartype="unittype">All</param>
+      <param name="DmgType" dispname="Damage Type" vartype="damagetype">-1</param>
+      <param name="Duration" dispname="Duration" vartype="float">1.0</param>
+      <param name="Value" dispname="Value" vartype="float">0.0</param>
+      <command>trProtounitActionSpecialEffect("%ProtoUnit%", "%ProtoUnitAction%", %PlayerID%, %FreezeType%, "%TargetType%", %DmgType%, %Duration%, %Value%);</command>
+    </effect>
+    <effect name="Protounit: Action Special Effect Progressive Freeze">
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">Villager</param>
+      <param name="ProtoUnitAction" dispname="Action" vartype="protoaction">
+      </param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Effect" dispname="Effect" vartype="onhiteffectprogfreeze">0</param>
+      <param name="TargetType" dispname="Target Unit Type" vartype="unittype">All</param>
+      <param name="Duration" dispname="Duration" vartype="float">1.0</param>
+      <param name="FreezeDuration" dispname="Freeze Duration" vartype="float">0</param>
+      <param name="Value" dispname="Value" vartype="float">0.0</param>
+      <command>trProtounitActionSpecialEffect("%ProtoUnit%", "%ProtoUnitAction%", %PlayerID%, %Effect%, "%TargetType%", xsFloatToInt(%FreezeDuration% * 1000.0), %Duration%, %Value%);</command>
+    </effect>
+    <effect name="Protounit: Action Special Effect with ProtoUnit">
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">Villager</param>
+      <param name="ProtoUnitAction" dispname="Action" vartype="protoaction">
+      </param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Effect" dispname="Effect" vartype="onhiteffectprotounit">0</param>
+      <param name="TargetType" dispname="Target Unit Type" vartype="unittype">All</param>
+      <param name="DstProtoUnit" dispname="Dest ProtoUnit" vartype="protounitnofilter">0</param>
+      <param name="Duration" dispname="Duration" vartype="float">1.0</param>
+      <param name="Value" dispname="Value" vartype="float">0.0</param>
+      <command>trProtounitActionSpecialEffectProtoUnit("%ProtoUnit%", "%ProtoUnitAction%", %PlayerID%, %Effect%, "%TargetType%", "%DstProtoUnit%", %Duration%, %Value%);</command>
+    </effect>
+    <effect name="Protounit: Action Special Effect with Modifier">
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">Villager</param>
+      <param name="ProtoUnitAction" dispname="Action" vartype="protoaction">
+      </param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Effect" dispname="Effect" vartype="onhiteffectmodify">0</param>
+      <param name="TargetType" dispname="Target Unit Type" vartype="unittype">All</param>
+      <param name="Value" dispname="Value" vartype="float">0.0</param>
+      <param name="ModifyType" dispname="Modify Type" vartype="modifytype">0</param>
+      <param name="DmgType" dispname="Damage Type" vartype="damagetype">-1</param>
+      <command>trProtounitActionSpecialEffectModifier("%ProtoUnit%", "%ProtoUnitAction%", %PlayerID%, %Effect%, "%TargetType%", %Value%, %ModifyType%, %DmgType%);</command>
+    </effect>
+    <effect name="Protounit: Action Special Effect Duration">
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">Villager</param>
+      <param name="ProtoUnitAction" dispname="Action" vartype="protoaction">
+      </param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Effect" dispname="Effect" vartype="onhiteffectduration">0</param>
+      <param name="TargetType" dispname="Target Unit Type" vartype="unittype">All</param>
+      <param name="DmgType" dispname="Damage Type" vartype="damagetype">-1</param>
+      <param name="Delta" dispname="Delta" vartype="float">1.0</param>
+      <param name="Relativity" dispname="Relativity" vartype="purelativity">0</param>
+      <command>trProtounitActionSpecialEffectDuration("%ProtoUnit%", "%ProtoUnitAction%", %PlayerID%, %Effect%, "%TargetType%", %DmgType%, %Delta%, %Relativity%);</command>
+    </effect>
+    <effect name="Protounit: Modify Action">
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">Villager</param>
+      <param name="ProtoUnitAction" dispname="Action" vartype="protoaction">
+      </param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Field" dispname="Field" vartype="puactionfield">0</param>
+      <param name="Delta" dispname="Delta" vartype="float">1.0</param>
+      <param name="Relativity" dispname="Relativity" vartype="purelativity">0</param>
+      <command>trModifyProtounitAction("%ProtoUnit%", "%ProtoUnitAction%", %PlayerID%, %Field%, %Delta%, %Relativity%);</command>
+    </effect>
+    <effect name="Protounit: Modify Action with Unit Type">
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">Villager</param>
+      <param name="ProtoUnitAction" dispname="Action" vartype="protoaction">
+      </param>
+      <param name="UnitType" dispname="Unit Type" vartype="unittype">
+      </param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Field" dispname="Field" vartype="puactionunittypefield">0</param>
+      <param name="Delta" dispname="Delta" vartype="float">1.0</param>
+      <param name="Relativity" dispname="Relativity" vartype="purelativity">0</param>
+      <command>trModifyProtounitActionUnitType("%ProtoUnit%", "%ProtoUnitAction%", "%UnitType%", %PlayerID%, %Field%, %Delta%, %Relativity%);</command>
+    </effect>
+    <effect name="Protounit: Modify Data">
+      <param name="ProtoUnit" dispname="Unit Type" vartype="unittype">Villager</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Field" dispname="Field" vartype="pudatafield">0</param>
+      <param name="Delta" dispname="Delta" vartype="float">1.0</param>
+      <param name="Relativity" dispname="Relativity" vartype="purelativity">0</param>
+      <command>trModifyProtounitData("%ProtoUnit%", %PlayerID%, %Field%, %Delta%, %Relativity%);</command>
+    </effect>
+    <effect name="Protounit: Modify Resource Data">
+      <param name="ProtoUnit" dispname="Unit Type" vartype="unittype">Villager</param>
+      <param name="Resource" dispname="Resource" vartype="resource">food</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Field" dispname="Field" vartype="puresourcefield">0</param>
+      <param name="Delta" dispname="Delta" vartype="float">1.0</param>
+      <param name="Relativity" dispname="Relativity" vartype="purelativity">0</param>
+      <command>trModifyProtounitResource("%ProtoUnit%", "%Resource%", %PlayerID%, %Field%, %Delta%, %Relativity%);</command>
+    </effect>
+    <effect name="Protounit: Movement Type">
+      <param name="ProtoUnit" dispname="Unit Type" vartype="unittype">Villager</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="MovementType" dispname="Movement Type" vartype="movementtype">0</param>
+      <command>trProtoUnitMovementType("%ProtoUnit%", %PlayerID%, "%MovementType%");</command>
+    </effect>
+    <effect name="Protounit: Unforbid and Enable">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="ProtoUnit" dispname="Unit" vartype="protounit">default</param>
+      <command>trUnforbidProtounit(%PlayerID%, "%ProtoUnit%");</command>
+    </effect>
+    <effect name="Protounit: Remove Train">
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">Villager</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="TrainProtoUnit" dispname="Train ProtoUnit" vartype="protounit">
+      </param>
+      <command>trProtounitRemoveTrain("%ProtoUnit%", %PlayerID%, "%TrainProtoUnit%");</command>
+    </effect>
+    <effect name="Protounit: Remove Tech">
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">Villager</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="TechID" dispname="Tech" vartype="tech">
+      </param>
+      <command>trProtounitRemoveTech("%ProtoUnit%", %PlayerID%, %TechID%);</command>
+    </effect>
+    <effect name="Protounit: Remove Unit Command">
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">Villager</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Command" dispname="Command" vartype="protounitcommand">
+      </param>
+      <command>trProtounitRemoveCommand("%ProtoUnit%", %PlayerID%, "%Command%");</command>
+    </effect>
+    <effect name="Protounit: Set Unit Type">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="ProtoUnit" dispname="Unit Type" vartype="unittype">Villager</param>
+      <param name="UnitType" dispname="Unit Type" vartype="abstractunittype">
+      </param>
+      <param name="Set" dispname="Set" vartype="bool">true</param>
+      <command>trProtoUnitSetUnitType(%PlayerID%, "%ProtoUnit%", "%UnitType%", %Set%);</command>
+    </effect>
+    <effect name="Protounit: Set Flag">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="ProtoUnit" dispname="Unit Type" vartype="unittype">Villager</param>
+      <param name="Flag" dispname="Flag" vartype="protounitflag">
+      </param>
+      <param name="Set" dispname="Set" vartype="bool">true</param>
+      <command>trProtoUnitSetFlag(%PlayerID%, "%ProtoUnit%", "%Flag%", %Set%);</command>
+    </effect>
+    <effect name="Protounit: Set Icon">
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">Villager</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="IconPath" dispname="Icon" vartype="string">
+      </param>
+      <param name="MinimapIconPath" dispname="Minimap Icon" vartype="string">
+      </param>
+      <command>trProtoUnitSetIcon("%ProtoUnit%", %PlayerID%, "%IconPath%", "%MinimapIconPath%");</command>
+    </effect>
+    <effect name="Quest Variable: Copy">
+      <param name="QVName" dispname="Var Name" vartype="string">QV1</param>
+      <param name="QVName2" dispname="From Var" vartype="string">QV2</param>
+      <command>trQuestVarCopy("%QVName%", "%QVName2%");</command>
+    </effect>
+    <effect name="Quest Variable: Echo in Chat">
+      <param name="QVName" dispname="Var Name" vartype="string">QV1</param>
+      <command>trQuestVarEcho("%QVName%");</command>
+    </effect>
+    <effect name="Quest Variable: Get Scenario User Data">
+      <param name="Index" dispname="Index (0-15)" vartype="long">0</param>
+      <param name="QuestVar" dispname="Var Name" vartype="string">QV1</param>
+      <param name="Name" dispname="Name" vartype="string">
+      </param>
+      <command>trQuestVarSet("%QuestVar%", trGetScenarioUserData(%Index%, 0, "%Name%"));</command>
+    </effect>
+    <effect name="Quest Variable: Modify">
+      <param name="QVName" dispname="Var Name" vartype="string">QV1</param>
+      <param name="Oper" dispname="Operator" vartype="arithmeticoperator">+</param>
+      <param name="Value" dispname="Value" vartype="float">0</param>
+      <command>trQuestVarSet("%QVName%", trQuestVarGet("%QVName%") %Oper% %Value%);</command>
+    </effect>
+    <effect name="Quest Variable: Modify with Variable">
+      <param name="QVName" dispname="Var Name" vartype="string">QV1</param>
+      <param name="Oper" dispname="Operator" vartype="arithmeticoperator">+</param>
+      <param name="QVName2" dispname="Var Name 2" vartype="string">QV2</param>
+      <command>trQuestVarSet("%QVName%", trQuestVarGet("%QVName%") %Oper% trQuestVarGet("%QVName2%"));</command>
+    </effect>
+    <effect name="Quest Variable: Randomize">
+      <param name="QVName" dispname="Var Name" vartype="string">QV1</param>
+      <param name="MinVal" dispname="Min Value" vartype="float">1</param>
+      <param name="MaxVal" dispname="Max Value" vartype="float">100</param>
+      <param name="Round" dispname="Rounding" vartype="bool">true</param>
+      <command>trQuestVarSetFromRand("%QVName%", %MinVal%, %MaxVal%, %Round%);</command>
+    </effect>
+    <effect name="Quest Variable: Randomize and Force New Result">
+      <param name="QVName" dispname="Var Name" vartype="string">QV1</param>
+      <param name="MinVal" dispname="Min Value" vartype="float">1</param>
+      <param name="MaxVal" dispname="Max Value" vartype="float">100</param>
+      <param name="Round" dispname="Rounding" vartype="bool">true</param>
+      <command>trQuestVarSetFromRandUnique("%QVName%", %MinVal%, %MaxVal%, %Round%);</command>
+    </effect>
+    <effect name="Quest Variable: Set Scenario User Data">
+      <param name="Index" dispname="Index (0-15)" vartype="long">0</param>
+      <param name="QuestVar" dispname="Var Name" vartype="string">QV1</param>
+      <command>trSetCurrentScenarioUserData(%Index%,trQuestVarGet("%QuestVar%"));</command>
+    </effect>
+    <effect name="Quest Variable: Set Value">
+      <param name="QVName" dispname="Var Name" vartype="string">QV1</param>
+      <param name="Value" dispname="Value" vartype="float">0</param>
+      <command>trQuestVarSet("%QVName%", %Value%);</command>
+    </effect>
+    <effect name="Rate Modify Global: Construction Speed">
+      <param name="Rate" dispname="Rate" vartype="float">1.0</param>
+      <command>trRateConstruction(%Rate%);</command>
+    </effect>
+    <effect name="Rate Modify Global: Return All to Normal">
+      <command>trRatesReset();</command>
+    </effect>
+    <effect name="Rate Modify Global: Tech Research Speed">
+      <param name="Rate" dispname="Rate" vartype="float">1.0</param>
+      <command>trRateResearch(%Rate%);</command>
+    </effect>
+    <effect name="Rate Modify Global: Training Speed">
+      <param name="Rate" dispname="Rate" vartype="float">1.0</param>
+      <command>trRateTrain(%Rate%);</command>
+    </effect>
+    <effect name="Render: Cinematic Sky">
+      <param name="Flag" dispname="Render:" vartype="bool">true</param>
+      <param name="SkyBoxName" dispname="Sky Name" vartype="skybox">(none)</param>
+      <param name="Orientation" dispname="Orientation (0-359)" vartype="long">0</param>
+      <param name="Height" dispname="Height" vartype="float">0</param>
+      <param name="TerrainHeight" dispname="Use Terrain Height" vartype="bool">true</param>
+      <command>trRenderSky(%Flag%, "%SkyBoxName%", %Orientation%, %Height%, %TerrainHeight%);</command>
+    </effect>
+    <effect name="Render: Fog/Black Map">
+      <param name="Fog" dispname="Fog of War:" vartype="bool">true</param>
+      <param name="Black" dispname="Black Map:" vartype="bool">true</param>
+      <command>trSetFogAndBlackmap(%Fog%, %Black%);</command>
+    </effect>
+    <effect name="Render: Fog/Black Map Multiplayer">
+      <param name="Fog" dispname="Fog of War:" vartype="bool">true</param>
+      <param name="Black" dispname="Black Map:" vartype="bool">true</param>
+      <command>trSetFogAndBlackmapMultiplayer(%Fog%, %Black%);</command>
+    </effect>
+    <effect name="Render: Lighting">
+      <param name="SetName" dispname="Set Name:" vartype="string">default</param>
+      <param name="FadeTime" dispname="Fade In:" vartype="float">5.0</param>
+      <command>trSetLighting("%SetName%",%FadeTime%);</command>
+    </effect>
+    <effect name="Render: Rain">
+      <param name="Percent" dispname="Percent:" vartype="float">0.0</param>
+      <command>trRenderRain(%Percent%);</command>
+    </effect>
+    <effect name="Render: Set Shadow Far Clipping Plane">
+      <param name="Enable" dispname="Enable" vartype="bool">true</param>
+      <param name="Distance" dispname="Distance Away From Camera" vartype="float">50.0</param>
+      <command>trSetShadowFarClip(%Enable%, %Distance%);</command>
+    </effect>
+    <effect name="Render: Snow">
+      <param name="Percent" dispname="Percent:" vartype="float">0.0</param>
+      <command>trRenderSnow(%Percent%);</command>
+    </effect>
+    <effect name="Relic: Create">
+      <param name="RelicName" dispname="Relic Name" vartype="relic">RelicAnkhOfRa</param>
+      <param name="Location" dispname="" vartype="area">0,0,0</param>
+      <param name="Heading" dispname="Heading (0-359)" vartype="long">0</param>
+      <command>trRelicCreate(%Location%, %Heading%, "%RelicName%");</command>
+    </effect>
+    <effect name="Relic: Force">
+      <param name="SrcObject" dispname="Unit" vartype="unit">-1</param>
+      <param name="RelicName" dispname="Relic Name" vartype="relic">RelicAnkhOfRa</param>
+      <command>trRelicForce(%SrcObject%, "%RelicName%");</command>
+    </effect>
+    <effect name="Socket: Construct Itself">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Socket" dispname="Socket" vartype="unit">-1</param>
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">TradingPost</param>
+      <command>trSocketBuild(%PlayerID%, %Socket%, "%ProtoUnit%");</command>
+    </effect>
+    <effect name="Socket: Place Foundation">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Socket" dispname="Socket" vartype="unit">-1</param>
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">TradingPost</param>
+      <command>trSocketPlaceFoundation(%PlayerID%, %Socket%, "%ProtoUnit%");</command>
+    </effect>
+    <effect name="Sound: Block All Ambient Sounds">
+      <command>trBlockAllAmbientSounds();</command>
+    </effect>
+    <effect name="Sound: Block All Sounds">
+      <param name="Dialog" dispname="Exclude Dialog" vartype="bool">true</param>
+      <command>trBlockAllSounds(%Dialog%);</command>
+    </effect>
+    <effect name="Sound: Block Notification Sounds">
+      <command>trDisableNotificationSounds(true);</command>
+    </effect>
+    <effect name="Sound: Fade Out All Sounds">
+      <param name="Duration" dispname="Fade Duration" vartype="float">3.0</param>
+      <command>trFadeOutAllSounds(%Duration%);</command>
+    </effect>
+    <effect name="Sound: Play Sound File">
+      <param name="Sound" dispname="Sound" vartype="sound">default</param>
+      <param name="EventID" dispname="Trigger" vartype="event">-1</param>
+      <param name="Subtitle" dispname="Subtitle" vartype="stringid">
+      </param>
+      <param name="Portrait" dispname="Portrait" vartype="string">
+      </param>
+      <command>trSoundPlayFN("%Sound%", %EventID%, "%Subtitle%","%Portrait%");</command>
+    </effect>
+    <effect name="Sound: Play Soundset">
+      <param name="Soundset" dispname="Soundset" vartype="soundset">
+      </param>
+      <command>trSoundsetPlay("%Soundset%");</command>
+    </effect>
+    <effect name="Sound: Play Soundset for Player">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Soundset" dispname="Soundset" vartype="soundset">
+      </param>
+      <command>trSoundsetPlayPlayer(%PlayerID%, "%Soundset%");</command>
+    </effect>
+    <effect name="Sound: Unblock All Ambient Sounds">
+      <command>trUnBlockAllAmbientSounds();</command>
+    </effect>
+    <effect name="Sound: Unblock All Sounds">
+      <command>trUnblockAllSounds();</command>
+    </effect>
+    <effect name="Sound: Unblock Notification Sounds">
+      <command>trDisableNotificationSounds(false);</command>
+    </effect>
+    <effect name="Tech: Hide Effects from Rollover">
+      <param name="Tech" dispname="Tech" vartype="tech">
+      </param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Hide" dispname="Hide Effects" vartype="bool">false</param>
+      <command>trTechHideEffects(%Tech%, %PlayerID%, %Hide%);</command>
+    </effect>
+    <effect name="Tech: Modify Cost">
+      <param name="Tech" dispname="Tech" vartype="tech">Villager</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="ResourceID" dispname="Resource" vartype="resourceid">0</param>
+      <param name="Delta" dispname="Delta" vartype="float">1.0</param>
+      <param name="Relativity" dispname="Relativity" vartype="purelativity">0</param>
+      <command>trTechModifyCost(%Tech%, %PlayerID%, %ResourceID%, %Delta%, %Relativity%);</command>
+    </effect>
+    <effect name="Tech: Modify Research Points">
+      <param name="Tech" dispname="Tech" vartype="tech">Villager</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Delta" dispname="Delta" vartype="float">1.0</param>
+      <param name="Relativity" dispname="Relativity" vartype="purelativity">0</param>
+      <command>trTechModifyResearchPoints(%Tech%, %PlayerID%, %Delta%, %Relativity%);</command>
+    </effect>
+    <effect name="Tech: Replace Icon">
+      <param name="Tech" dispname="Tech" vartype="tech">
+      </param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="IconPath" dispname="Icon Path" vartype="string">
+      </param>
+      <command>trTechSetIconPath(%Tech%, %PlayerID%, "%IconPath%");</command>
+    </effect>
+    <effect name="Tech: Replace Icon by Tech">
+      <param name="Tech" dispname="Tech" vartype="tech">
+      </param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="IconTech" dispname="Icon Tech" vartype="tech">
+      </param>
+      <command>trTechReplaceIconByTech(%Tech%, %PlayerID%, %IconTech%);</command>
+    </effect>
+    <effect name="Tech: Set String">
+      <param name="Tech" dispname="Tech" vartype="tech">Villager</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Field" dispname="Field" vartype="techstringfield">0</param>
+      <param name="StringID" dispname="String" vartype="stringid">
+      </param>
+      <command>trTechSetStringID(%Tech%, %PlayerID%, "%StringID%", %Field%);</command>
+    </effect>
+    <effect name="Unit: Apply Effect">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="Effect" dispname="Effect" vartype="uniteffect">0</param>
+      <param name="Duration" dispname="Duration (s)" vartype="float">0</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitApplyEffect(%Effect%, %Duration%);</command>
+    </effect>
+    <effect name="Unit: Apply Effect with Damage">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="Effect" dispname="Effect" vartype="uniteffectdamage">0</param>
+      <param name="Duration" dispname="Duration (s)" vartype="float">0</param>
+      <param name="DmgType" dispname="Damage Type" vartype="damagetype">-1</param>
+      <param name="Amount" dispname="Amount" vartype="float">1.0</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitApplyEffectDamage(%Effect%, %Duration%, %Amount%, %DmgType%);</command>
+    </effect>
+    <effect name="Unit: Apply Effect by ProtoUnit">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="Effect" dispname="Effect" vartype="uniteffectprotounit">0</param>
+      <param name="Duration" dispname="Duration (s)" vartype="float">0</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="ProtoName" dispname="ProtoName" vartype="protounit">Villager</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitApplyEffectProtoUnit(%Effect%, %Duration%, %PlayerID%, "%ProtoName%");</command>
+    </effect>
+    <effect name="Unit: Add Modifier">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="ModifyType" dispname="Modify Type" vartype="modifytype">0</param>
+      <param name="DmgType" dispname="Damage Type" vartype="damagetype">-1</param>
+      <param name="Amount" dispname="Amount" vartype="float">1.0</param>
+      <param name="Duration" dispname="Duration (s)" vartype="float">0</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitAddModifier(%ModifyType%, %DmgType%, %Amount%, %Duration%);</command>
+    </effect>
+    <effect name="Unit: Adjust Modifier">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="ModifyType" dispname="Modify Type" vartype="modifytype">0</param>
+      <param name="DmgType" dispname="Damage Type" vartype="damagetype">-1</param>
+      <param name="Delta" dispname="Delta" vartype="float">1.0</param>
+      <param name="Relativity" dispname="Relativity" vartype="purelativity">0</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitAdjustModifier(%ModifyType%, %DmgType%, %Delta%, %Relativity%);</command>
+    </effect>
+    <effect name="Unit: Change Name">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="NewName" dispname="Name" vartype="stringid">Name</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitChangeName("%NewName%");</command>
+    </effect>
+    <effect name="Unit: Change Type">
+      <param name="SrcObject" dispname="Unit" vartype="unit">-1</param>
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">Villager</param>
+      <param name="SkipBirth" dispname="Skip Birth Anim:" vartype="bool">false</param>
+      <param name="Foundation" dispname="Force Foundation" vartype="bool">false</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitChangeProtoUnit("%ProtoUnit%", %SkipBirth%, %Foundation%);</command>
+    </effect>
+    <effect name="Unit: Delayed Transform">
+      <param name="SrcObject" dispname="Unit" vartype="unit">-1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitDelayedTransform();</command>
+    </effect>
+    <effect name="Unit: Perform Transformation">
+      <param name="SrcObject" dispname="Unit" vartype="unit">-1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitTransformCommand();</command>
+    </effect>
+    <effect name="Unit: Construct Building">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <param name="ProtoUnit" dispname="ProtoUnit To Build" vartype="protounit">default</param>
+      <param name="DstPoint" dispname="Build Location" vartype="area">0</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitBuildUnit("%ProtoUnit%", vector(%DstPoint%));</command>
+    </effect>
+    <effect name="Unit: Convert">
+      <param name="SrcObject" dispname="Unit" vartype="unit">-1</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitConvert(%PlayerID%);</command>
+    </effect>
+    <effect name="Unit: Create">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="ProtoName" dispname="ProtoName" vartype="protounit">Villager</param>
+      <param name="Location" dispname="" vartype="area">0,0,0</param>
+      <param name="Heading" dispname="Heading (0-359)" vartype="long">0</param>
+      <param name="SkipBirth" dispname="Skip Birth Anim:" vartype="bool">false</param>
+      <command>trUnitCreate("%ProtoName%", %Location%, %Heading%, %PlayerID%, %SkipBirth%);</command>
+    </effect>
+    <effect name="Unit: Create from Source Unit">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="ProtoName" dispname="ProtoName" vartype="protounit">Villager</param>
+      <param name="SrcObject" dispname="Source Unit" vartype="unit">-1</param>
+      <param name="DstObject" dispname="Target Unit" vartype="unit">-1</param>
+      <command>trUnitCreateFromSource("%ProtoName%", %SrcObject%, %DstObject%, %PlayerID%);</command>
+    </effect>
+    <effect name="Unit: Create Multiple">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="ProtoName" dispname="ProtoName" vartype="protounit">Villager</param>
+      <param name="Location" dispname="" vartype="area">0,0,0</param>
+      <param name="Count" dispname="Count" vartype="long">0</param>
+      <param name="Heading" dispname="Heading (0-359)" vartype="long">0</param>
+      <command>for (int i = 0; i &lt; %Count%; i++)</command>
+      <command>trUnitCreate("%ProtoName%", %Location%, %Heading%, %PlayerID%);</command>
+    </effect>
+    <effect name="Unit: Create Multiple from Source Unit">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="ProtoName" dispname="ProtoName" vartype="protounit">Villager</param>
+      <param name="SrcObject" dispname="Source Unit" vartype="unit">-1</param>
+      <param name="DstObject" dispname="Target Unit" vartype="unit">-1</param>
+      <param name="Count" dispname="Count" vartype="long">1</param>
+      <command>trUnitCreateFromSourceMulti("%ProtoName%", %SrcObject%, %DstObject%, %PlayerID%, %Count%);</command>
+    </effect>
+    <effect name="Unit: Damage">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="DamageAmt" dispname="DamageAmt" vartype="float">1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trDamageUnit(%DamageAmt%);</command>
+    </effect>
+    <effect name="Unit: Damage by Percentage">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="DamagePct" dispname="DamagePct" vartype="float">50</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trDamageUnitPercent(%DamagePct%);</command>
+    </effect>
+    <effect name="Unit: Disable Conversion">
+      <param name="SrcObject" dispname="Unit" vartype="unit">-1</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Forbid" dispname="Forbid:" vartype="bool">true</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitSetConvertible(%PlayerID%, %Forbid%);</command>
+    </effect>
+    <effect name="Unit: Disable Deletion">
+      <param name="Disable" dispname="Disable" vartype="bool">false</param>
+      <command>trDisableUnitDeletion(%Disable%);</command>
+    </effect>
+    <effect name="Unit: Flash">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="Duration" dispname="Seconds" vartype="float">2.5</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitHighlight(%Duration%, true);</command>
+    </effect>
+    <effect name="Unit: Garrison">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <param name="DstObject" dispname="Target Unit" vartype="unit">-1</param>
+      <param name="EventID" dispname="Trigger" vartype="event">-1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitGarrison(%DstObject%,%EventID%);</command>
+    </effect>
+    <effect name="Unit: Garrison Instantly">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <param name="DstObject" dispname="Target Unit" vartype="unit">-1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trImmediateUnitGarrison(%DstObject%);</command>
+    </effect>
+    <effect name="Unit: Heal">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="HealAmt" dispname="Amount" vartype="float">1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trHealUnit(%HealAmt%);</command>
+    </effect>
+    <effect name="Unit: Heal by Percentage">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="HealPct" dispname="HealPct" vartype="float">50</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trHealUnitPercent(%HealPct%);</command>
+    </effect>
+    <effect name="Unit: Set Hitpoints">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="Value" dispname="Amount" vartype="float">1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitSetHitpoints(%Value%);</command>
+    </effect>
+    <effect name="Unit: Highlight">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="Duration" dispname="Seconds" vartype="float">2.5</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitHighlight(%Duration%, false);</command>
+    </effect>
+    <effect name="Unit: Kill">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitDelete(false);</command>
+    </effect>
+    <effect name="Unit: Make Invulnerable">
+      <param name="DstObject" dispname="Target Unit" vartype="unit">-1</param>
+      <param name="Enable" dispname="Enable" vartype="bool">true</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="DstObject">trUnitSelectByID(%DstObject%);</command>
+      <command>trUnitMakeInvulnerable(%Enable%);</command>
+    </effect>
+    <effect name="Unit: Make Passive">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <param name="Enable" dispname="Enable" vartype="bool">true</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitSetPassiveMode(%Enable%);</command>
+    </effect>
+    <effect name="Unit: Modify Resource Inventory">
+      <param name="DstObject" dispname="Target Unit" vartype="unit">-1</param>
+      <param name="ResourceID" dispname="Resource" vartype="resourceid">0</param>
+      <param name="Delta" dispname="Delta" vartype="float">1.0</param>
+      <param name="Relativity" dispname="Relativity" vartype="purelativity">0</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="DstObject">trUnitSelectByID(%DstObject%);</command>
+      <command>trUnitModifyResourceInventory(%ResourceID%, %Delta%, %Relativity%);</command>
+    </effect>
+    <effect name="Unit: Move From Area to Point">
+      <param name="RefObject" dispname="Center Unit" vartype="unit" dispradius="">-1</param>
+      <param name="UnitType" dispname="Type" vartype="string">Unit</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Radius" dispname="Radius" vartype="float" dispradius="">10</param>
+      <param name="DstPoint" dispname="X" vartype="area">0</param>
+      <param name="AttackMove" dispname="Attack Move" vartype="bool">false</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="RefObject">trUnitSelectByID(%RefObject%);</command>
+      <command>trUnitMoveFromArea(%DstPoint%, -1, %AttackMove%, %PlayerID%, "%UnitType%", %Radius%);</command>
+    </effect>
+    <effect name="Unit: Move From Area to Unit">
+      <param name="RefObject" dispname="Center Unit" vartype="unit" dispradius="">-1</param>
+      <param name="UnitType" dispname="Type" vartype="string">Unit</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Radius" dispname="Radius" vartype="float" dispradius="">10</param>
+      <param name="DstObject" dispname="Target Unit" vartype="unit">-1</param>
+      <param name="AttackMove" dispname="Attack Move" vartype="bool">false</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="RefObject">trUnitSelectByID(%RefObject%);</command>
+      <command>trUnitMoveFromAreaToUnit(%DstObject%, %AttackMove%, %PlayerID%, "%UnitType%", %Radius%);</command>
+    </effect>
+    <effect name="Unit: Move to Point">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <param name="DstPoint" dispname="X" vartype="area">0</param>
+      <param name="EventID" dispname="Trigger" vartype="event">-1</param>
+      <param name="AttackMove" dispname="Attack Move" vartype="bool">false</param>
+      <param name="Run" dispname="Run" vartype="bool">false</param>
+      <param name="RunSpeed" dispname="Run Speed" vartype="float">1.0</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitMoveToPoint(%DstPoint%, %EventID%, %AttackMove%, %Run%, %RunSpeed%);</command>
+    </effect>
+    <effect name="Unit: Move to Unit">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <param name="DstObject" dispname="Target Unit" vartype="unit">-1</param>
+      <param name="EventID" dispname="Trigger" vartype="event">-1</param>
+      <param name="AttackMove" dispname="Attack Move" vartype="bool">false</param>
+      <param name="Run" dispname="Run" vartype="bool">false</param>
+      <param name="RunSpeed" dispname="Run Speed" vartype="float">1.0</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitMoveToUnit(%DstObject%, %EventID%, %AttackMove%, %Run%, %RunSpeed%);</command>
+    </effect>
+    <effect name="Unit: Mutate">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">Villager</param>
+      <param name="FullHitpoints" dispname="Force Full Hitpoints" vartype="bool">false</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitMutate("%ProtoUnit%", %FullHitpoints%);</command>
+    </effect>
+    <effect name="Unit: Patrol to Point">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <param name="DstPoint" dispname="X" vartype="area">0</param>
+      <param name="Run" dispname="Run" vartype="bool">false</param>
+      <param name="RunSpeed" dispname="Run Speed" vartype="float">1.0</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitPatrolToPoint(%DstPoint%, %Run%, %RunSpeed%);</command>
+    </effect>
+    <effect name="Unit: Perform Action">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <param name="Action" dispname="Action" vartype="protoaction">
+      </param>
+      <param name="DstObject" dispname="Target Unit" vartype="unit" dispradius="">-1</param>
+      <param name="DstPoint" dispname="X" vartype="area">-1,-1,-1</param>
+      <param name="BypassCharge" dispname="Bypass Charge" vartype="bool">false</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitPerformAction("%Action%", %DstObject%, vector(%DstPoint%), %BypassCharge%);</command>
+    </effect>
+    <effect name="Unit: Perform Action By ProtoUnit">
+      <param name="SrcObject" dispname="Source Units" vartype="unit" dispradius="">-1</param>
+      <param name="ProtoUnit" dispname="ProtoUnit" vartype="protounit">Villager</param>
+      <param name="Action" dispname="Action" vartype="protoaction">
+      </param>
+      <param name="DstObject" dispname="Target Unit" vartype="unit" dispradius="">-1</param>
+      <param name="DstPoint" dispname="X" vartype="area">-1,-1,-1</param>
+      <param name="BypassCharge" dispname="Bypass Charge" vartype="bool">false</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitPerformAction("%Action%", %DstObject%, vector(%DstPoint%), %BypassCharge%);</command>
+    </effect>
+    <effect name="Unit: Reveal">
+      <param name="SrcObject" dispname="Unit" vartype="unit">-1</param>
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="Reveal" dispname="Reveal" vartype="bool">true</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitReveal(%PlayerID%, %Reveal%);</command>
+    </effect>
+    <effect name="Unit: Remove">
+      <param name="SrcObject" dispname="Unit" vartype="unit">-1</param>
+      <param name="EjectContained" dispname="Eject Contained:" vartype="bool">false</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitDestroy(%EjectContained%);</command>
+    </effect>
+    <effect name="Unit: Reposition">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="Area" dispname="" vartype="area">0, 0, 0</param>
+      <param name="DisableTie" dispname="Disable Tying" vartype="bool">false</param>
+      <param name="Immediate" dispname="Immediate" vartype="bool">false</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitReposition(%Area%, %DisableTie%, %Immediate%);</command>
+    </effect>
+    <effect name="Unit: Reposition To Unit">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="DstObject" dispname="Target Unit" vartype="unit">-1</param>
+      <param name="DisableTie" dispname="Disable Tying" vartype="bool">false</param>
+      <param name="Immediate" dispname="Immediate" vartype="bool">false</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitRepositionToUnit(%DstObject%, %DisableTie%, %Immediate%);</command>
+    </effect>
+    <effect name="Unit: Select">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="Clear" dispname="Clear" vartype="bool">true</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitGameSelect(%Clear%);</command>
+    </effect>
+    <effect name="Unit: Set Animation">
+      <param name="SrcObject" dispname="Unit" vartype="unit">-1</param>
+      <param name="AnimName" dispname="Animation" vartype="animname">
+      </param>
+      <param name="AnimVersion" dispname="Variation" vartype="animvariation">0</param>
+      <param name="LoopIt" dispname="Loop:" vartype="bool">false</param>
+      <param name="EventID" dispname="Trigger" vartype="event">-1</param>
+      <param name="NoIdlePop" dispname="No Idle Pop:" vartype="bool">false</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitSetAnimationPath("%AnimName%","%AnimVersion%",%LoopIt%,%EventID%,%NoIdlePop%);</command>
+    </effect>
+    <effect name="Unit: Set Animation By Variation Number">
+      <param name="SrcObject" dispname="Unit" vartype="unit">-1</param>
+      <param name="AnimName" dispname="Animation" vartype="animname">
+      </param>
+      <param name="AnimVersion" dispname="Variation" vartype="long">0</param>
+      <param name="LoopIt" dispname="Loop:" vartype="bool">false</param>
+      <param name="EventID" dispname="Trigger" vartype="event">-1</param>
+      <param name="NoIdlePop" dispname="No Idle Pop:" vartype="bool">false</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitSetAnimation("%AnimName%",%AnimVersion%,%LoopIt%,%EventID%,%NoIdlePop%);</command>
+    </effect>
+    <effect name="Unit: Set Animation By ProtoUnit">
+      <param name="SrcObject" dispname="Unit" vartype="unit" dispradius="">-1</param>
+      <param name="ProtoName" dispname="ProtoName" vartype="protounit">default</param>
+      <param name="AnimName" dispname="Animation" vartype="animname">
+      </param>
+      <param name="AnimVersion" dispname="Variation" vartype="animvariation">0</param>
+      <param name="LoopIt" dispname="Loop:" vartype="bool">false</param>
+      <param name="EventID" dispname="Trigger" vartype="event">-1</param>
+      <param name="NoIdlePop" dispname="No Idle Pop:" vartype="bool">false</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitSetAnimationPath("%AnimName%","%AnimVersion%",%LoopIt%,%EventID%,%NoIdlePop%);</command>
+    </effect>
+    <effect name="Unit: Rotate Around X Axis">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="Angle" dispname="Angle (0-359)" vartype="long">0</param>
+      <param name="DisableTie" dispname="Disable Tying" vartype="bool">false</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitRotateX(%Angle%, %DisableTie%);</command>
+    </effect>
+    <effect name="Unit: Rotate Around Y Axis">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="Angle" dispname="Angle (0-359)" vartype="long">0</param>
+      <param name="DisableTie" dispname="Disable Tying" vartype="bool">false</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitRotateY(%Angle%, %DisableTie%);</command>
+    </effect>
+    <effect name="Unit: Rotate Around Z Axis">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="Angle" dispname="Angle (0-359)" vartype="long">0</param>
+      <param name="DisableTie" dispname="Disable Tying" vartype="bool">false</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitRotateZ(%Angle%, %DisableTie%);</command>
+    </effect>
+    <effect name="Unit: Set Orientation Forward" hidden="">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="Forward" dispname="Forward (0-359)" vartype="long">0</param>
+      <param name="DisableTie" dispname="Disable Tying" vartype="bool">false</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitSetOrientationForward(%Forward%, %DisableTie%);</command>
+    </effect>
+    <effect name="Unit: Set Orientation Up" hidden="">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="Up" dispname="Up (0-359)" vartype="long">0</param>
+      <param name="DisableTie" dispname="Disable Tying" vartype="bool">false</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitSetOrientationUp(%Up%, %DisableTie%);</command>
+    </effect>
+    <effect name="Unit: Set Orientation Right" hidden="">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="Right" dispname="Right (0-359)" vartype="long">0</param>
+      <param name="DisableTie" dispname="Disable Tying" vartype="bool">false</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitSetOrientationRight(%Right%, %DisableTie%);</command>
+    </effect>
+    <effect name="Unit: Set Variation">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="Variation" dispname="Variation" vartype="long">0</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitSetVariation(%Variation%);</command>
+    </effect>
+    <effect name="Unit: Set Stance">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <param name="Stance" dispname="Stance" vartype="unitstance">Aggressive</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitSetStance("%Stance%");</command>
+    </effect>
+    <effect name="Unit: Set Scale">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <param name="ScaleX" dispname="X" vartype="float">1.0</param>
+      <param name="ScaleY" dispname="Y" vartype="float">1.0</param>
+      <param name="ScaleZ" dispname="Z" vartype="float">1.0</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitSetScale(%ScaleX%, %ScaleY%, %ScaleZ%);</command>
+    </effect>
+    <effect name="Unit: Set Shading">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="Shading" dispname="Shading Type" vartype="shadingtype">-1</param>
+      <param name="Opacity" dispname="Opacity (0-100)" vartype="float">100</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitSetShading(%Shading%, %Opacity%);</command>
+    </effect>
+    <effect name="Unit: Set Veterancy Rank">
+      <param name="SrcObject" dispname="Units" vartype="unit">-1</param>
+      <param name="Rank" dispname="Rank" vartype="long">0</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitSetVeterancyRank(%Rank%);</command>
+    </effect>
+    <effect name="Unit: Show Building Damage">
+      <param name="Building" dispname="Building" vartype="unit">-1</param>
+      <param name="DamageLocations" dispname="Damage Locations" vartype="string">
+      </param>
+      <param name="SmokeLocations" dispname="Smoke Locations" vartype="string">
+      </param>
+      <param name="FireLocations" dispname="Fire Locations" vartype="string">
+      </param>
+      <command>trShowDamage(%Building%, "%DamageLocations%", "%SmokeLocations%", "%FireLocations%");</command>
+    </effect>
+    <effect name="Unit: Stop Current Action">
+      <param name="SrcObject" dispname="Unit" vartype="unit">-1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitRemoveControlAction();</command>
+    </effect>
+    <effect name="Unit: Task">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <param name="DstObject" dispname="Target Unit" vartype="unit">-1</param>
+      <param name="EventID" dispname="Trigger" vartype="event">-1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitDoWorkOnUnit(%DstObject%, %EventID%);</command>
+    </effect>
+    <effect name="Unit: Teleport to Point">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <param name="Area" dispname="" vartype="area">0, 0, 0</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitTeleport(%Area%);</command>
+    </effect>
+    <effect name="Unit: Teleport to Unit">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <param name="DstObject" dispname="Target Unit" vartype="unit">-1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitTeleportToUnit(%DstObject%);</command>
+    </effect>
+    <effect name="Unit: Throw">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <param name="Direction" dispname="Direction (0-359)" vartype="long">0</param>
+      <param name="Distance" dispname="Distance" vartype="float">15</param>
+      <param name="NumBounces" dispname="Number of Bounces" vartype="long">1</param>
+      <param name="MaxHeight" dispname="Max. Height" vartype="float">6</param>
+      <param name="MaxVelocity" dispname="Max. Velocity" vartype="float">10</param>
+      <param name="SpinPeriod" dispname="Spin Period" vartype="float">0.1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitThrow(%Direction%, %Distance%, %NumBounces%, %MaxHeight%, %MaxVelocity%, %SpinPeriod%);</command>
+    </effect>
+    <effect name="Unit: Turn to Face Direction">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <param name="Heading" dispname="Heading (0-359)" vartype="long">0</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitSetHeading(%Heading%);</command>
+    </effect>
+    <effect name="Unit: Turn to Face Unit">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <param name="DstObject" dispname="Target Unit" vartype="unit">-1</param>
+      <param name="EventID" dispname="Trigger" vartype="event">-1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitFaceUnit(%DstObject%,%EventID%);</command>
+    </effect>
+    <effect name="Unit: Ungarrison Contained Units">
+      <param name="SrcObject" dispname="Unit" vartype="unit">-1</param>
+      <command>trUnitSelectClear();</command>
+      <command>trUnitSelectByID(%SrcObject%);</command>
+      <command>trUnitUngarrisonContained();</command>
+    </effect>
+    <effect name="Unit Formations: Set Scale">
+      <param name="Scale" dispname="Scale" vartype="float">1.0</param>
+      <command>trFormationScale(%Scale%);</command>
+    </effect>
+    <effect name="UI: Panel Visibility">
+      <param name="Panel" dispname="Panel" vartype="wpfpanel">0</param>
+      <param name="Display" dispname="Display" vartype="bool">true</param>
+      <command>trUIPanelVisibility(%Panel%, %Display%);</command>
+    </effect>
+    <effect name="UI: Gamepad Prompt Visibility">
+      <param name="Prompt" dispname="Prompt" vartype="wpfgamepadprompt">0</param>
+      <param name="Display" dispname="Display" vartype="bool">true</param>
+      <command>trUIGamepadPromptVisibility(%Prompt%, %Display%);</command>
+    </effect>
+    <effect name="UI: Block Radial Menu">
+      <param name="Menu" dispname="Menu" vartype="wpfradialmenu">0</param>
+      <param name="Blocked" dispname="Blocked" vartype="bool">true</param>
+      <command>trUIBlockRadialMenu(%Menu%, %Blocked%);</command>
+    </effect>
+    <effect name="UI: Hide Radial Menu Prompt Panel">
+      <param name="Hidden" dispname="Hidden" vartype="bool">true</param>
+      <command>trUIHideRadialMenuPromptPanel(%Hidden%);</command>
+    </effect>
+    <effect name="Building: Place Foundation">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="ProtoName" dispname="ProtoName" vartype="protounit">Villager</param>
+      <param name="Location" dispname="" vartype="area">0,0,0</param>
+      <param name="Heading" dispname="Heading (0-359)" vartype="long">0</param>
+      <param name="PercentComplete" dispname="Percent Complete (0-100)" vartype="float">0.0</param>
+      <command>trPlaceFoundation("%ProtoName%", %Location%, %Heading%, %PlayerID%, %PercentComplete%);</command>
+    </effect>
+    <effect name="Building: Timeshift to Point">
+      <param name="SrcObject" dispname="Source Unit" vartype="unit">-1</param>
+      <param name="DstPoint" dispname="X" vartype="area">0</param>
+      <command>trBuildingTimeShiftAtPos(%SrcObject%, %DstPoint%);</command>
+    </effect>
+    <effect name="Building: Generate Lush">
+      <param name="SrcObject" dispname="Source Units" vartype="unit">-1</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trGenerateLush();</command>
+    </effect>
+    <effect name="User: Set Scenario User Data">
+      <param name="Index" dispname="Index (0-15)" vartype="long">0</param>
+      <param name="Value" dispname="Value" vartype="long">0</param>
+      <command>trSetCurrentScenarioUserData(%Index%,%Value%);</command>
+    </effect>
+    <effect name="God Power: Grant to Player">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="PowerName" dispname="Power" vartype="godpower">default</param>
+      <param name="Count" dispname="Uses" vartype="long">1</param>
+      <param name="Cooldown" dispname="Cooldown (s)" vartype="long">0</param>
+      <param name="UseCost" dispname="Use Cost" vartype="bool">false</param>
+      <param name="RepeatAtEnd" dispname="Repeatable at End" vartype="bool">false</param>
+      <command>trGodPowerGrant(%PlayerID%, "%PowerName%", %Count%, %Cooldown%, %UseCost%, %RepeatAtEnd%);</command>
+    </effect>
+    <effect name="God Power: Grant to Player at Position">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="PowerName" dispname="Power" vartype="godpower">default</param>
+      <param name="Count" dispname="Uses" vartype="long">1</param>
+      <param name="Position" dispname="Position" vartype="long">0</param>
+      <param name="Cooldown" dispname="Cooldown (s)" vartype="long">0</param>
+      <param name="UseCost" dispname="Use Cost" vartype="bool">false</param>
+      <param name="RepeatAtEnd" dispname="Repeatable at End" vartype="bool">false</param>
+      <command>trGodPowerGrantAtSlot(%PlayerID%, "%PowerName%", %Count%, %Position%, %Cooldown%, %UseCost%, %RepeatAtEnd%);</command>
+    </effect>
+    <effect name="God Power: Invoke">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="PowerName" dispname="Power" vartype="godpower">default</param>
+      <param name="DstPoint1" dispname="X" vartype="area">0,0,0</param>
+      <param name="DstPoint2" dispname="X" vartype="area">0,0,0</param>
+      <param name="SrcObject" dispname="Target Unit" vartype="unit">-1</param>
+      <param name="IgnoreCooldown" dispname="Ignore Cooldown" vartype="bool">false</param>
+      <command>trUnitSelectClear();</command>
+      <command loop="" loopparm="SrcObject">trUnitSelectByID(%SrcObject%);</command>
+      <command>trGodPowerInvoke(%PlayerID%, "%PowerName%", vector(%DstPoint1%), vector(%DstPoint2%), %IgnoreCooldown%);</command>
+    </effect>
+    <effect name="God Power: Invoke at Army">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="SrcArmy" dispname="Army" vartype="group">default</param>
+      <param name="PowerName" dispname="Power" vartype="godpower">default</param>
+      <param name="IgnoreCooldown" dispname="Ignore Cooldown" vartype="bool">false</param>
+      <command>trGodPowerInvokeAtArmy(%PlayerID%, "%SrcArmy%", "%PowerName%", %IgnoreCooldown%);</command>
+    </effect>
+    <effect name="God Power: Redefine for Player">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="PowerName" dispname="Power" vartype="godpower">default</param>
+      <param name="IconPath" dispname="Icon Path" vartype="string">
+      </param>
+      <param name="DisplayName" dispname="Display Name" vartype="stringid">
+      </param>
+      <param name="Rollover" dispname="Rollover" vartype="stringid">
+      </param>
+      <command>trGodPowerRedefine(%Player%, "%PowerName%", "%IconPath%", "%DisplayName%", "%Rollover%");</command>
+    </effect>
+    <effect name="God Power: Remove All for Player">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <command>trPlayerKillAllGodPowers(%Player%);</command>
+    </effect>
+    <effect name="God Power: Enable Granting by Techs">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <param name="Enable" dispname="Enable" vartype="bool">true</param>
+      <command>trPlayerTechTreeEnabledGodPowers(%Player%, %Enable%);</command>
+    </effect>
+    <effect name="God Power: Enable Blocking">
+      <param name="Enable" dispname="Enable" vartype="bool">true</param>
+      <command>trGodPowerEnableBlocking(%Enable%);</command>
+    </effect>
+    <effect name="God Power: Set Cost">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="PowerName" dispname="Power" vartype="godpower">default</param>
+      <param name="InitialCost" dispname="Initial Cost" vartype="float">0</param>
+      <param name="RepeatCost" dispname="Repeat Cost" vartype="float">0</param>
+      <command>trGodPowerSetCost(%PlayerID%, "%PowerName%", %InitialCost%, %RepeatCost%);</command>
+    </effect>
+    <effect name="God Power: Set Use Count">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="PowerName" dispname="Power" vartype="godpower">default</param>
+      <param name="UseCount" dispname="Use Count" vartype="long">0</param>
+      <command>trGodPowerSetUseCount(%PlayerID%, "%PowerName%", %UseCount%);</command>
+    </effect>
+    <effect name="God Power: Set Used Times">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="PowerName" dispname="Power" vartype="godpower">default</param>
+      <param name="UsedTimes" dispname="Used Times" vartype="long">0</param>
+      <command>setPowerNumUsedTimes(%PlayerID%, "%PowerName%", %UseCount%);</command>
+    </effect>
+    <effect name="God Power: Set Cooldown">
+      <param name="PlayerID" dispname="Player" vartype="player">1</param>
+      <param name="PowerName" dispname="Power" vartype="godpower">default</param>
+      <param name="Cooldown" dispname="Cooldown (s)" vartype="long">0</param>
+      <command>trGodPowerSetCooldown(%PlayerID%, "%PowerName%", %Cooldown%);</command>
+    </effect>
+    <effect name="Scenario: Restart">
+      <command>trRestartScenario();</command>
+    </effect>
+    <effect name="Terrain: Change Height Rectangular">
+      <param name="DstArea" dispname="Area" vartype="rectarea">0,0,0,0</param>
+      <param name="Height" dispname="Height" vartype="float" dispradius="">0</param>
+      <param name="RemoveWater" dispname="Remove Water" vartype="bool">true</param>
+      <command>trChangeTerrainHeight(%DstArea%, %Height%, %RemoveWater%);</command>
+    </effect>
+    <effect name="Terrain: Change Height Circular">
+      <param name="Center" dispname="" vartype="area" dispradius="">0, 0, 0</param>
+      <param name="Radius" dispname="Radius" vartype="float" dispradius="">0</param>
+      <param name="Height" dispname="Height" vartype="float">0</param>
+      <param name="RemoveWater" dispname="Remove Water" vartype="bool">true</param>
+      <command>trChangeTerrainHeightCircular(vector(%Center%), %Radius%, %Height%, %RemoveWater%);</command>
+    </effect>
+    <effect name="Terrain: Paint Rectangular">
+      <param name="Subtype" dispname="Terrain" vartype="terrainsubtype">
+      </param>
+      <param name="DstArea" dispname="Area" vartype="rectarea">0,0,0,0</param>
+      <param name="UpdateObstructions" dispname="Update Obstructions" vartype="bool">true</param>
+      <command>trPaintTerrainBySubtypeName("%Subtype%", %DstArea%, %UpdateObstructions%);</command>
+    </effect>
+    <effect name="Terrain: Paint Circular">
+      <param name="Subtype" dispname="Terrain" vartype="terrainsubtype">
+      </param>
+      <param name="Center" dispname="" vartype="area" dispradius="">0, 0, 0</param>
+      <param name="Radius" dispname="Radius" vartype="float" dispradius="">0</param>
+      <param name="UpdateObstructions" dispname="Update Obstructions" vartype="bool">true</param>
+      <command>trPaintTerrainCircularBySubtypeName("%Subtype%", vector(%Center%), %Radius%, %UpdateObstructions%);</command>
+    </effect>
+    <effect name="Terrain: Paint Water Circular">
+      <param name="Water" dispname="Water" vartype="water">
+      </param>
+      <param name="Center" dispname="" vartype="area" dispradius="">0, 0, 0</param>
+      <param name="Radius" dispname="Radius" vartype="float" dispradius="">0</param>
+      <param name="UpdateObstructions" dispname="Update Obstructions" vartype="bool">true</param>
+      <command>trPaintWaterCircular("%Water%", vector(%Center%), %Radius%, %UpdateObstructions%);</command>
+    </effect>
+    <effect name="Terrain: Paint Water Rectangular">
+      <param name="Water" dispname="Water" vartype="water">
+      </param>
+      <param name="DstArea" dispname="Area" vartype="rectarea">0,0,0,0</param>
+      <param name="UpdateObstructions" dispname="Update Obstructions" vartype="bool">true</param>
+      <command>trPaintWaterRectangular("%Water%", %DstArea%, %UpdateObstructions%);</command>
+    </effect>
+    <effect name="Player: Queue Starting Units">
+      <param name="Player" dispname="Player" vartype="player">1</param>
+      <command>trQueueStartingUnits(%Player%);</command>
+    </effect>
+    <effect name="XS: Code Snippet" directcode="">
+      <param name="CodeSnippet" dispname="CodeSnippet" vartype="snippet">
+      </param>
+      <command>%CodeSnippet%</command>
+    </effect>
+  </effects>
+</trigger>
