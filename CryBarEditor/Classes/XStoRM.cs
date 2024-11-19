@@ -71,7 +71,8 @@ public static partial class XStoRM
                 var new_lines = text_with_includes.Split('\n', StringSplitOptions.RemoveEmptyEntries);
                 foreach (var line in new_lines)
                 {
-                    builder.AppendLine($"{FUNCTION}(\"{EscapeText(line)}\");");
+                    var corrected_line = line.Replace("\r", "");
+                    builder.AppendLine($"{FUNCTION}(\"{EscapeText(corrected_line)}\");");
                 }
                 text_with_includes = builder.ToString();
             }
