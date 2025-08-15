@@ -1500,7 +1500,7 @@ public partial class MainWindow : SimpleWindow
         // then we cache this value for later use
 
         var relevant_path = "";
-        var dirs = _rootDirectory.Split('\\');
+        var dirs = _rootDirectory.Split('\\', StringSplitOptions.RemoveEmptyEntries);
         foreach (var dir in dirs)
         {
             if (dir == ROOT_DIRECTORY_NAME)
