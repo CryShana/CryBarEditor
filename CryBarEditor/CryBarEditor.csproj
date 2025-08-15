@@ -18,18 +18,24 @@
   <ItemGroup>
     <Content Include="crybar.ico" />
   </ItemGroup>
+	
+<ItemGroup>
+	<Content Include="lib\**\*">
+		<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	</Content>
+</ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="11.2.1" />
-    <PackageReference Include="Avalonia.AvaloniaEdit" Version="11.1.0" />
-    <PackageReference Include="Avalonia.Desktop" Version="11.2.1" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.1" />
-    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.1" />
+    <PackageReference Include="Avalonia" Version="11.3.3" />
+    <PackageReference Include="Avalonia.AvaloniaEdit" Version="11.3.0" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.3" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.3" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.3" />
     <!--Condition below is needed to remove Avalonia.Diagnostics package from build output in Release configuration.-->
-    <PackageReference Condition="'$(Configuration)' == 'Debug'" Include="Avalonia.Diagnostics" Version="11.2.1" />
-    <PackageReference Include="AvaloniaEdit.TextMate" Version="11.1.0" />
-    <PackageReference Include="Material.Icons.Avalonia" Version="2.1.10" />
-    <PackageReference Include="TextMateSharp.Grammars" Version="1.0.64" />
+    <PackageReference Condition="'$(Configuration)' == 'Debug'" Include="Avalonia.Diagnostics" Version="11.3.3" />
+    <PackageReference Include="AvaloniaEdit.TextMate" Version="11.3.0" />
+    <PackageReference Include="Material.Icons.Avalonia" Version="2.4.1" />
+    <PackageReference Include="TextMateSharp.Grammars" Version="1.0.70" />
   </ItemGroup>
 
   <ItemGroup>

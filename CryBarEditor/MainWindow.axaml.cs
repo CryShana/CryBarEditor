@@ -12,6 +12,7 @@ using System.IO;
 using System.Xml;
 using System.Linq;
 using System.Text;
+using System.Buffers;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
@@ -762,6 +763,11 @@ public partial class MainWindow : SimpleWindow
 
                 PreviewedFileNote = "(Preview not yet supported)";
             }
+            else if (ext == ".bank")
+            {
+                PreviewedFileNote = "(FMOD Bank)";
+                text = ParseFMODBank(data);
+            }
             else
             {
                 if (data_size > MAX_DATA_TEXT_SIZE)
@@ -899,6 +905,89 @@ public partial class MainWindow : SimpleWindow
         }
 
         p.Report(null);
+    }
+    
+    
+    static string ParseFMODBank(Memory<byte> data)
+    {
+        var text = "";
+        FMOD.Studio.Bank bank = default;
+        FMOD.Studio.System studio = default;
+        
+        var buffer = ArrayPool<byte>.Shared.Rent(data.Length);
+        try
+        {
+            FMOD.Studio.System.create(out studio); 
+            var r = studio.initialize(512, FMOD.Studio.INITFLAGS.NORMAL, FMOD.INITFLAGS.NORMAL, nint.Zero);
+            if (r != FMOD.RESULT.OK) throw new Exception("Failed to initialize FMOD system: " + r);
+
+            data.Span.CopyTo(buffer);
+            r = studio.loadBankMemory(buffer, FMOD.Studio.LOAD_BANK_FLAGS.NORMAL, out bank);
+            if (r != FMOD.RESULT.OK) throw new Exception("Failed to load FMOD bank: " + r);
+
+            r = bank.getEventCount(out int eventCount);
+            if (r != FMOD.RESULT.OK) throw new Exception("Failed to load FMOD bank events: " + r);
+            if (eventCount == 0)
+            {
+                text = "FMOD bank is empty (no events)";
+            }
+            else
+            {
+                var events = new FMOD.Studio.EventDescription[eventCount];
+                r = bank.getEventList(out events);
+                if (r != FMOD.RESULT.OK) throw new Exception("Failed to load FMOD bank event list: " + r);
+
+                text = $"Loaded {eventCount} events from bank:\n";
+
+                foreach (var e in events)
+                {
+                    e.getPath(out string path);
+                    if (string.IsNullOrEmpty(path))
+                    {
+                        // try ID instead
+                        e.getID(out FMOD.GUID id); 
+                        path = $"GUID_{id.Data1:X4}_{id.Data2:X4}_{id.Data3:X4}_{id.Data4:X4}";
+                    }
+
+                    // Get more useful info
+                    e.getLength(out int length);
+                    e.getParameterDescriptionCount(out int paramCount);
+                    e.getSampleLoadingState(out FMOD.Studio.LOADING_STATE loadingState);
+                    e.is3D(out bool is3D);
+                    e.isOneshot(out bool isOneshot);
+                    e.isSnapshot(out bool isSnapshot);
+                    e.getUserPropertyCount(out int userPropCount);
+                    e.getMinMaxDistance(out float minDist, out float maxDist);
+                    e.isDopplerEnabled(out bool doppler);
+                    e.getUserData(out IntPtr userData);
+
+                    text += $"\nEvent: {path}\n";
+                    text += $"  Length: {length}ms, 3D: {is3D}, Oneshot: {isOneshot}, Snapshot: {isSnapshot}\n";
+                    text += $"  Distance: {minDist}-{maxDist}\n";
+
+                    // Get parameter details
+                    for (int i = 0; i < paramCount; i++)
+                    {
+                        e.getParameterDescriptionByIndex(i, out var prm);
+                        
+                        string name = prm.name;
+                        text += $"    Param: {name,-15} ({prm.type})\n";
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            text = "Failed to decode bank file: " + ex.Message;
+        }
+        finally
+        {
+            bank.unload();
+            studio.release();
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+
+        return text;
     }
     #endregion
 
