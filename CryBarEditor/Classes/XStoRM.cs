@@ -13,7 +13,11 @@ public static partial class XStoRM
     public static partial Regex GetSafeClassNameRgx();
 
     [GeneratedRegex("""include "([^"]+)"\;""")]
-    private static partial Regex GetIncludeRgx();
+    public static partial Regex GetIncludeRgx();
+
+    // trDelayedRuleActivation(string name, bool checkForTrigger)
+    [GeneratedRegex("""trDelayedRuleActivation\(([^\),;]+),*[^\);]*\)\s*;""")]
+    public static partial Regex GetDelayedRuleActivationRgx();
 
     public static bool Convert(string input_path, string output_path, string class_name)
     {
@@ -22,19 +26,22 @@ public static partial class XStoRM
 
         if (!File.Exists(input_path))
             return false;
-        
+
         const string FUNCTION = "_c";
 
         var output_text = ProcessXStoRM(input_path);
 
         output_text = $$"""
+                #if (defined({{class_name}}_INCLUDE) == false)
+                #define {{class_name}}_INCLUDE
                 class {{class_name}} { 
                 void {{FUNCTION}}(string l = ""){rmTriggerAddScriptLine(l);}
                 void RegisterTriggers()
                 {
                 {{output_text}}
                 }
-                };   
+                };
+                #endif   
                 """;
 
         File.WriteAllText(output_path, output_text);
@@ -56,7 +63,9 @@ public static partial class XStoRM
                 var include_path = Path.Combine(root ?? ".", include);
                 if (!File.Exists(include_path))
                 {
-                    // TODO: log warning that include was not found
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.WriteLine("Include '" + include + "' not found, will be ignored.");
+                    Console.ResetColor();
                     continue;
                 }
 
@@ -66,8 +75,34 @@ public static partial class XStoRM
 
             if (wrap)
             {
+                // HANDLE DELAYED RULE ACTIVATIONS
+                var delayedActivations = GetDelayedRuleActivationRgx().Matches(text_with_includes);
+                if (delayedActivations.Count > 0)
+                {
+                    text_with_includes = GetDelayedRuleActivationRgx()
+                        .Replace(text_with_includes, "__delayedRuleActivations.add($1);");
+
+                    // add this on top
+                    text_with_includes = $$"""
+                    string[] __delayedRuleActivations = default;
+                    rule __DelayedRuleActivations
+                    highFrequency
+                    active
+                    {
+                        for(int i = 0; i < __delayedRuleActivations.size(); i++) 
+                        {
+                            string triggerName = __delayedRuleActivations[i];
+                            xsEnableRule(triggerName);
+                        }
+                        __delayedRuleActivations.clear();
+                    }
+                    
+                    {{text_with_includes}}
+                    """;
+                }
+
                 // DO THE WRAPPING
-                StringBuilder builder = new();
+                var builder = new StringBuilder();
                 var new_lines = text_with_includes.Split('\n', StringSplitOptions.RemoveEmptyEntries);
                 foreach (var line in new_lines)
                 {
