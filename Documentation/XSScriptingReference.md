@@ -3,6 +3,8 @@ This is **NOT a coding guide**. This also **NOT a COMPLETE reference**.
 
 This is just a collection of all functions and useful snippets/constants that I collected while making custom scripts for my customs scenarios.
 
+**NOTE: Developers have released official XS documentation, found inside the game installation folder inside BANG_Documentation. Please check that as well!**
+
 ### Disclaimer
 All notes you find here are my **personal notes** I wrote while collecting this information. If you think it's incorrect or you want to add your own information, make a pull request or open an issue.
 
