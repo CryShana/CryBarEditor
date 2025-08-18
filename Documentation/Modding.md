@@ -247,9 +247,9 @@ You can include your custom powers (or abilities) like so: (inside `powers_mod.x
 ### Working with sounds
 AOM Retold switched recently to using FMOD Bank files. These are compiled files that contain sound events that are played by the game, and can be controlled by various parameters.
 
-Sounds are defined in `soundmanifest.xml` file (inside `Sound.bar` BAR archive)
+Sounds are defined in `soundmanifest.xml` file (inside `Sound.bar` BAR archive) and also `.soundset` files within same archive.
 
-If you want to replace existing sound:
+If you want to replace existing sound, just find it's path like so:
 ```xml
 <soundfile>
 		<filename>campaign\tgg\cinematics\tgg02\campfire.mp3</filename>
@@ -257,7 +257,7 @@ If you want to replace existing sound:
 		<numsamples>1903104</numsamples>
 </soundfile>
 ```
-Just create a file at `game\sound\campaign\tgg\cinematics\tgg02\campfire.mp3` and it will override it.
+And create same file at `game\sound\campaign\tgg\cinematics\tgg02\campfire.mp3` within you mod folder and it will override it.
 
 If you wish to add a NEW sound, there are many ways:
 - if making a** custom scenario**, whenever playing a sound, provide relative path in the editor itself like so `mymodname\myfile.mp3` - path is relative to `game\sound` folder within your mod
