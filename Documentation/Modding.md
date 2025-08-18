@@ -100,7 +100,9 @@ Only certain files support additive modding, I confirmed only the following:
 | `proto.xml` | `proto_mods.xml` | `<protomods>`
 | `techtree.xml` | `techtree_mods.xml` | `<techtreemods>`
 | `string_table.txt` | `stringmods.txt` | (Is not XML)
-| `powers.xml` | `powers_mods.xml` | `<powersmod>`
+| `powers.xml` | `powers_mods.xml` | `<powersmods>` or `<powersmod>`
+| `proto_unit_commands.xml` | `proto_unit_command_mods.xml` (exception, uses singular "command") | `<protounitcommandsmods>`
+| `abilities.xml` | `abilities_mods.xml` | `<abilitiesmods>`
 
 If you are uncertain whether your additive mod of a custom file was accepted by the game or not,
 please check [Debugging Tips](#debugging-tips)
@@ -242,6 +244,45 @@ You can include your custom powers (or abilities) like so: (inside `powers_mod.x
 </powersmod>
 ```
 
+### Working with sounds
+AOM Retold switched recently to using FMOD Bank files. These are compiled files that contain sound events that are played by the game, and can be controlled by various parameters.
+
+Sounds are defined in `soundmanifest.xml` file (inside `Sound.bar` BAR archive)
+
+If you want to replace existing sound:
+```xml
+<soundfile>
+		<filename>campaign\tgg\cinematics\tgg02\campfire.mp3</filename>
+		<length>43.154</length>
+		<numsamples>1903104</numsamples>
+</soundfile>
+```
+Just create a file at `game\sound\campaign\tgg\cinematics\tgg02\campfire.mp3` and it will override it.
+
+If you wish to add a NEW sound, there are many ways:
+- if making a** custom scenario**, whenever playing a sound, provide relative path in the editor itself like so `mymodname\myfile.mp3` - path is relative to `game\sound` folder within your mod
+- for **general usage**, example, for a new unit, you need a unit soundset file first, placed within `game\sound` folder. (For example Hoplite has soundset file `<soundsetfile>greek\vo\hoplite\hoplite.xml</soundsetfile>`)
+  - this unit soundset file defines which soundsets to use for which actions, example:
+  ```xml
+  <protounitsounddef>
+    <soundtype name="Select">
+      <soundset name="SoundSetName">
+      </soundset>
+    </soundtype>
+  </protounitsounddef>
+  ```
+  - now you need your own soundset definition file (examples are inside `Sound.bar`)
+  - within `game\sound` create your own `YourName.soundset` file, it has XML contents like so:
+  ```xml
+  <soundsetdef>
+    <soundset name="SoundSetName" volume="0.91">
+      <sound filename="path\to\your\file.wav">
+      <!-- Can have multiple sounds in same soundset to pick from -->
+    </soundset>
+  </soundsetdef>
+  ```
+  - the sound files' paths should all be relative to `game\sounds` folder within your mod folder
+
 ### Debugging Tips
 
 To check if your additive mod resulted in intended changes, open the following file in your installation directory:
@@ -267,5 +308,8 @@ And one command helpful for normal modding:
 generateTRConstants
 ``` 
 
+**Please check the official BANG_Documentation directory inside AOMRetold install directory! It contains official instructions on how to set up development environment and how to debug various aspects of the game**
+
 ## XS scripting reference
 If you are writing XS scripts, you can also checkout my personal reference I wrote [here](XSScriptingReference.md) 
+
