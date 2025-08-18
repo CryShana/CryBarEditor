@@ -179,8 +179,7 @@ public partial class SearchWindow : SimpleWindow
                                         foreach (var bar_entry in bar_file.Entries)
                                         {
                                             if (token.IsCancellationRequested) break;
-                                            if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
-
+                                            
                                             // check the filename itself
                                             name_index = bar_entry.RelativePath.IndexOf(query);
                                             if (name_index >= 0)
@@ -192,6 +191,7 @@ public partial class SearchWindow : SimpleWindow
                                                 });
                                             }
 
+                                            if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
                                             var ddata = bar_entry.ReadDataDecompressed(stream);
                                             SearchData(ddata, file, bar_entry.RelativePath, SearchResults, query, token);
                                         }
