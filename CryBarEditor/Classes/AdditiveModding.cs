@@ -14,7 +14,8 @@ public static class AdditiveModding
         { "techtree.xml", new("techtree_mods.xml", "<techtreemods>\n</techtreemods>") },
         { "powers.xml", new("powers_mods.xml", "<powersmods>\n</powersmods>") },
         { "string_table.txt", new("stringmods.txt", "") },
-        { "proto_unit_commands.xml", new("proto_unit_command_mods.xml", "<protounitcommandsmods>\n</<protounitcommandsmods>")}
+        { "proto_unit_commands.xml", new("proto_unit_command_mods.xml", "<protounitcommandsmods>\n</<protounitcommandsmods>") },
+        { "abilities.xml", new("abilities_mods.xml", "<abilitiesmods>\n</abilitiesmods>") }
         // TODO: add more here if they exist
     }.ToFrozenDictionary();
 
