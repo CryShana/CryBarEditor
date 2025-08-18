@@ -103,6 +103,7 @@ Only certain files support additive modding, I confirmed only the following:
 | `powers.xml` | `powers_mods.xml` | `<powersmods>` or `<powersmod>`
 | `proto_unit_commands.xml` | `proto_unit_command_mods.xml` (exception, uses singular "command") | `<protounitcommandsmods>`
 | `abilities.xml` | `abilities_mods.xml` | `<abilitiesmods>`
+| `major_gods.xml` | `major_gods_mods.xml` | `<civsmods>`
 
 If you are uncertain whether your additive mod of a custom file was accepted by the game or not,
 please check [Debugging Tips](#debugging-tips)
