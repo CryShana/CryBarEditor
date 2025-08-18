@@ -157,52 +157,85 @@
 
 				<GridSplitter Grid.Row="1" Grid.Column="1" Width="5" Margin="3" />
 
-				<!-- BAR ARCHIVE FILE ENTRIES -->
-				<DockPanel Grid.Row="1" Grid.Column="2">
-					<Label DockPanel.Dock="Top" Content="BAR File" FontWeight="Bold"  FontSize="16"/>
-					<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
-						<Button Content="{micons:MaterialIconExt Kind=ArchiveArrowUpOutline, Size=20}" Padding="4" Click="LoadBAR_Click" Margin="0,0,6,6"/>
-						<Label DockPanel.Dock="Top" Content="{Binding LoadedBARFilePathOrRelative}" Foreground="Gray" Margin="0,2,0,0" />
+				<!-- BAR ARCHIVE FILE ENTRIES / FMOD BANK -->
+				<Grid Grid.Row="1" Grid.Column="2">
+					<!-- BAR File Panel -->
+					<DockPanel IsVisible="{Binding !IsBankFileSelected}">
+						<Label DockPanel.Dock="Top" Content="BAR File" FontWeight="Bold" FontSize="16"/>
+						<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
+							<Button Content="{micons:MaterialIconExt Kind=ArchiveArrowUpOutline, Size=20}" Padding="4" Click="LoadBAR_Click" Margin="0,0,6,6"/>
+							<Label DockPanel.Dock="Top" Content="{Binding LoadedBARFilePathOrRelative}" Foreground="Gray" Margin="0,2,0,0" />
+						</DockPanel>
+						<TextBox DockPanel.Dock="Top" Text="{Binding EntryQuery, Mode=TwoWay}" Watermark="Filter BAR entries" />
+						<DockPanel DockPanel.Dock="Top" Margin="0,6,0,0">
+							<TextBlock DockPanel.Dock="Left" HorizontalAlignment="Left">
+								<Run Text="Root: " FontWeight="Bold"/>
+								<Run Text="{Binding BarFileRootPath}"/>
+							</TextBlock>
+							<TextBlock DockPanel.Dock="Right" HorizontalAlignment="Right">
+								<Run Text="Entries: " FontWeight="Bold"/>
+								<Run Text="{Binding BarFile.Entries.Count}"/>
+							</TextBlock>
+						</DockPanel>
+						
+						<ListBox ItemsSource="{Binding BarEntries}" Margin="0,10,0,0"
+								SelectionMode="Multiple"
+								SelectedItems="{Binding SelectedBarFileEntries, Mode=TwoWay}"
+								SelectedItem="{Binding SelectedBarEntry, Mode=TwoWay}"
+								ContextMenu="{StaticResource SharedContextMenu}">
+							<ListBox.ItemTemplate>
+								<DataTemplate x:DataType="cb:BarFileEntry">
+									<StackPanel Orientation="Horizontal" Height="19">
+										<TextBlock Text="{Binding DirectoryPath}" Foreground="#808080" VerticalAlignment="Center"/>
+										<TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+										<micons:MaterialIcon Kind="FileExportOutline" VerticalAlignment="Center" 
+															Margin="5,0,0,0" Foreground="#e3bd54" 
+															Width="19" Height="19"
+															ToolTip.Tip="Overriden in export directory">
+											<micons:MaterialIcon.IsVisible>
+												<MultiBinding Converter="{StaticResource overridenConverter}">
+													<Binding Path="." />
+													<Binding Path="#mainWindow" />
+													<Binding Path="#mainWindow.((ce:MainWindow)DataContext).ShowOverridenIcons" />
+												</MultiBinding>
+											</micons:MaterialIcon.IsVisible>
+										</micons:MaterialIcon>
+									</StackPanel>
+								</DataTemplate>
+							</ListBox.ItemTemplate>
+						</ListBox>
 					</DockPanel>
-					<TextBox DockPanel.Dock="Top" Text="{Binding EntryQuery, Mode=TwoWay}" Watermark="Filter BAR entries" />
-					<DockPanel DockPanel.Dock="Top" Margin="0,6,0,0">
-						<TextBlock DockPanel.Dock="Left" HorizontalAlignment="Left">
-							<Run Text="Root: " FontWeight="Bold"/>
-							<Run Text="{Binding BarFileRootPath}"/>
+
+					<!-- FMOD Bank Panel -->
+					<DockPanel IsVisible="{Binding IsBankFileSelected}">
+						<Label DockPanel.Dock="Top" Content="FMOD Bank" FontWeight="Bold" FontSize="16"/>
+						<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
+							<Button Content="{micons:MaterialIconExt Kind=FileMusic, Size=20}" Padding="4" Click="LoadBank_Click" Margin="0,0,6,6"/>
+							<Label DockPanel.Dock="Top" Content="{Binding LoadedBankFilePathOrRelative}" Foreground="Gray" Margin="0,2,0,0" />
+						</DockPanel>
+						<TextBox DockPanel.Dock="Top" Text="{Binding BankQuery, Mode=TwoWay}" Watermark="Filter events" />
+						<TextBlock DockPanel.Dock="Top" Margin="0,6,0,0">
+							<Run Text="Events: " FontWeight="Bold"/>
+							<Run Text="{Binding FmodBank.Events.Length}"/>
 						</TextBlock>
-						<TextBlock DockPanel.Dock="Right" HorizontalAlignment="Right">
-							<Run Text="Entries: " FontWeight="Bold"/>
-							<Run Text="{Binding BarFile.Entries.Count}"/>
-						</TextBlock>
+						
+						<ListBox ItemsSource="{Binding BankEntries}" Margin="0,10,0,0"
+								SelectionMode="Multiple"
+								SelectedItems="{Binding SelectedBankEntries, Mode=TwoWay}"
+								SelectedItem="{Binding SelectedBankEntry, Mode=TwoWay}">
+							<ListBox.ItemTemplate>
+								<DataTemplate x:DataType="ce:FMODEvent">
+									<StackPanel Orientation="Horizontal" Height="19">
+										<micons:MaterialIcon Kind="MusicNote" Width="16" Height="16" 
+														Margin="0,0,5,0" Foreground="#6f96bf" 
+														VerticalAlignment="Center"/>
+										<TextBlock Text="{Binding Path}" VerticalAlignment="Center"/>
+									</StackPanel>
+								</DataTemplate>
+							</ListBox.ItemTemplate>
+						</ListBox>
 					</DockPanel>
-					
-					<ListBox ItemsSource="{Binding BarEntries}" Margin="0,10,0,0"
-							 SelectionMode="Multiple"
-							 SelectedItems="{Binding SelectedBarFileEntries, Mode=TwoWay}"
-							 SelectedItem="{Binding SelectedBarEntry, Mode=TwoWay}"
-							 ContextMenu="{StaticResource SharedContextMenu}">
-						<ListBox.ItemTemplate>
-							<DataTemplate x:DataType="cb:BarFileEntry">
-								<StackPanel Orientation="Horizontal" Height="19">
-									<TextBlock Text="{Binding DirectoryPath}" Foreground="#808080" VerticalAlignment="Center"/>
-									<TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
-									<micons:MaterialIcon Kind="FileExportOutline" VerticalAlignment="Center" 
-														 Margin="5,0,0,0" Foreground="#e3bd54" 
-														 Width="19" Height="19"
-														 ToolTip.Tip="Overriden in export directory">
-										<micons:MaterialIcon.IsVisible>
-											<MultiBinding Converter="{StaticResource overridenConverter}">
-												<Binding Path="." />
-												<Binding Path="#mainWindow" />
-												<Binding Path="#mainWindow.((ce:MainWindow)DataContext).ShowOverridenIcons" />
-											</MultiBinding>
-										</micons:MaterialIcon.IsVisible>
-									</micons:MaterialIcon>
-								</StackPanel>
-							</DataTemplate>
-						</ListBox.ItemTemplate>
-					</ListBox>
-				</DockPanel>
+				</Grid>
 
 				<GridSplitter Grid.Row="1" Grid.Column="3" Width="5" Margin="3"  />
 

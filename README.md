@@ -13,6 +13,7 @@ The purpose of this tool is to enable fast and easy modding of Age of Mythology 
 ## Features
 ### Highlights
 - **Read BAR archives**
+- **Read FMOD banks**
 - Pick a **Root directory** (usually `\games` folder) for fast switching between BAR and other files
 - Pick an **Export root directory** for fast exporting either from BAR or from Root directory
 - Supports following formats:
@@ -79,6 +80,8 @@ If you are writing XS scripts, you can also checkout my personal reference I wro
 ![CryBarEditor_5](https://assets.cryshana.me/RueQpmx0q9L3.png)
 ### Real-time status if file is overriden (in export directory)
 ![CryBarEditor_6](https://assets.cryshana.me/HEMu7Ojws84P.png)
+### Reading FMOD banks
+![CryBarEditor_7](https://assets.cryshana.me/krQyHL2fQKiq.avif);
 
 ## Thanks
 I wish to thank the developers of AoE3 Resource Manager, their code helped me with decoding of XMB and DDT files.

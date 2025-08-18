@@ -37,6 +37,7 @@ namespace CryBarEditor;
 
 public partial class MainWindow : SimpleWindow
 {
+    string _bankQuery = "";
     string _entryQuery = "";
     string _filesQuery = "";
     string _rootDirectory = "";
@@ -47,9 +48,11 @@ public partial class MainWindow : SimpleWindow
     string? _latestVersion = null;
     int _contextSelectedItemsCount = 0;
 
+    FMODBank? _fmodBank = null;
     BarFile? _barFile = null;
     FileStream? _barStream = null;
     BarFileEntry? _selectedBarEntry = null;
+    FMODEvent? _selectedBankEntry = null;
     RootFileEntry? _selectedRootFileEntry = null;
     List<RootFileEntry>? _loadedRootFiles = null;
 
@@ -72,11 +75,17 @@ public partial class MainWindow : SimpleWindow
     public FileStream? BarFileStream => _barStream;
     public event Action<BarFile?, FileStream?>? OnBarFileLoaded;
 
+    public FMODBank? FmodBank => _fmodBank;
+    public bool IsBankFileSelected => FmodBank != null;
+
     public ObservableCollectionExtended<RootFileEntry> RootFileEntries { get; } = new();
     public ObservableCollectionExtended<BarFileEntry> BarEntries { get; } = new();
 
     public ObservableCollectionExtended<RootFileEntry> SelectedRootFileEntries { get; } = new();
     public ObservableCollectionExtended<BarFileEntry> SelectedBarFileEntries { get; } = new();
+
+    public ObservableCollectionExtended<FMODEvent> BankEntries { get; } = new();
+    public ObservableCollectionExtended<FMODEvent> SelectedBankEntries { get; } = new();
 
     // this is used just to notify override icons to update
     public bool ShowOverridenIcons => true;
@@ -84,6 +93,10 @@ public partial class MainWindow : SimpleWindow
     public string LoadedBARFilePathOrRelative => _barStream == null ? "No BAR file loaded" :
         (Directory.Exists(_rootDirectory) && _barStream.Name.StartsWith(_rootDirectory) ?
             Path.GetRelativePath(_rootDirectory, _barStream.Name) : _barStream.Name);
+
+    public string LoadedBankFilePathOrRelative => _fmodBank == null ? "No FMOD bank loaded" :
+        (Directory.Exists(_rootDirectory) && _fmodBank.BankPath.StartsWith(_rootDirectory) ?
+            Path.GetRelativePath(_rootDirectory, _fmodBank.BankPath) : _fmodBank.BankPath);
 
     public string ExportRootDirectory
     {
@@ -109,6 +122,7 @@ public partial class MainWindow : SimpleWindow
         }
     }
 
+    public string BankQuery { get => _bankQuery; set { _bankQuery = value; OnSelfChanged(); RefreshBankEntries(); } }
     public string EntryQuery { get => _entryQuery; set { _entryQuery = value; OnSelfChanged(); RefreshBAREntries(); } }
     public string FilesQuery { get => _filesQuery; set { _filesQuery = value; OnSelfChanged(); RefreshFileEntries(); } }
     public string BarFileRootPath => _barFile == null ? "-" : _barFile.RootPath!;
@@ -160,6 +174,20 @@ public partial class MainWindow : SimpleWindow
         }
     }
 
+    public FMODEvent? SelectedBankEntry
+    {
+        get => _selectedBankEntry; set
+        {
+            if (value == _selectedBankEntry)
+                return;
+
+            _selectedBankEntry = value;
+            OnSelfChanged();
+            RefreshSelectedProperties();
+
+            _ = Preview(value);
+        }
+    }
     void RefreshSelectedProperties()
     {
         OnPropertyChanged(nameof(SelectedIsDDT));
@@ -254,9 +282,9 @@ public partial class MainWindow : SimpleWindow
                 var link = "https://github.com" + match.Groups["link"].Value;
                 var version = match.Groups["version"].Value;
                 return (link, version);
-            }   
+            }
         }
-        catch {}
+        catch { }
 
         return default;
     }
@@ -288,6 +316,14 @@ public partial class MainWindow : SimpleWindow
         var file = await PickFile(sender, "Open BAR file", [new("BAR file") { Patterns = ["*.bar"] }], suggested_folder);
         if (file == null) return;
         LoadBAR(file);
+    }
+
+    async void LoadBank_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var suggested_folder = _lastConfiguration?.RootDirectory;
+        var file = await PickFile(sender, "Open FMOD Bank file", [new("Bank file") { Patterns = ["*.bank"] }], suggested_folder);
+        if (file == null) return;
+        LoadFMODBank(file);
     }
 
     async void LoadDir_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
@@ -582,8 +618,51 @@ public partial class MainWindow : SimpleWindow
         }
     }
 
+    public void LoadFMODBank(string fmod_bank_file)
+    {
+        if (_barStream != null)
+        {
+            _barStream?.Dispose();
+            _barStream = null;
+            _barFile = null;
+            RefreshBAREntries();
+            OnBarFileLoaded?.Invoke(null, null);
+
+            OnPropertyChanged(nameof(LoadedBARFilePathOrRelative));
+            OnPropertyChanged(nameof(BarFileRootPath));
+            OnPropertyChanged(nameof(BarFile));
+        }
+
+        try
+        {
+            _fmodBank?.Dispose();
+            _fmodBank = FMODBank.LoadBank(fmod_bank_file);
+            SelectedBankEntries.Clear();
+            SelectedBankEntry = null;
+            OnPropertyChanged(nameof(FmodBank));
+            OnPropertyChanged(nameof(IsBankFileSelected));
+            OnPropertyChanged(nameof(LoadedBankFilePathOrRelative));
+            RefreshBankEntries();
+        }
+        catch (Exception ex)
+        {
+            _ = ShowError("Failed to load FMOD bank:\n" + ex.Message);
+        }
+    }
+
     public void LoadBAR(string bar_file, bool update_config = true)
     {
+        // deselect FMOD bank if selected
+        if (_fmodBank != null)
+        {
+            _fmodBank?.Dispose();
+            _fmodBank = null;
+            SelectedBankEntries.Clear();
+            SelectedBankEntry = null;
+            OnPropertyChanged(nameof(FmodBank));
+            OnPropertyChanged(nameof(IsBankFileSelected));
+        }
+
         _barStream?.Dispose();
         var stream = File.OpenRead(bar_file);
 
@@ -644,6 +723,12 @@ public partial class MainWindow : SimpleWindow
             return;
         }
 
+        if (entry.Extension == ".BANK")
+        {
+            LoadFMODBank(path);
+            return;
+        }
+
         _previewCsc?.Cancel();
         _previewCsc = new();
         PreviewedFileData = $"File Size: {new FileInfo(path).Length}";
@@ -660,6 +745,27 @@ public partial class MainWindow : SimpleWindow
 
         PreviewedFileData = $"BAR Offset: {entry.ContentOffset},   BAR Size: {entry.SizeInArchive},   Actual Size: {entry.SizeUncompressed},   Compressed: {(entry.IsCompressed ? "true" : "false")}";
         await Preview(entry, F_GetFullRelativePathBAR, F_ReadSizeBAR, F_ReadBAR, _previewCsc.Token);
+    }
+
+    public async Task Preview(FMODEvent? e)
+    {
+        if (e == null || _fmodBank == null)
+            return;
+
+        PreviewedFileData = $"FMOD event: " + e.Path;
+        await SetImagePreview(null);
+        SetEditorText(".txt",
+        $"""
+        Path:       {e.Path}
+        Length:     {e.LengthMs}ms
+        Is3D:       {e.Is3D} (Distance: {e.MinDistance} - {e.MaxDistance})
+        IsOneshot:  {e.IsOneshot}
+        IsSnapshot: {e.IsSnapshot}
+        Doppler:    {e.IsDopplerEnabled}
+
+        Parameters: 
+        - {string.Join("\n- ", e.Parameters)}
+        """);
     }
 
     public async Task Preview<T>(T entry, Func<T, string> get_rel_path,
@@ -702,7 +808,7 @@ public partial class MainWindow : SimpleWindow
 
                 return;
             }
-            
+
             if (ext == ".xmb")
             {
                 var xml = BarFormatConverter.XMBtoXML(data.Span);
@@ -763,39 +869,6 @@ public partial class MainWindow : SimpleWindow
                 tmm.ParseModel(0);
 
                 PreviewedFileNote = "(Preview not yet supported)";
-            }
-            else if (ext == ".bank")
-            {
-                PreviewedFileNote = "(FMOD Bank)";
-                byte[]? master_data = null;
-                byte[]? master_strings = null;
-
-                var name = Path.GetFileNameWithoutExtension(relative_path);
-                var re = entry as RootFileEntry;
-                if (name != "Master" && re is not null && Directory.Exists(RootDirectory))
-                {
-                    // load master bank if possible
-                    var full_path = Path.Combine(RootDirectory, re.RelativePath);
-                    var full_dir = Path.GetDirectoryName(full_path);
-                    var master_path = Path.Combine(full_dir!, "Master.bank");
-                    if (File.Exists(master_path))
-                    {
-                        master_data = File.ReadAllBytes(master_path);
-                    }
-                }
-
-                if (name != "Master.strings" && re is not null && Directory.Exists(RootDirectory))
-                {
-                    var full_path = Path.Combine(RootDirectory, re.RelativePath);
-                    var full_dir = Path.GetDirectoryName(full_path);
-                    var master_path = Path.Combine(full_dir!, "Master.strings.bank");
-                    if (File.Exists(master_path))
-                    {
-                        master_strings = File.ReadAllBytes(master_path);
-                    }
-                }
-
-                text = await ParseFMODBank(data, master_strings, master_data);
             }
             else
             {
@@ -935,136 +1008,6 @@ public partial class MainWindow : SimpleWindow
 
         p.Report(null);
     }
-    
-    
-    static async Task<string> ParseFMODBank(Memory<byte> data, byte[]? master_strings, byte[]? master_data)
-    {
-        var text = "";
-        FMOD.Studio.Bank bank = default;
-        FMOD.Studio.Bank bank_master = default;
-        FMOD.Studio.Bank bank_master_strings = default;
-        FMOD.Studio.System studio = default;
-        
-        var buffer = ArrayPool<byte>.Shared.Rent(data.Length);
-        try
-        {
-            FMOD.Studio.System.create(out studio); 
-            var r = studio.initialize(512, FMOD.Studio.INITFLAGS.NORMAL, FMOD.INITFLAGS.NORMAL, nint.Zero);
-            if (r != FMOD.RESULT.OK) throw new Exception("Failed to initialize FMOD system: " + r);
-
-            if (master_strings != null)
-            {
-                // we load MASTER strings bank first
-                r = studio.loadBankMemory(master_strings, FMOD.Studio.LOAD_BANK_FLAGS.NORMAL, out bank_master_strings);
-                if (r != FMOD.RESULT.OK) throw new Exception("Failed to load master strings FMOD bank: " + r);
-            }
-
-            if (master_data != null)
-            {
-                // we load MASTER bank first
-                r = studio.loadBankMemory(master_data, FMOD.Studio.LOAD_BANK_FLAGS.NORMAL, out bank_master);
-                if (r != FMOD.RESULT.OK) throw new Exception("Failed to load master FMOD bank: " + r);
-
-                r = bank_master.loadSampleData();
-                if (r != FMOD.RESULT.OK) throw new Exception("Failed to load master FMOD bank samples: " + r);
-            }
-
-            data.Span.CopyTo(buffer);
-            r = studio.loadBankMemory(buffer, FMOD.Studio.LOAD_BANK_FLAGS.NORMAL, out bank);
-            if (r != FMOD.RESULT.OK) throw new Exception("Failed to load FMOD bank: " + r);
-
-            r = bank.loadSampleData();
-            if (r != FMOD.RESULT.OK) throw new Exception("Failed to load FMOD bank samples: " + r);
-
-            r = bank.getEventCount(out int eventCount);
-            if (r != FMOD.RESULT.OK) throw new Exception("Failed to load FMOD bank events: " + r);
-            if (eventCount == 0)
-            {
-                text = "FMOD bank is empty (no events)";
-            }
-            else
-            {
-                var events = new FMOD.Studio.EventDescription[eventCount];
-                r = bank.getEventList(out events);
-                if (r != FMOD.RESULT.OK || events == null) throw new Exception("Failed to load FMOD bank event list: " + r);
-
-                text = $"Loaded {eventCount} events from bank:\n";
-
-                foreach (var e in events)
-                {
-                    e.getPath(out string? path);
-                    if (string.IsNullOrEmpty(path))
-                    {
-                        // try ID instead
-                        e.getID(out FMOD.GUID id);
-                        path = $"GUID_{id.Data1:X4}_{id.Data2:X4}_{id.Data3:X4}_{id.Data4:X4}";
-                    }
-
-                    // Get more useful info
-                    e.getLength(out int length);
-                    e.getParameterDescriptionCount(out int paramCount);
-                    e.getSampleLoadingState(out FMOD.Studio.LOADING_STATE loadingState);
-                    e.is3D(out bool is3D);
-                    e.isOneshot(out bool isOneshot);
-                    e.isSnapshot(out bool isSnapshot);
-                    e.getUserPropertyCount(out int userPropCount);
-                    e.getMinMaxDistance(out float minDist, out float maxDist);
-                    e.isDopplerEnabled(out bool doppler);
-                    e.getUserData(out IntPtr userData);
-
-                    text += $"\nEvent: {path}\n";
-                    text += $"  Length: {length}ms, 3D: {is3D}, Oneshot: {isOneshot}, Snapshot: {isSnapshot}\n";
-                    text += $"  Distance: {minDist}-{maxDist}\n";
-
-                    // Get parameter details
-                    for (int i = 0; i < paramCount; i++)
-                    {
-                        e.getParameterDescriptionByIndex(i, out var prm);
-
-                        string name = prm.name;
-                        text += $"    Param: {name,-15} ({prm.type})\n";
-                    }
-
-                    
-                    /*
-                    // EXAMPLE OF PLAYING AN EVENT
-                    r = bank.loadSampleData();
-                    if (r != FMOD.RESULT.OK) throw new Exception("Invalid bank sample data");
-
-                    r = e.createInstance(out var instance);
-                    if (r != FMOD.RESULT.OK) throw new Exception("Invalid event");
-
-                    r = instance.start();
-                    if (r != FMOD.RESULT.OK) throw new Exception("Invalid start");
-
-                    while (true)
-                    {
-                        studio.update();
-                        instance.getPlaybackState(out var state);
-                        if (state == FMOD.Studio.PLAYBACK_STATE.STOPPED) break;
-                        await Task.Delay(10);
-                    }
-
-                    instance.stop(FMOD.Studio.STOP_MODE.IMMEDIATE);
-                    instance.release();
-                    */
-                    
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            text = "Failed to decode bank file: " + ex.Message;
-        }
-        finally
-        {
-            bank.unload();
-            studio.release();
-            ArrayPool<byte>.Shared.Return(buffer);
-        }
-
-        return text;
-    }
     #endregion
 
     #region UI functions
@@ -1178,6 +1121,16 @@ public partial class MainWindow : SimpleWindow
         BarEntries.AddItems(FilterBAR(_barFile.Entries));
     }
 
+    public void RefreshBankEntries()
+    {
+        // TODO: filter
+        BankEntries.Clear();
+        if (_fmodBank?.Events == null)
+            return;
+
+        BankEntries.AddItems(FilterBankEvents(_fmodBank.Events));
+    }
+
     IEnumerable<BarFileEntry> FilterBAR(IEnumerable<BarFileEntry> entries)
     {
         var q = EntryQuery;
@@ -1198,6 +1151,19 @@ public partial class MainWindow : SimpleWindow
         {
             // filter by query
             if (q.Length > 0 && !e.RelativePath.Contains(q, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            yield return e;
+        }
+    }
+
+    IEnumerable<FMODEvent> FilterBankEvents(IEnumerable<FMODEvent> events)
+    {
+        var q = BankQuery;
+        foreach (var e in events)
+        {
+            // filter by query
+            if (q.Length > 0 && !e.Path.Contains(q, StringComparison.OrdinalIgnoreCase))
                 continue;
 
             yield return e;
