@@ -8,14 +8,15 @@ namespace CryBarEditor.Classes;
 
 public static class AdditiveModding
 {
-    public static FrozenDictionary<string, AdditiveModFormat> SupportedFilesForAdditiveMod = (new Dictionary<string, AdditiveModFormat>()
+    public static FrozenDictionary<string, AdditiveModFormat> SupportedFilesForAdditiveMod = new Dictionary<string, AdditiveModFormat>()
     {
         { "proto.xml", new("proto_mods.xml", "<protomods>\n</protomods>") },
         { "techtree.xml", new("techtree_mods.xml", "<techtreemods>\n</techtreemods>") },
         { "powers.xml", new("powers_mods.xml", "<powersmod>\n</powersmod>") },
-        { "string_table.txt", new("stringmods.txt", "") }
+        { "string_table.txt", new("stringmods.txt", "") },
+        { "proto_unit_commands.xml", new("proto_unit_command_mods.xml", "<protounitcommandmods>\n</<protounitcommandmods>")}
         // TODO: add more here if they exist
-    }).ToFrozenDictionary();
+    }.ToFrozenDictionary();
 
     public static bool IsSupportedFor(string? relative_path, 
         [NotNullWhen(true)] out AdditiveModFormat? format)
