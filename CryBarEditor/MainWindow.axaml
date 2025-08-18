@@ -233,6 +233,13 @@
 									</StackPanel>
 								</DataTemplate>
 							</ListBox.ItemTemplate>
+							<ListBox.ContextMenu>
+								<ContextMenu>
+									<MenuItem Header="Play" 
+											Icon="{micons:MaterialIconExt Kind=Play}"
+											Click="BankItem_Play" />
+								</ContextMenu>
+							</ListBox.ContextMenu>
 						</ListBox>
 					</DockPanel>
 				</Grid>

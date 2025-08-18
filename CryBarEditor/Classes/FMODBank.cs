@@ -68,70 +68,6 @@ public class FMODBank : IDisposable
         instance.release();
     }
 
-    public void ExportEvent(FMOD.Studio.EventDescription e, string output_wav_path)
-    {
-        // Create a separate system for recording
-        FMOD.Studio.System.create(out var recordSystem);
-        recordSystem.getCoreSystem(out var coreSystem);
-
-        // Set to WAV writer output
-        coreSystem.setOutput(FMOD.OUTPUTTYPE.WAVWRITER);
-        coreSystem.init(512, FMOD.INITFLAGS.NORMAL,
-            System.Runtime.InteropServices.Marshal.StringToHGlobalAnsi(output_wav_path));
-
-        recordSystem.initialize(512, FMOD.Studio.INITFLAGS.NORMAL,
-            FMOD.INITFLAGS.NORMAL, IntPtr.Zero);
-
-        try
-        {
-            // reload banks in record system
-            LoadBanksIntoSystem(recordSystem);
-
-            // create event instance
-            e.getID(out var id);
-            recordSystem.getEventByID(id, out var eventDesc);
-            eventDesc.createInstance(out var instance);
-
-            // Get length
-            eventDesc.getLength(out int lengthMs);
-            if (lengthMs <= 0) lengthMs = 10000;
-
-            instance.start();
-
-            // Process until complete
-            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-            while (stopwatch.ElapsedMilliseconds < lengthMs + 100)
-            {
-                recordSystem.update();
-                instance.getPlaybackState(out var state);
-                if (state == FMOD.Studio.PLAYBACK_STATE.STOPPED) break;
-            }
-
-            instance.stop(FMOD.Studio.STOP_MODE.IMMEDIATE);
-            instance.release();
-        }
-        finally
-        {
-            recordSystem.release();
-        }
-    }
-
-    public void ExportAllEvents(string outputDirectory)
-    {
-        Directory.CreateDirectory(outputDirectory);
-        foreach (var fmodEvent in Events)
-        {
-            var outputPath = Path.Combine(outputDirectory, SanitizeFileName(fmodEvent.Path) + ".wav");
-            ExportEvent(fmodEvent.eventDescription, outputPath);
-        }
-    }
-
-    static string SanitizeFileName(string fileName)
-    {
-        var invalid = Path.GetInvalidFileNameChars();
-        return string.Join("_", fileName.Split(invalid, StringSplitOptions.RemoveEmptyEntries));
-    }
-
     (Bank bank, Bank? bank_master, Bank? bank_strings) LoadBanksIntoSystem(FMOD.Studio.System system)
     {
         Bank? bank_strings_out = null;
@@ -229,6 +165,7 @@ public class FMODBank : IDisposable
 
 public class FMODEvent
 {
+    public string Id { get; set; }
     public string Path { get; set; }
     public int LengthMs { get; set; }
     public bool Is3D { get; set; }
@@ -247,10 +184,11 @@ public class FMODEvent
         e.getPath(out string? path);
         if (string.IsNullOrEmpty(path))
         {
-            // try ID instead
-            e.getID(out FMOD.GUID id);
-            path = $"GUID_{id.Data1:X4}_{id.Data2:X4}_{id.Data3:X4}_{id.Data4:X4}";
+            path = $"No path found";
         }
+
+        e.getID(out FMOD.GUID id);
+        Id = $"{{{id.Data1:x8}-{id.Data2:x8}-{id.Data3:x8}-{id.Data4:x8}}}"; // FMOD uses a slightly different format of displaying IDs, but unsure what
 
         // Get more useful info
         e.getLength(out int length);

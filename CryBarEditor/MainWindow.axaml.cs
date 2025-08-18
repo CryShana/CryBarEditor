@@ -759,6 +759,7 @@ public partial class MainWindow : SimpleWindow
         await SetImagePreview(null);
         SetEditorText(".txt",
         $"""
+        Id:         {e.Id}
         Path:       {e.Path}
         Length:     {e.LengthMs}ms
         Is3D:       {e.Is3D} (Distance: {e.MinDistance} - {e.MaxDistance})
@@ -1502,6 +1503,17 @@ public partial class MainWindow : SimpleWindow
         {
             item.IsEnabled = true;
         }
+    }
+
+    CancellationTokenSource? bank_play_csc = null;
+    void BankItem_Play(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (SelectedBankEntry == null || FmodBank == null)
+            return;
+
+        bank_play_csc?.Cancel();
+        bank_play_csc = new();
+        _ = FmodBank.Play(SelectedBankEntry.eventDescription, bank_play_csc.Token);
     }
     #endregion
 
