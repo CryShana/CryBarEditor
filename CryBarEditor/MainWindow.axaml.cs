@@ -752,7 +752,10 @@ public partial class MainWindow : SimpleWindow
         if (e == null || _fmodBank == null)
             return;
 
-        PreviewedFileData = $"FMOD event: " + e.Path;
+        PreviewedFileName = $"FMOD event: \"${e.Path}\"";
+        PreviewedFileNote = "";
+        PreviewedFileData = $"Length: {e.LengthMs}ms";
+
         await SetImagePreview(null);
         SetEditorText(".txt",
         $"""
