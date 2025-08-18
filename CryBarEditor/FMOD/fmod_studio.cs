@@ -491,7 +491,7 @@ namespace FMOD.Studio
         {
             return FMOD_Studio_System_GetParameterDescriptionByID(this.handle, id, out parameter);
         }
-        public RESULT getParameterLabelByName(string name, int labelindex, out string label)
+        public RESULT getParameterLabelByName(string name, int labelindex, out string? label)
         {
             label = null;
 
@@ -518,7 +518,7 @@ namespace FMOD.Studio
                 return result;
             }
         }
-        public RESULT getParameterLabelByID(PARAMETER_ID id, int labelindex, out string label)
+        public RESULT getParameterLabelByID(PARAMETER_ID id, int labelindex, out string? label)
         {
             label = null;
 
@@ -602,7 +602,7 @@ namespace FMOD.Studio
                 return FMOD_Studio_System_LookupID(this.handle, encoder.byteFromStringUTF8(path), out id);
             }
         }
-        public RESULT lookupPath(GUID id, out string path)
+        public RESULT lookupPath(GUID id, out string? path)
         {
             path = null;
 
@@ -714,7 +714,7 @@ namespace FMOD.Studio
         {
             return FMOD_Studio_System_GetBankCount(this.handle, out count);
         }
-        public RESULT getBankList(out Bank[] array)
+        public RESULT getBankList(out Bank[]? array)
         {
             array = null;
 
@@ -727,7 +727,7 @@ namespace FMOD.Studio
             }
             if (capacity == 0)
             {
-                array = new Bank[0];
+                array = [];
                 return result;
             }
 
@@ -753,7 +753,7 @@ namespace FMOD.Studio
         {
             return FMOD_Studio_System_GetParameterDescriptionCount(this.handle, out count);
         }
-        public RESULT getParameterDescriptionList(out PARAMETER_DESCRIPTION[] array)
+        public RESULT getParameterDescriptionList(out PARAMETER_DESCRIPTION[]? array)
         {
             array = null;
 
@@ -960,7 +960,7 @@ namespace FMOD.Studio
         {
             return FMOD_Studio_EventDescription_GetID(this.handle, out id);
         }
-        public RESULT getPath(out string path)
+        public RESULT getPath(out string? path)
         {
             path = null;
 
@@ -1004,7 +1004,7 @@ namespace FMOD.Studio
         {
             return FMOD_Studio_EventDescription_GetParameterDescriptionByID(this.handle, id, out parameter);
         }
-        public RESULT getParameterLabelByIndex(int index, int labelindex, out string label)
+        public RESULT getParameterLabelByIndex(int index, int labelindex, out string? label)
         {
             label = null;
 
@@ -1030,7 +1030,7 @@ namespace FMOD.Studio
                 return result;
             }
         }
-        public RESULT getParameterLabelByName(string name, int labelindex, out string label)
+        public RESULT getParameterLabelByName(string name, int labelindex, out string? label)
         {
             label = null;
 
@@ -1057,7 +1057,7 @@ namespace FMOD.Studio
                 return result;
             }
         }
-        public RESULT getParameterLabelByID(PARAMETER_ID id, int labelindex, out string label)
+        public RESULT getParameterLabelByID(PARAMETER_ID id, int labelindex, out string? label)
         {
             label = null;
 
@@ -1144,7 +1144,7 @@ namespace FMOD.Studio
         {
             return FMOD_Studio_EventDescription_GetInstanceCount(this.handle, out count);
         }
-        public RESULT getInstanceList(out EventInstance[] array)
+        public RESULT getInstanceList(out EventInstance[]? array)
         {
             array = null;
 
@@ -1588,7 +1588,7 @@ namespace FMOD.Studio
         {
             return FMOD_Studio_Bus_GetID(this.handle, out id);
         }
-        public RESULT getPath(out string path)
+        public RESULT getPath(out string? path)
         {
             path = null;
 
@@ -1735,7 +1735,7 @@ namespace FMOD.Studio
         {
             return FMOD_Studio_VCA_GetID(this.handle, out id);
         }
-        public RESULT getPath(out string path)
+        public RESULT getPath(out string? path)
         {
             path = null;
 
@@ -1811,7 +1811,7 @@ namespace FMOD.Studio
         {
             return FMOD_Studio_Bank_GetID(this.handle, out id);
         }
-        public RESULT getPath(out string path)
+        public RESULT getPath(out string? path)
         {
             path = null;
 
@@ -1862,7 +1862,7 @@ namespace FMOD.Studio
         {
             return FMOD_Studio_Bank_GetStringCount(this.handle, out count);
         }
-        public RESULT getStringInfo(int index, out GUID id, out string path)
+        public RESULT getStringInfo(int index, out GUID id, out string? path)
         {
             path = null;
             id = new GUID();
@@ -1893,7 +1893,7 @@ namespace FMOD.Studio
         {
             return FMOD_Studio_Bank_GetEventCount(this.handle, out count);
         }
-        public RESULT getEventList(out EventDescription[] array)
+        public RESULT getEventList(out EventDescription[]? array)
         {
             array = null;
 
@@ -1932,7 +1932,7 @@ namespace FMOD.Studio
         {
             return FMOD_Studio_Bank_GetBusCount(this.handle, out count);
         }
-        public RESULT getBusList(out Bus[] array)
+        public RESULT getBusList(out Bus[]? array)
         {
             array = null;
 
@@ -1971,7 +1971,7 @@ namespace FMOD.Studio
         {
             return FMOD_Studio_Bank_GetVCACount(this.handle, out count);
         }
-        public RESULT getVCAList(out VCA[] array)
+        public RESULT getVCAList(out VCA[]? array)
         {
             array = null;
 
@@ -2093,7 +2093,7 @@ namespace FMOD.Studio
             return FMOD_Studio_CommandReplay_GetCommandInfo(this.handle, commandIndex, out info);
         }
 
-        public RESULT getCommandString(int commandIndex, out string buffer)
+        public RESULT getCommandString(int commandIndex, out string? buffer)
         {
             buffer = null;
             using (StringHelper.ThreadSafeEncoding encoder = StringHelper.GetFreeHelper())

@@ -885,7 +885,7 @@ public partial class MainWindow : SimpleWindow
 
                 copy(f, file);
             }
-            catch (Exception ex)
+            catch
             {
                 // TODO: handle error and show it somewhere
                 failed.Add(relative_path);
@@ -935,13 +935,13 @@ public partial class MainWindow : SimpleWindow
             {
                 var events = new FMOD.Studio.EventDescription[eventCount];
                 r = bank.getEventList(out events);
-                if (r != FMOD.RESULT.OK) throw new Exception("Failed to load FMOD bank event list: " + r);
+                if (r != FMOD.RESULT.OK || events == null) throw new Exception("Failed to load FMOD bank event list: " + r);
 
                 text = $"Loaded {eventCount} events from bank:\n";
 
                 foreach (var e in events)
                 {
-                    e.getPath(out string path);
+                    e.getPath(out string? path);
                     if (string.IsNullOrEmpty(path))
                     {
                         // try ID instead
@@ -1209,7 +1209,8 @@ public partial class MainWindow : SimpleWindow
 
         var export_path = Path.Combine(_exportRootDirectory, relative_path_full);
         var export_dir = Path.GetDirectoryName(export_path);
-        Directory.CreateDirectory(export_dir);
+        if (!string.IsNullOrEmpty(export_dir))
+            Directory.CreateDirectory(export_dir);
 
         // TODO: only for windows, maybe make methods for other platforms? But will people even use it elsewhere?
 

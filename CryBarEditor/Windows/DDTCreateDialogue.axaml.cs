@@ -113,7 +113,7 @@ public partial class DDTCreateDialogue : SimpleWindow
 
             Close();
         }
-        catch (Exception ex)
+        catch
         {
             // TODO: display error somewhere
         }

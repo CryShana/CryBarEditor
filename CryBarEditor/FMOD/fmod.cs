@@ -698,47 +698,47 @@ namespace FMOD
         public int                         nonblockthreadid;
         public IntPtr                      fsbguid;
 
-        public SOUND_PCMREAD_CALLBACK pcmreadcallback
+        public SOUND_PCMREAD_CALLBACK? pcmreadcallback
         {
             set { pcmreadcallback_internal = (value == null ? IntPtr.Zero : Marshal.GetFunctionPointerForDelegate(value)); }
             get { return pcmreadcallback_internal == IntPtr.Zero ? null : Marshal.GetDelegateForFunctionPointer<SOUND_PCMREAD_CALLBACK>(pcmreadcallback_internal); }
         }
-        public SOUND_PCMSETPOS_CALLBACK pcmsetposcallback
+        public SOUND_PCMSETPOS_CALLBACK? pcmsetposcallback
         {
             set { pcmsetposcallback_internal = (value == null ? IntPtr.Zero : Marshal.GetFunctionPointerForDelegate(value)); }
             get { return pcmsetposcallback_internal == IntPtr.Zero ? null : Marshal.GetDelegateForFunctionPointer<SOUND_PCMSETPOS_CALLBACK>(pcmsetposcallback_internal); }
         }
-        public SOUND_NONBLOCK_CALLBACK nonblockcallback
+        public SOUND_NONBLOCK_CALLBACK? nonblockcallback
         {
             set { nonblockcallback_internal = (value == null ? IntPtr.Zero : Marshal.GetFunctionPointerForDelegate(value)); }
             get { return nonblockcallback_internal == IntPtr.Zero ? null : Marshal.GetDelegateForFunctionPointer<SOUND_NONBLOCK_CALLBACK>(nonblockcallback_internal); }
         }
-        public FILE_OPEN_CALLBACK fileuseropen
+        public FILE_OPEN_CALLBACK? fileuseropen
         {
             set { fileuseropen_internal = (value == null ? IntPtr.Zero : Marshal.GetFunctionPointerForDelegate(value)); }
             get { return fileuseropen_internal == IntPtr.Zero ? null : Marshal.GetDelegateForFunctionPointer<FILE_OPEN_CALLBACK>(fileuseropen_internal); }
         }
-        public FILE_CLOSE_CALLBACK fileuserclose
+        public FILE_CLOSE_CALLBACK? fileuserclose
         {
             set { fileuserclose_internal = (value == null ? IntPtr.Zero : Marshal.GetFunctionPointerForDelegate(value)); }
             get { return fileuserclose_internal == IntPtr.Zero ? null : Marshal.GetDelegateForFunctionPointer<FILE_CLOSE_CALLBACK>(fileuserclose_internal); }
         }
-        public FILE_READ_CALLBACK fileuserread
+        public FILE_READ_CALLBACK? fileuserread
         {
             set { fileuserread_internal = (value == null ? IntPtr.Zero : Marshal.GetFunctionPointerForDelegate(value)); }
             get { return fileuserread_internal == IntPtr.Zero ? null : Marshal.GetDelegateForFunctionPointer<FILE_READ_CALLBACK>(fileuserread_internal); }
         }
-        public FILE_SEEK_CALLBACK fileuserseek
+        public FILE_SEEK_CALLBACK? fileuserseek
         {
             set { fileuserseek_internal = (value == null ? IntPtr.Zero : Marshal.GetFunctionPointerForDelegate(value)); }
             get { return fileuserseek_internal == IntPtr.Zero ? null : Marshal.GetDelegateForFunctionPointer<FILE_SEEK_CALLBACK>(fileuserseek_internal); }
         }
-        public FILE_ASYNCREAD_CALLBACK fileuserasyncread
+        public FILE_ASYNCREAD_CALLBACK? fileuserasyncread
         {
             set { fileuserasyncread_internal = (value == null ? IntPtr.Zero : Marshal.GetFunctionPointerForDelegate(value)); }
             get { return fileuserasyncread_internal == IntPtr.Zero ? null : Marshal.GetDelegateForFunctionPointer<FILE_ASYNCREAD_CALLBACK>(fileuserasyncread_internal); }
         }
-        public FILE_ASYNCCANCEL_CALLBACK fileuserasynccancel
+        public FILE_ASYNCCANCEL_CALLBACK? fileuserasynccancel
         {
             set { fileuserasynccancel_internal = (value == null ? IntPtr.Zero : Marshal.GetFunctionPointerForDelegate(value)); }
             get { return fileuserasynccancel_internal == IntPtr.Zero ? null : Marshal.GetDelegateForFunctionPointer<FILE_ASYNCCANCEL_CALLBACK>(fileuserasynccancel_internal); }
@@ -1003,7 +1003,7 @@ namespace FMOD
 
     public struct Debug
     {
-        public static RESULT Initialize(DEBUG_FLAGS flags, DEBUG_MODE mode = DEBUG_MODE.TTY, DEBUG_CALLBACK callback = null, string filename = null)
+        public static RESULT Initialize(DEBUG_FLAGS flags, DEBUG_MODE mode = DEBUG_MODE.TTY, DEBUG_CALLBACK? callback = null, string filename = "")
         {
             using (StringHelper.ThreadSafeEncoding encoder = StringHelper.GetFreeHelper())
             {
@@ -1013,7 +1013,7 @@ namespace FMOD
 
         #region importfunctions
         [DllImport(VERSION.dll)]
-        private static extern RESULT FMOD5_Debug_Initialize(DEBUG_FLAGS flags, DEBUG_MODE mode, DEBUG_CALLBACK callback, byte[] filename);
+        private static extern RESULT FMOD5_Debug_Initialize(DEBUG_FLAGS flags, DEBUG_MODE mode, DEBUG_CALLBACK? callback, byte[] filename);
 
         #endregion
     }
@@ -3959,7 +3959,7 @@ namespace FMOD
             {
                 if (s == null)
                 {
-                    return null;
+                    return [];
                 }
 
                 int maximumLength = encoding.GetMaxByteCount(s.Length) + 1; // +1 for null terminator
@@ -4048,7 +4048,7 @@ namespace FMOD
         {
             lock (encoders)
             {
-                ThreadSafeEncoding helper = null;
+                ThreadSafeEncoding? helper = null;
                 // Search for not in use helper
                 for (int i = 0; i < encoders.Count; i++)
                 {
