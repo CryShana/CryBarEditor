@@ -71,7 +71,7 @@ public partial class SearchWindow : SimpleWindow
 
     async void Search_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
-        const int MAX_FILE_SIZE = 4_000_000; // 4 MB
+        const int MAX_FILE_SIZE = 100_000_000; // 100 MB
 
         if (!CanSearch)
             return;
@@ -108,8 +108,7 @@ public partial class SearchWindow : SimpleWindow
                         foreach (var bar_entry in _barFile.Entries)
                         {
                             if (token.IsCancellationRequested) break;
-                            if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
-
+    
                             // check the filename itself
                             var name_index = bar_entry.RelativePath.IndexOf(query);
                             if (name_index >= 0)
@@ -118,6 +117,7 @@ public partial class SearchWindow : SimpleWindow
                                 SearchResults.Add(new SearchResult(file, bar_entry.RelativePath, name_index, context.left, context.mid, context.right));
                             }
 
+                            if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
                             var ddata = bar_entry.ReadDataDecompressed(_barFileStream);
                             SearchData(ddata, file, bar_entry.RelativePath, SearchResults, query, token);
                         }
