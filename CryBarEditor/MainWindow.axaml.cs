@@ -32,6 +32,7 @@ using SixLabors.ImageSharp.PixelFormats;
 
 using CommunityToolkit.HighPerformance;
 using Configuration = CryBarEditor.Classes.Configuration;
+using System.Runtime.InteropServices;
 
 namespace CryBarEditor;
 
@@ -208,6 +209,18 @@ public partial class MainWindow : SimpleWindow
 
     public MainWindow()
     {
+        // Needed to work when AOT compiled
+        NativeLibrary.SetDllImportResolver(typeof(FMOD.Studio.STUDIO_VERSION).Assembly,
+            (library_name, assembly, search_path) =>
+            {
+                if (library_name.Contains("fmod"))
+                {
+                    var libPath = Path.Combine(AppContext.BaseDirectory, "lib", $"{Path.GetFileName(library_name)}.dll");
+                    return NativeLibrary.Load(libPath);
+                }
+                return IntPtr.Zero;
+            });
+
         InitializeComponent();
 
         TryRestorePreviousConfiguration();
@@ -647,7 +660,7 @@ public partial class MainWindow : SimpleWindow
         }
         catch (Exception ex)
         {
-            _ = ShowError("Failed to load FMOD bank:\n" + ex.Message);
+            _ = ShowError($"Failed to load FMOD bank:\n{ex.Message} (Dir: {Environment.CurrentDirectory})");
         }
     }
 
