@@ -70,7 +70,7 @@ public partial class MainWindow : SimpleWindow
     #region Properties
     public BarFile? BarFile => _barFile;
     public FileStream? BarFileStream => _barStream;
-    public event Action<BarFile?, FileStream?> OnBarFileLoaded;
+    public event Action<BarFile?, FileStream?>? OnBarFileLoaded;
 
     public ObservableCollectionExtended<RootFileEntry> RootFileEntries { get; } = new();
     public ObservableCollectionExtended<BarFileEntry> BarEntries { get; } = new();
@@ -702,8 +702,7 @@ public partial class MainWindow : SimpleWindow
 
                 return;
             }
-
-
+            
             if (ext == ".xmb")
             {
                 var xml = BarFormatConverter.XMBtoXML(data.Span);
@@ -768,7 +767,35 @@ public partial class MainWindow : SimpleWindow
             else if (ext == ".bank")
             {
                 PreviewedFileNote = "(FMOD Bank)";
-                text = ParseFMODBank(data);
+                byte[]? master_data = null;
+                byte[]? master_strings = null;
+
+                var name = Path.GetFileNameWithoutExtension(relative_path);
+                var re = entry as RootFileEntry;
+                if (name != "Master" && re is not null && Directory.Exists(RootDirectory))
+                {
+                    // load master bank if possible
+                    var full_path = Path.Combine(RootDirectory, re.RelativePath);
+                    var full_dir = Path.GetDirectoryName(full_path);
+                    var master_path = Path.Combine(full_dir!, "Master.bank");
+                    if (File.Exists(master_path))
+                    {
+                        master_data = File.ReadAllBytes(master_path);
+                    }
+                }
+
+                if (name != "Master.strings" && re is not null && Directory.Exists(RootDirectory))
+                {
+                    var full_path = Path.Combine(RootDirectory, re.RelativePath);
+                    var full_dir = Path.GetDirectoryName(full_path);
+                    var master_path = Path.Combine(full_dir!, "Master.strings.bank");
+                    if (File.Exists(master_path))
+                    {
+                        master_strings = File.ReadAllBytes(master_path);
+                    }
+                }
+
+                text = await ParseFMODBank(data, master_strings, master_data);
             }
             else
             {
@@ -910,10 +937,12 @@ public partial class MainWindow : SimpleWindow
     }
     
     
-    static string ParseFMODBank(Memory<byte> data)
+    static async Task<string> ParseFMODBank(Memory<byte> data, byte[]? master_strings, byte[]? master_data)
     {
         var text = "";
         FMOD.Studio.Bank bank = default;
+        FMOD.Studio.Bank bank_master = default;
+        FMOD.Studio.Bank bank_master_strings = default;
         FMOD.Studio.System studio = default;
         
         var buffer = ArrayPool<byte>.Shared.Rent(data.Length);
@@ -923,9 +952,29 @@ public partial class MainWindow : SimpleWindow
             var r = studio.initialize(512, FMOD.Studio.INITFLAGS.NORMAL, FMOD.INITFLAGS.NORMAL, nint.Zero);
             if (r != FMOD.RESULT.OK) throw new Exception("Failed to initialize FMOD system: " + r);
 
+            if (master_strings != null)
+            {
+                // we load MASTER strings bank first
+                r = studio.loadBankMemory(master_strings, FMOD.Studio.LOAD_BANK_FLAGS.NORMAL, out bank_master_strings);
+                if (r != FMOD.RESULT.OK) throw new Exception("Failed to load master strings FMOD bank: " + r);
+            }
+
+            if (master_data != null)
+            {
+                // we load MASTER bank first
+                r = studio.loadBankMemory(master_data, FMOD.Studio.LOAD_BANK_FLAGS.NORMAL, out bank_master);
+                if (r != FMOD.RESULT.OK) throw new Exception("Failed to load master FMOD bank: " + r);
+
+                r = bank_master.loadSampleData();
+                if (r != FMOD.RESULT.OK) throw new Exception("Failed to load master FMOD bank samples: " + r);
+            }
+
             data.Span.CopyTo(buffer);
             r = studio.loadBankMemory(buffer, FMOD.Studio.LOAD_BANK_FLAGS.NORMAL, out bank);
             if (r != FMOD.RESULT.OK) throw new Exception("Failed to load FMOD bank: " + r);
+
+            r = bank.loadSampleData();
+            if (r != FMOD.RESULT.OK) throw new Exception("Failed to load FMOD bank samples: " + r);
 
             r = bank.getEventCount(out int eventCount);
             if (r != FMOD.RESULT.OK) throw new Exception("Failed to load FMOD bank events: " + r);
@@ -947,7 +996,7 @@ public partial class MainWindow : SimpleWindow
                     if (string.IsNullOrEmpty(path))
                     {
                         // try ID instead
-                        e.getID(out FMOD.GUID id); 
+                        e.getID(out FMOD.GUID id);
                         path = $"GUID_{id.Data1:X4}_{id.Data2:X4}_{id.Data3:X4}_{id.Data4:X4}";
                     }
 
@@ -971,10 +1020,35 @@ public partial class MainWindow : SimpleWindow
                     for (int i = 0; i < paramCount; i++)
                     {
                         e.getParameterDescriptionByIndex(i, out var prm);
-                        
+
                         string name = prm.name;
                         text += $"    Param: {name,-15} ({prm.type})\n";
                     }
+
+                    
+                    /*
+                    // EXAMPLE OF PLAYING AN EVENT
+                    r = bank.loadSampleData();
+                    if (r != FMOD.RESULT.OK) throw new Exception("Invalid bank sample data");
+
+                    r = e.createInstance(out var instance);
+                    if (r != FMOD.RESULT.OK) throw new Exception("Invalid event");
+
+                    r = instance.start();
+                    if (r != FMOD.RESULT.OK) throw new Exception("Invalid start");
+
+                    while (true)
+                    {
+                        studio.update();
+                        instance.getPlaybackState(out var state);
+                        if (state == FMOD.Studio.PLAYBACK_STATE.STOPPED) break;
+                        await Task.Delay(10);
+                    }
+
+                    instance.stop(FMOD.Studio.STOP_MODE.IMMEDIATE);
+                    instance.release();
+                    */
+                    
                 }
             }
         }
