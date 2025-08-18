@@ -45,27 +45,7 @@ public class FMODBank : IDisposable
 
         Events = new FMODEvent[events.Length];
         for (int i = 0; i < events.Length; i++)
-            Events[i] = new FMODEvent(events[i]);
-    }
-
-    public async Task Play(FMOD.Studio.EventDescription e, CancellationToken token = default)
-    {
-        var r = e.createInstance(out var instance);
-        if (r != FMOD.RESULT.OK) throw new Exception("Invalid event");
-
-        r = instance.start();
-        if (r != FMOD.RESULT.OK) throw new Exception("Invalid start");
-
-        while (!_disposed && !token.IsCancellationRequested)
-        {
-            _system.update();
-            instance.getPlaybackState(out var state);
-            if (state == FMOD.Studio.PLAYBACK_STATE.STOPPED) break;
-            await Task.Delay(10);
-        }
-
-        instance.stop(FMOD.Studio.STOP_MODE.IMMEDIATE);
-        instance.release();
+            Events[i] = new FMODEvent(system, events[i]);
     }
 
     (Bank bank, Bank? bank_master, Bank? bank_strings) LoadBanksIntoSystem(FMOD.Studio.System system)
@@ -177,9 +157,11 @@ public class FMODEvent
     public string[] Parameters { get; set; }
 
     public readonly FMOD.Studio.EventDescription eventDescription;
+    readonly FMOD.Studio.System _system;
 
-    public FMODEvent(FMOD.Studio.EventDescription e)
+    public FMODEvent(FMOD.Studio.System system, FMOD.Studio.EventDescription e)
     {
+        _system = system;
         eventDescription = e;
         e.getPath(out string? path);
         if (string.IsNullOrEmpty(path))
@@ -217,5 +199,30 @@ public class FMODEvent
             string name = prm.name;
             Parameters[i] = $"{name} ({prm.type})";
         }
+
+        // use system to discover sound files
+
     }
+
+    public async Task Play(CancellationToken token = default)
+    {
+        var e = eventDescription;
+
+        var r = e.createInstance(out var instance);
+        if (r != FMOD.RESULT.OK) throw new Exception("Invalid event");
+
+        r = instance.start();
+        if (r != FMOD.RESULT.OK) throw new Exception("Invalid start");
+
+        while (!token.IsCancellationRequested)
+        {
+            _system.update();
+            instance.getPlaybackState(out var state);
+            if (state == FMOD.Studio.PLAYBACK_STATE.STOPPED) break;
+            await Task.Delay(10);
+        }
+
+        instance.stop(FMOD.Studio.STOP_MODE.IMMEDIATE);
+        instance.release();
+    } 
 }

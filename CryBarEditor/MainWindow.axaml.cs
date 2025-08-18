@@ -635,6 +635,7 @@ public partial class MainWindow : SimpleWindow
 
         try
         {
+            bank_play_csc?.Cancel();
             _fmodBank?.Dispose();
             _fmodBank = FMODBank.LoadBank(fmod_bank_file);
             SelectedBankEntries.Clear();
@@ -1513,7 +1514,7 @@ public partial class MainWindow : SimpleWindow
 
         bank_play_csc?.Cancel();
         bank_play_csc = new();
-        _ = FmodBank.Play(SelectedBankEntry.eventDescription, bank_play_csc.Token);
+        _ = SelectedBankEntry.Play(bank_play_csc.Token);
     }
     #endregion
 

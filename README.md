@@ -13,7 +13,7 @@ The purpose of this tool is to enable fast and easy modding of Age of Mythology 
 ## Features
 ### Highlights
 - **Read BAR archives**
-- **Read FMOD banks**
+- **Read FMOD banks** (play and view FMOD events)
 - Pick a **Root directory** (usually `\games` folder) for fast switching between BAR and other files
 - Pick an **Export root directory** for fast exporting either from BAR or from Root directory
 - Supports following formats:
