@@ -70,6 +70,7 @@ public partial class MainWindow : SimpleWindow
     #region Properties
     public BarFile? BarFile => _barFile;
     public FileStream? BarFileStream => _barStream;
+    public event Action<BarFile?, FileStream?> OnBarFileLoaded;
 
     public ObservableCollectionExtended<RootFileEntry> RootFileEntries { get; } = new();
     public ObservableCollectionExtended<BarFileEntry> BarEntries { get; } = new();
@@ -597,6 +598,7 @@ public partial class MainWindow : SimpleWindow
             _barStream = stream;
             _barFile = file;
             RefreshBAREntries();
+            OnBarFileLoaded?.Invoke(file, stream);
 
             OnPropertyChanged(nameof(LoadedBARFilePathOrRelative));
             OnPropertyChanged(nameof(BarFileRootPath));

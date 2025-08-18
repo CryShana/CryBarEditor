@@ -32,8 +32,9 @@ public partial class SearchWindow : SimpleWindow
 
     readonly string? _rootDirectory;
     readonly List<RootFileEntry>? _rootEntries;
-    readonly BarFile? _barFile;
-    readonly FileStream? _barFileStream;
+
+    BarFile? _barFile;
+    FileStream? _barFileStream;
 
     public SearchWindow()
     {
@@ -47,11 +48,18 @@ public partial class SearchWindow : SimpleWindow
         if (Directory.Exists(_rootDirectory))
             _rootEntries = owner.RootFileEntries.ToList();
 
-        _barFile = owner.BarFile;
-        _barFileStream = owner.BarFileStream;
+        OnBarFileChanged(owner.BarFile, owner.BarFileStream);
+        owner.OnBarFileLoaded += OnBarFileChanged;
+    }
 
+    void OnBarFileChanged(BarFile? file, FileStream? stream)
+    {
+        // different BAR file opened
+        _barFile = file;
+        _barFileStream = stream;
+
+        // adjust this count
         var count = (_barFile != null ? 1 : 0) + (_rootEntries?.Count ?? 0);
-
         Title = $"Search in [{count}] captured files";
     }
 
@@ -135,7 +143,7 @@ public partial class SearchWindow : SimpleWindow
                             var file = Path.Combine(_rootDirectory, entry.RelativePath);
 
                             lock (searched)
-                                if (!searched.Add(file)) 
+                                if (!searched.Add(file))
                                     return;
 
                             // status update
@@ -212,6 +220,10 @@ public partial class SearchWindow : SimpleWindow
                 Status = "Done";
             });
         }
+        catch (Exception ex)
+        {
+            Status = "Searching error: " + ex.Message;
+        }
         finally
         {
             CurrentlySearching = false;
@@ -219,7 +231,7 @@ public partial class SearchWindow : SimpleWindow
 
         static bool ValidForSearch(string ext)
         {
-            if (ext is ".jpg" or ".jpeg" or ".tga" or ".ddt" or ".png" or ".gif" or ".jpx" or ".webp") 
+            if (ext is ".jpg" or ".jpeg" or ".tga" or ".ddt" or ".png" or ".gif" or ".jpx" or ".webp")
                 return false;
 
             if (ext is ".wav" or ".mp3" or ".wmv" or ".opus" or ".vorbis" or ".ogg" or ".m4a")
@@ -238,7 +250,7 @@ public partial class SearchWindow : SimpleWindow
         static void SearchData(Memory<byte> decompressed_data, string file_path, string? bar_entry_path, IList<SearchResult> results, string query, CancellationToken token)
         {
             if (token.IsCancellationRequested) return;
-            
+
             var text = "";
 
             var ext = Path.GetExtension(bar_entry_path ?? file_path).ToLower();
@@ -255,8 +267,8 @@ public partial class SearchWindow : SimpleWindow
             else
             {
                 var unicode = MainWindow.DetectIfUnicode(decompressed_data.Span);
-                text = unicode ? 
-                    Encoding.Unicode.GetString(decompressed_data.Span) : 
+                text = unicode ?
+                    Encoding.Unicode.GetString(decompressed_data.Span) :
                     Encoding.UTF8.GetString(decompressed_data.Span);
             }
 
@@ -297,7 +309,7 @@ public partial class SearchWindow : SimpleWindow
             return (left_context, query, right_context);
         }
 
-        static string MakeItSafe(string text) => GetUnsafeCharsRgx().Replace(text, " ");        
+        static string MakeItSafe(string text) => GetUnsafeCharsRgx().Replace(text, " ");
     }
 
     [GeneratedRegex(@"\n|\r|[^\u0020-\u007E\u00A1-]")]
