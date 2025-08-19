@@ -70,6 +70,8 @@ public partial class MainWindow : SimpleWindow
     FoldingManager? _foldingManager;
     readonly RegistryOptions _registryOptions;
     readonly TextMate.Installation _textMateInstallation;
+    string _previewText = "";
+    public string PreviewText => _previewText;
 
     #region Properties
     public BarFile? BarFile => _barFile;
@@ -1106,6 +1108,7 @@ public partial class MainWindow : SimpleWindow
         var lang = _registryOptions.GetLanguageByExtension(ext);
         var scope = lang == null ? null : _registryOptions.GetScopeByLanguageId(lang.Id);
 
+        _previewText = text;
         _txtEditor.Document = new TextDocument(text);
         _textMateInstallation.SetGrammar(scope);
 

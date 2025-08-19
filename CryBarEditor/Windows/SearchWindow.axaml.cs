@@ -13,6 +13,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using Avalonia.VisualTree;
 
 namespace CryBarEditor;
 
@@ -35,6 +36,7 @@ public partial class SearchWindow : SimpleWindow
 
     BarFile? _barFile;
     FileStream? _barFileStream;
+    MainWindow? _owner;
 
     public SearchWindow()
     {
@@ -44,6 +46,7 @@ public partial class SearchWindow : SimpleWindow
 
     public SearchWindow(MainWindow owner) : this()
     {
+        _owner = owner;
         _rootDirectory = owner.RootDirectory;
         if (Directory.Exists(_rootDirectory))
             _rootEntries = owner.RootFileEntries.ToList();
@@ -114,7 +117,7 @@ public partial class SearchWindow : SimpleWindow
                             if (name_index >= 0)
                             {
                                 var context = MakeContext(name_index, query, bar_entry.RelativePath);
-                                SearchResults.Add(new SearchResult(file, bar_entry.RelativePath, name_index, context.left, context.mid, context.right));
+                                SearchResults.Add(new SearchResult(file, bar_entry.RelativePath, name_index, context.left, context.mid, context.right, query, false));
                             }
 
                             if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
@@ -164,7 +167,7 @@ public partial class SearchWindow : SimpleWindow
 
                                     Dispatcher.UIThread.Post(() =>
                                     {
-                                        SearchResults.Add(new SearchResult(file, null, name_index, context.left, context.mid, context.right));
+                                        SearchResults.Add(new SearchResult(file, null, name_index, context.left, context.mid, context.right, query, false));
                                     });
                                 }
 
@@ -187,7 +190,7 @@ public partial class SearchWindow : SimpleWindow
                                                 var context = MakeContext(name_index, query, bar_entry.RelativePath);
                                                 Dispatcher.UIThread.Post(() =>
                                                 {
-                                                    SearchResults.Add(new SearchResult(file, bar_entry.RelativePath, name_index, context.left, context.mid, context.right));
+                                                    SearchResults.Add(new SearchResult(file, bar_entry.RelativePath, name_index, context.left, context.mid, context.right, query, false));
                                                 });
                                             }
 
@@ -284,7 +287,7 @@ public partial class SearchWindow : SimpleWindow
 
                 if (token.IsCancellationRequested) break;
 
-                var result = new SearchResult(file_path, bar_entry_path, found_index, context.left, context.mid, context.right);
+                var result = new SearchResult(file_path, bar_entry_path, found_index, context.left, context.mid, context.right, query, true);
                 Dispatcher.UIThread.Post(() =>
                 {
                     results.Add(result);
@@ -312,6 +315,103 @@ public partial class SearchWindow : SimpleWindow
         static string MakeItSafe(string text) => GetUnsafeCharsRgx().Replace(text, " ");
     }
 
+
+    async void SearchResultOpen_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var result = (sender as Button)?.DataContext as SearchResult;
+        if (result == null || _owner == null) return;
+
+        var file = Path.GetRelativePath(_owner.RootDirectory, result.RelevantFile);
+        var bar_entry = result.EntryWithinBAR;
+        RootFileEntry? toSelect = null;
+        foreach (var entry in _owner.RootFileEntries)
+        {
+            if (entry.RelativePath != file)
+                continue;
+
+            toSelect = entry;
+            break;
+        }
+
+        if (toSelect == null)
+            return;
+
+        // set selection and wait for it to load
+        _owner.SelectedRootFileEntry = toSelect;
+        await Task.Delay(50);
+        if (_owner.SelectedRootFileEntry != toSelect)
+            return;
+
+        if (!string.IsNullOrEmpty(bar_entry))
+        {
+            // BAR file
+            if (_owner?.BarFile?.Entries == null)
+                return;
+
+            BarFileEntry? toSelectBarEntry = null;
+            foreach (var entry in _owner.BarFile.Entries)
+            {
+                if (entry.RelativePath != bar_entry)
+                    continue;
+
+                toSelectBarEntry = entry;
+                break;
+            }
+
+            if (toSelectBarEntry == null)
+                return;
+
+            // set selected bar entry and wait it to load
+            _owner.SelectedBarEntry = toSelectBarEntry;
+            await Task.Delay(50);
+        }
+        else
+        {
+            // deselect any opened BAR entry
+            _owner.SelectedBarEntry = null;
+        }
+
+        var text = _owner.PreviewText;
+        if (!result.WithinContent || text.Length < 100)
+            return;
+
+        // wait a bit for editor to load
+        await Task.Delay(50);
+
+        // this is index of character within file
+        var index = result.IndexWithinContent;
+
+        // convert this index to line and column
+        var line = 0;
+        var column = 0;
+        for (int i = 0; i < index && i < text.Length; i++)
+        {
+            if (text[i] == '\n')
+            {
+                line++;
+                column = 0;
+            }
+            else if (text[i] == '\r')
+            {
+                // handle \r\n as single line break
+                if (i + 1 < text.Length && text[i + 1] == '\n')
+                    i++; 
+
+                line++;
+                column = 0;
+            }
+            else
+            {
+                column++;
+            }
+        }
+        
+        _owner._txtEditor.ScrollTo(line, column);
+
+        if (index >= 0 && index + result.Query.Length < text.Length)
+            _owner._txtEditor.Select(index, result.Query.Length);
+    }
+
     [GeneratedRegex(@"\n|\r|[^\u0020-\u007E\u00A1-]")]
     private static partial Regex GetUnsafeCharsRgx();
 }
@@ -320,20 +420,26 @@ public class SearchResult
 {
     public string ShortenedFilePath { get; }
     public string RelevantFile { get; }
+    public string? EntryWithinBARDisplay { get; }
     public string? EntryWithinBAR { get; }
     public int IndexWithinContent { get; }
     public string ContextLeft { get; }
     public string ContextMain { get; }
     public string ContextRight { get; }
+    public string Query { get; }
+    public bool WithinContent { get; }
 
-    public SearchResult(string file, string? bar_entry, int index, string context_left, string context_main, string context_right)
+    public SearchResult(string file, string? bar_entry, int index, string context_left, string context_main, string context_right, string query, bool within_content)
     {
         RelevantFile = file;
-        EntryWithinBAR = bar_entry == null ? "" : ("BAR: " + bar_entry);
+        EntryWithinBARDisplay = bar_entry == null ? "" : ("BAR: " + bar_entry);
+        EntryWithinBAR = bar_entry ?? "";
         IndexWithinContent = index;
         ContextLeft = context_left;
         ContextMain = context_main;
         ContextRight = context_right;
+        Query = query;
+        WithinContent = within_content;
 
         if (file.Length > 70)
         {
