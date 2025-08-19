@@ -792,7 +792,7 @@ public partial class MainWindow : SimpleWindow
         Func<T, long> get_read_size, Func<T, Memory<byte>> read, CancellationToken token = default)
     {
         const int MAX_DATA_SIZE = 1_500_000_000;    // 1.5 GB
-        const int MAX_DATA_TEXT_SIZE = 25_000_000; // 25 MB
+        const int MAX_DATA_TEXT_SIZE = 100_000_000; // 100 MB
 
         var relative_path = get_rel_path(entry);
         var ext = Path.GetExtension(relative_path).ToLower();
@@ -910,6 +910,9 @@ public partial class MainWindow : SimpleWindow
 
                 var xml_tags = GetXMLTagRegex().Count(text);
                 if (xml_tags > 0) ext = ".xml";
+
+                //if (ext == ".simjson")
+                //   ext = ".json";
             }
         }
         catch (UnknownImageFormatException)
