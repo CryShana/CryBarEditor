@@ -111,7 +111,7 @@ public partial class SearchWindow : SimpleWindow
                         foreach (var bar_entry in _barFile.Entries)
                         {
                             if (token.IsCancellationRequested) break;
-    
+
                             // check the filename itself
                             var name_index = bar_entry.RelativePath.IndexOf(query);
                             if (name_index >= 0)
@@ -182,7 +182,7 @@ public partial class SearchWindow : SimpleWindow
                                         foreach (var bar_entry in bar_file.Entries)
                                         {
                                             if (token.IsCancellationRequested) break;
-                                            
+
                                             // check the filename itself
                                             name_index = bar_entry.RelativePath.IndexOf(query);
                                             if (name_index >= 0)
@@ -316,100 +316,89 @@ public partial class SearchWindow : SimpleWindow
     }
 
 
+    bool _selectionInProgress = false;
     async void SearchResultOpen_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
+        if (_selectionInProgress)
+            return;
+
         var result = (sender as Button)?.DataContext as SearchResult;
         if (result == null || _owner == null) return;
 
-        var file = Path.GetRelativePath(_owner.RootDirectory, result.RelevantFile);
-        var bar_entry = result.EntryWithinBAR;
-        RootFileEntry? toSelect = null;
-        foreach (var entry in _owner.RootFileEntries)
+        _selectionInProgress = true;
+        try
         {
-            if (entry.RelativePath != file)
-                continue;
 
-            toSelect = entry;
-            break;
-        }
-
-        if (toSelect == null)
-            return;
-
-        // set selection and wait for it to load
-        _owner.SelectedRootFileEntry = toSelect;
-        await Task.Delay(50);
-        if (_owner.SelectedRootFileEntry != toSelect)
-            return;
-
-        if (!string.IsNullOrEmpty(bar_entry))
-        {
-            // BAR file
-            if (_owner?.BarFile?.Entries == null)
-                return;
-
-            BarFileEntry? toSelectBarEntry = null;
-            foreach (var entry in _owner.BarFile.Entries)
+            var file = Path.GetRelativePath(_owner.RootDirectory, result.RelevantFile);
+            var bar_entry = result.EntryWithinBAR;
+            RootFileEntry? toSelect = null;
+            foreach (var entry in _owner.RootFileEntries)
             {
-                if (entry.RelativePath != bar_entry)
+                if (entry.RelativePath != file)
                     continue;
 
-                toSelectBarEntry = entry;
+                toSelect = entry;
                 break;
             }
 
-            if (toSelectBarEntry == null)
+            if (toSelect == null)
                 return;
 
-            // set selected bar entry and wait it to load
-            _owner.SelectedBarEntry = toSelectBarEntry;
+            // set selection and wait for it to load
+            _owner.SelectedRootFileEntry = toSelect;
             await Task.Delay(50);
-        }
-        else
-        {
-            // deselect any opened BAR entry
-            _owner.SelectedBarEntry = null;
-        }
+            if (_owner.SelectedRootFileEntry != toSelect)
+                return;
 
-        var text = _owner.PreviewText;
-        if (!result.WithinContent || text.Length < 100)
-            return;
-
-        // wait a bit for editor to load
-        await Task.Delay(50);
-
-        // this is index of character within file
-        var index = result.IndexWithinContent;
-
-        // convert this index to line and column
-        var line = 0;
-        var column = 0;
-        for (int i = 0; i < index && i < text.Length; i++)
-        {
-            if (text[i] == '\n')
+            if (!string.IsNullOrEmpty(bar_entry))
             {
-                line++;
-                column = 0;
-            }
-            else if (text[i] == '\r')
-            {
-                // handle \r\n as single line break
-                if (i + 1 < text.Length && text[i + 1] == '\n')
-                    i++; 
+                // BAR file
+                if (_owner?.BarFile?.Entries == null)
+                    return;
 
-                line++;
-                column = 0;
+                BarFileEntry? toSelectBarEntry = null;
+                foreach (var entry in _owner.BarFile.Entries)
+                {
+                    if (entry.RelativePath != bar_entry)
+                        continue;
+
+                    toSelectBarEntry = entry;
+                    break;
+                }
+
+                if (toSelectBarEntry == null)
+                    return;
+
+                // set selected bar entry and wait it to load
+                _owner.SelectedBarEntry = toSelectBarEntry;
+                await Task.Delay(50);
             }
             else
             {
-                column++;
+                // deselect any opened BAR entry
+                _owner.SelectedBarEntry = null;
             }
-        }
-        
-        _owner._txtEditor.ScrollTo(line, column);
 
-        if (index >= 0 && index + result.Query.Length < text.Length)
-            _owner._txtEditor.Select(index, result.Query.Length);
+            var text = _owner.PreviewText;
+            if (!result.WithinContent || text.Length < 100)
+                return;
+
+            // wait a bit for editor to load
+            await Task.Delay(50);
+
+            // this is index of character within file
+            var index = result.IndexWithinContent;
+
+            var location = _owner._txtEditor.Document.GetLocation(index);
+            _owner._txtEditor.ScrollTo(location.Line, location.Column);
+
+            if (index >= 0 && index + result.Query.Length < text.Length)
+                _owner._txtEditor.Select(index, result.Query.Length);
+        }
+        finally
+        {
+            _selectionInProgress = false;
+        }
     }
 
     [GeneratedRegex(@"\n|\r|[^\u0020-\u007E\u00A1-]")]
