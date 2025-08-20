@@ -180,7 +180,7 @@ public partial class SearchWindow : SimpleWindow
 
         var time_started = Stopwatch.GetTimestamp();
         var comparer = IsCaseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-        var regex = IsRegex ? await Task.Run(() => new Regex(query, RegexOptions.Compiled | RegexOptions.Singleline)) : null;
+        var regex = IsRegex ? await Task.Run(() => new Regex(query, RegexOptions.Compiled | RegexOptions.Singleline, TimeSpan.FromMilliseconds(500))) : null;
 
         // THIS IS THE SEARCH FUNCTION
         Func<string, int, (int index, int length)> searcher = regex == null ?
@@ -249,7 +249,7 @@ public partial class SearchWindow : SimpleWindow
                     var filename = Path.GetFileName(file);
                     if (!IsFileExcluded(filename))
                     {
-                        Status = filename;
+                        current_items.TryAdd(filename, 0);
                         foreach (var bar_entry in _barFile.Entries)
                         {
                             if (token.IsCancellationRequested) break;
@@ -269,6 +269,7 @@ public partial class SearchWindow : SimpleWindow
                             var ddata = bar_entry.ReadDataDecompressed(_barFileStream);
                             await SearchData(ddata, file, bar_entry.RelativePath, channel.Writer, searcher, token);
                         }
+                        current_items.TryRemove(filename, out _);
                     }
                 }
             }
