@@ -13,7 +13,7 @@ The purpose of this tool is to enable fast and easy modding of Age of Mythology 
 ## Features
 ### Highlights
 - **Read BAR archives**
-- **Read FMOD banks** (play and view FMOD events)
+- **Read FMOD banks** (play, view and export FMOD events)
 - Pick a **Root directory** (usually `\games` folder) for fast switching between BAR and other files
 - Pick an **Export root directory** for fast exporting either from BAR or from Root directory
 - Supports following formats:
@@ -53,7 +53,7 @@ Just download the latest version .zip and extract it into a folder, run the .exe
 ## Planned features
 Currently planned:
 - Decoding + Encoding TMA and TMM formats
-- Exporting FMOD sounds
+- Somehow exporting all FMOD sound files within event (manual decoding?)
 - More features for additive modding (supporting more files, and generating some template)
 - Maybe another side panel for export directory for quickly editing/viewing exported files - all within same ap
 
