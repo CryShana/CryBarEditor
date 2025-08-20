@@ -38,7 +38,7 @@ public partial class SearchWindow : SimpleWindow
     public string Query { get => _query; set { _query = value; OnSelfChanged(); OnPropertyChanged(nameof(CanSearch)); } }
     public string Status { get => _status; set { _status = value; OnSelfChanged(); } }
     public string ExclusionFilter { get => _exclusionFilter; set { _exclusionFilter = value; _ = RebuildExclusionRegex(); OnSelfChanged(); } }
-    public bool IsRegex { get => _isRegex; set { _isRegex = value; OnSelfChanged(); if (value) IsCaseInsensitive = false; } }
+    public bool IsRegex { get => _isRegex; set { _isRegex = value; OnSelfChanged(); } }
     public bool IsCaseInsensitive { get => _isCaseInsensitive; set { _isCaseInsensitive = value; OnSelfChanged(); } }
     public ObservableCollectionExtended<SearchResult> SearchResults { get; } = new();
 
@@ -180,7 +180,10 @@ public partial class SearchWindow : SimpleWindow
 
         var time_started = Stopwatch.GetTimestamp();
         var comparer = IsCaseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-        var regex = IsRegex ? await Task.Run(() => new Regex(query, RegexOptions.Compiled, TimeSpan.FromMilliseconds(800))) : null;
+
+        var regex_options = RegexOptions.Compiled;
+        if (IsCaseInsensitive) regex_options |= RegexOptions.IgnoreCase;
+        var regex = IsRegex ? await Task.Run(() => new Regex(query, regex_options, TimeSpan.FromMilliseconds(800))) : null;
 
         // THIS IS THE SEARCH FUNCTION
         Func<string, int, (int index, int length)> searcher = regex == null ?
