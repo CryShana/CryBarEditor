@@ -176,11 +176,11 @@ public partial class SearchWindow : SimpleWindow
         SearchResults.Clear();
 
         // we want to continue on different thread after this point - to not block UI
-        await Task.Delay(1).ConfigureAwait(false);
+        await Task.Delay(10).ConfigureAwait(false);
 
         var time_started = Stopwatch.GetTimestamp();
         var comparer = IsCaseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-        var regex = IsRegex ? await Task.Run(() => new Regex(query, RegexOptions.Compiled | RegexOptions.Singleline, TimeSpan.FromMilliseconds(500))) : null;
+        var regex = IsRegex ? await Task.Run(() => new Regex(query, RegexOptions.Compiled, TimeSpan.FromMilliseconds(800))) : null;
 
         // THIS IS THE SEARCH FUNCTION
         Func<string, int, (int index, int length)> searcher = regex == null ?
@@ -192,9 +192,16 @@ public partial class SearchWindow : SimpleWindow
         :
             (txt, si) =>
             {
-                var m = regex.Match(txt, si);
-                if (!m.Success) return (-1, 0);
-                return (m.Index, m.Length);
+                try
+                {
+                    var m = regex.Match(txt, si);
+                    if (!m.Success) return (-1, 0);
+                    return (m.Index, m.Length);
+                }
+                catch (RegexMatchTimeoutException)
+                {
+                    return (-1, 0);
+                }
             };
 
         // searching state
@@ -212,19 +219,29 @@ public partial class SearchWindow : SimpleWindow
         {
             const int BATCH_SIZE = 10;
             var batch = new List<SearchResult>(BATCH_SIZE);
-            await foreach (var result in channel.Reader.ReadAllAsync(token))
+            await foreach (var result in channel.Reader.ReadAllAsync(token).ConfigureAwait(false))
             {
                 batch.Add(result);
                 if (batch.Count >= BATCH_SIZE || !channel.Reader.TryPeek(out _))
                 {
                     var toAdd = batch.ToArray();
                     batch.Clear();
+
                     await Dispatcher.UIThread.InvokeAsync(() =>
                     {
                         foreach (var r in toAdd)
                             SearchResults.Add(r);
                     });
                 }
+            }
+            // flush remaining items 
+            if (batch.Count > 0)
+            {
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    foreach (var r in batch)
+                        SearchResults.Add(r);
+                });
             }
         }, token);
 
@@ -233,10 +250,10 @@ public partial class SearchWindow : SimpleWindow
             while (!token.IsCancellationRequested && !search_finished)
             {
                 Status = $"[{processed_root_files_count}/{total_root_files_count}] {string.Join(", ", current_items.Select(x => x.Key))}";
-                await Task.Delay(100, token);
+                await Task.Delay(100, token).ConfigureAwait(false);
             }
         }, token);
-        
+
 
         try
         {
@@ -262,12 +279,12 @@ public partial class SearchWindow : SimpleWindow
                             {
                                 var context = MakeContext(name_index, bar_entry.RelativePath.AsSpan(name_index, matched_length), bar_entry.RelativePath);
                                 var result = new SearchResult(file, bar_entry.RelativePath, name_index, context.left, context.mid, context.right, false);
-                                await channel.Writer.WriteAsync(result, token);
+                                await channel.Writer.WriteAsync(result, token).ConfigureAwait(false);
                             }
 
                             if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
                             var ddata = bar_entry.ReadDataDecompressed(_barFileStream);
-                            await SearchData(ddata, file, bar_entry.RelativePath, channel.Writer, searcher, token);
+                            await SearchData(ddata, file, bar_entry.RelativePath, channel.Writer, searcher, token).ConfigureAwait(false);
                         }
                         current_items.TryRemove(filename, out _);
                     }
@@ -302,7 +319,7 @@ public partial class SearchWindow : SimpleWindow
                             {
                                 var context = MakeContext(name_index, file.AsSpan(name_index, matched_length), file);
                                 var result = new SearchResult(file, null, name_index, context.left, context.mid, context.right, false);
-                                await channel.Writer.WriteAsync(result, token);
+                                await channel.Writer.WriteAsync(result, token).ConfigureAwait(false);
                             }
 
                             var ext = Path.GetExtension(file).ToLower();
@@ -325,12 +342,12 @@ public partial class SearchWindow : SimpleWindow
                                         {
                                             var context = MakeContext(name_index, bar_entry.RelativePath.AsSpan(name_index, matched_length), bar_entry.RelativePath);
                                             var result = new SearchResult(file, bar_entry.RelativePath, name_index, context.left, context.mid, context.right, false);
-                                            await channel.Writer.WriteAsync(result, token);
+                                            await channel.Writer.WriteAsync(result, token).ConfigureAwait(false);
                                         }
 
                                         if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
                                         var ddata = bar_entry.ReadDataDecompressed(stream);
-                                        await SearchData(ddata, file, bar_entry.RelativePath, channel.Writer, searcher, token);
+                                        await SearchData(ddata, file, bar_entry.RelativePath, channel.Writer, searcher, token).ConfigureAwait(false);
                                     }
                                 }
                             }
@@ -339,22 +356,25 @@ public partial class SearchWindow : SimpleWindow
                                 if (new FileInfo(file).Length > MAX_FILE_SIZE) return;
 
                                 // process file directly
-                                var data = await File.ReadAllBytesAsync(file);
+                                var data = await File.ReadAllBytesAsync(file).ConfigureAwait(false);
                                 var ddata = BarCompression.EnsureDecompressed(data, out _);
-                                await SearchData(ddata, file, null, channel.Writer, searcher, token);
+                                await SearchData(ddata, file, null, channel.Writer, searcher, token).ConfigureAwait(false);
                             }
                         }
                         finally
                         {
                             current_items.TryRemove(file_name, out _);
                         }
-                    });
+                    })
+                    .ConfigureAwait(false);
             }
 
             search_finished = true;
             channel.Writer.Complete();
-            await consumer;
-            await updater;
+            await consumer.ConfigureAwait(false);
+            await updater.ConfigureAwait(false);
+            // wait a bit
+            await Task.Delay(50).ConfigureAwait(false);
             Status = "Done";
         }
         catch (OperationCanceledException)
@@ -367,6 +387,7 @@ public partial class SearchWindow : SimpleWindow
         }
         finally
         {
+            _csc.Cancel();
             CurrentlySearching = false;
         }
 
@@ -427,7 +448,7 @@ public partial class SearchWindow : SimpleWindow
                 if (token.IsCancellationRequested) break;
 
                 var result = new SearchResult(file_path, bar_entry_path, found_index, context.left, context.mid, context.right, true);
-                await channel.WriteAsync(result, token);
+                await channel.WriteAsync(result, token).ConfigureAwait(false);
             }
         }
 
