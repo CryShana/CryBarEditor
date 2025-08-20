@@ -37,6 +37,16 @@
 		<Style Selector="ListBoxItem">
 			<Setter Property="Padding" Value="5" />
 		</Style>
+
+		<Style Selector="ToggleButton">
+			<Setter Property="Padding" Value="8,6" />
+			<Setter Property="MinWidth" Value="40" />
+			<Setter Property="MinHeight" Value="32" />
+		</Style>
+
+		<Style Selector="ToggleButton:checked">
+			<Setter Property="Background" Value="#4772b5" />
+		</Style>
 	</Window.Styles>
 	<DockPanel Margin="10">
 		<DockPanel Margin="0,0,0,5" DockPanel.Dock="Top">
@@ -45,6 +55,7 @@
 				Margin="0,0,10,0"
 				Classes.Searching="{Binding CurrentlySearching}"
 				Click="Search_Click"
+				DockPanel.Dock="Left"
 				IsDefault="True"
 				IsEnabled="{Binding CanSearch}">
 				<Button.Styles>
@@ -56,12 +67,42 @@
 					</Style>
 				</Button.Styles>
 			</Button>
+			<ToggleButton
+				x:Name="btnRegex"
+				Margin="5,0,0,0"
+				DockPanel.Dock="Right"
+				IsChecked="{Binding IsRegex, Mode=TwoWay}"
+				IsEnabled="{Binding !CurrentlySearching}"
+				ToolTip.Tip="Regular Expression">
+				<micons:MaterialIcon FontSize="22" Kind="Regex" />
+			</ToggleButton>
+			<ToggleButton
+				x:Name="btnCaseSensitive"
+				Margin="5,0,0,0"
+				DockPanel.Dock="Right"
+				IsChecked="{Binding IsCaseInsensitive, Mode=TwoWay}"
+				IsEnabled="{Binding !CurrentlySearching}"
+				ToolTip.Tip="Case Insensitive">
+				<micons:MaterialIcon FontSize="22" Kind="FormatLetterCase" />
+			</ToggleButton>
 			<TextBox
 				x:Name="txtQuery"
 				HorizontalAlignment="Stretch"
-				DockPanel.Dock="Left"
 				Text="{Binding Query, Mode=TwoWay}"
 				Watermark="Query" />
+		</DockPanel>
+		<DockPanel Margin="0,0,0,5" DockPanel.Dock="Top">
+			<TextBlock
+				Margin="0,0,10,0"
+				VerticalAlignment="Center"
+				DockPanel.Dock="Left"
+				Text="File exclusion filter:" />
+			<TextBox
+				x:Name="txtExclusionFilter"
+				HorizontalAlignment="Stretch"
+				IsEnabled="{Binding !CurrentlySearching}"
+				Text="{Binding ExclusionFilter, Mode=TwoWay}"
+				Watermark="*.txt, temp*, *debug*, specific_file.dat" />
 		</DockPanel>
 		<TextBlock Margin="0,0,0,10" DockPanel.Dock="Top">
 			<Run Foreground="Gray" Text="{Binding Status}" />
@@ -70,13 +111,17 @@
 			<ListBox.ItemTemplate>
 				<DataTemplate>
 					<StackPanel Orientation="Horizontal">
-						<Button Content="{micons:MaterialIconExt Kind=SelectionEllipseArrowInside, Size=20}" Click="SearchResultOpen_Click" Margin="0,0,6,0"/>
+						<Button
+							Margin="0,0,6,0"
+							Click="SearchResultOpen_Click"
+							Content="{micons:MaterialIconExt Kind=SelectionEllipseArrowInside}" />
 						<StackPanel>
 							<SelectableTextBlock>
-								<Run Foreground="#d9d9d9" Text="{Binding IndexWithinContent, StringFormat='[{0}] '}" /><Run Foreground="#4772b5" Text="{Binding ContextLeft}" /><Run
-									Foreground="#63a0ff"
+								<Run Foreground="#d9d9d9" Text="{Binding IndexWithinContent, StringFormat='[{0}] '}" /><Run Foreground="#4772b5" Text="{Binding ContextLeft}" />
+								<Run Foreground="#63a0ff"
 									Text="{Binding ContextMain}"
-									TextDecorations="Underline" /><Run Foreground="#4772b5" Text="{Binding ContextRight}" />
+									TextDecorations="Underline" />
+								<Run Foreground="#4772b5" Text="{Binding ContextRight}" />
 							</SelectableTextBlock>
 							<SelectableTextBlock Foreground="Gray" Text="{Binding ShortenedFilePath}" />
 							<SelectableTextBlock Foreground="#874742" Text="{Binding EntryWithinBARDisplay}" />

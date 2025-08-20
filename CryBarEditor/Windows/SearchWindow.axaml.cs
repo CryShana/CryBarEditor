@@ -13,7 +13,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
-using Avalonia.VisualTree;
+
+using System.Buffers;
+using System.Threading.Channels;
+using System.Collections.Concurrent;
+using System.Diagnostics;
 
 namespace CryBarEditor;
 
@@ -21,6 +25,9 @@ public partial class SearchWindow : SimpleWindow
 {
     string _status = "This searches through all FILTERED files and opened BAR archives";
     string _query = "";
+    string _exclusionFilter = "";
+    bool _isRegex = false;
+    bool _isCaseInsensitive = false;
     bool _searching = false;
     CancellationTokenSource? _csc;
 
@@ -29,6 +36,9 @@ public partial class SearchWindow : SimpleWindow
 
     public string Query { get => _query; set { _query = value; OnSelfChanged(); OnPropertyChanged(nameof(CanSearch)); } }
     public string Status { get => _status; set { _status = value; OnSelfChanged(); } }
+    public string ExclusionFilter { get => _exclusionFilter; set { _exclusionFilter = value; OnSelfChanged(); } }
+    public bool IsRegex { get => _isRegex; set { _isRegex = value; OnSelfChanged(); if (value) IsCaseInsensitive = false; } }
+    public bool IsCaseInsensitive { get => _isCaseInsensitive; set { _isCaseInsensitive = value; OnSelfChanged(); } }
     public ObservableCollectionExtended<SearchResult> SearchResults { get; } = new();
 
     readonly string? _rootDirectory;
@@ -93,135 +103,177 @@ public partial class SearchWindow : SimpleWindow
         CurrentlySearching = true;
         SearchResults.Clear();
 
+        var time_started = Stopwatch.GetTimestamp();
+        var comparer = IsCaseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var regex = IsRegex ? await Task.Run(() => new Regex(query, RegexOptions.Compiled | RegexOptions.Singleline)) : null;
+
+        // THIS IS THE SEARCH FUNCTION
+        Func<string, int, (int index, int length)> searcher = regex == null ?
+            (txt, si) =>
+            {
+                var i = txt.IndexOf(query, si, comparer);
+                return (i, query.Length);
+            }
+        :
+            (txt, si) =>
+            {
+                var m = regex.Match(txt, si);
+                if (!m.Success) return (-1, 0);
+                return (m.Index, m.Length);
+            };
+
+        // searching state
+        var searched = new ConcurrentDictionary<string, byte>();
+        var current_items = new ConcurrentDictionary<string, byte>();
+        var channel = Channel.CreateUnbounded<SearchResult>();
+        var search_finished = false;
+
+        var processed_root_files_count = 0;
+        var total_root_files_count = _rootEntries?.Count;
+
+        // this channnel consumer will handle updating the UI more efficiently in batches
+        var consumer = Task.Run(async () =>
+        {
+            const int BATCH_SIZE = 10;
+            var batch = new List<SearchResult>(BATCH_SIZE);
+            await foreach (var result in channel.Reader.ReadAllAsync(token))
+            {
+                batch.Add(result);
+                if (batch.Count >= BATCH_SIZE || !channel.Reader.TryPeek(out _))
+                {
+                    var toAdd = batch.ToArray();
+                    batch.Clear();
+                    await Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        foreach (var r in toAdd)
+                            SearchResults.Add(r);
+                    });
+                }
+            }
+        }, token);
+
+        var updater = Task.Run(async () =>
+        {
+            while (!token.IsCancellationRequested && !search_finished)
+            {
+                Status = $"[{processed_root_files_count}/{total_root_files_count}] {string.Join(", ", current_items.Select(x => x.Key))}";
+                await Task.Delay(100, token);
+            }
+        }, token);
+
         try
         {
-            await Task.Run(() =>
+            // go through bar file if opened (it's not always included with root files)
+            if (_barFile?.Entries != null && _barFileStream != null)
             {
-                var searched = new HashSet<string>();
-                var current_items = new List<string>();
-
-                // go through bar file if opened (it's not always included with root files)
-                if (_barFile?.Entries != null && _barFileStream != null)
+                var file = _barFileStream.Name;
+                if (searched.TryAdd(file, 0))
                 {
-                    var file = _barFileStream.Name;
-                    if (searched.Add(file))
+                    Status = Path.GetFileName(file);
+                    foreach (var bar_entry in _barFile.Entries)
                     {
-                        Status = Path.GetFileName(file);
+                        if (token.IsCancellationRequested) break;
 
-                        foreach (var bar_entry in _barFile.Entries)
+                        // check the filename itself
+                        var (name_index, matched_length) = searcher(bar_entry.RelativePath, 0);
+                        if (name_index >= 0)
                         {
-                            if (token.IsCancellationRequested) break;
-
-                            // check the filename itself
-                            var name_index = bar_entry.RelativePath.IndexOf(query);
-                            if (name_index >= 0)
-                            {
-                                var context = MakeContext(name_index, query, bar_entry.RelativePath);
-                                SearchResults.Add(new SearchResult(file, bar_entry.RelativePath, name_index, context.left, context.mid, context.right, query, false));
-                            }
-
-                            if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
-                            var ddata = bar_entry.ReadDataDecompressed(_barFileStream);
-                            SearchData(ddata, file, bar_entry.RelativePath, SearchResults, query, token);
+                            var context = MakeContext(name_index, bar_entry.RelativePath.AsSpan(name_index, matched_length), bar_entry.RelativePath);
+                            var result = new SearchResult(file, bar_entry.RelativePath, name_index, context.left, context.mid, context.right, false);
+                            await channel.Writer.WriteAsync(result, token);
                         }
+
+                        if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
+                        var ddata = bar_entry.ReadDataDecompressed(_barFileStream);
+                        await SearchData(ddata, file, bar_entry.RelativePath, channel.Writer, searcher, token);
                     }
                 }
+            }
 
-                // go through all root files (in parallel)
-                if (_rootEntries != null && _rootDirectory != null)
-                {
-                    var count = 0;
-                    var total_count = _rootEntries.Count;
+            // go through all root files (in parallel)
+            if (_rootEntries != null && _rootDirectory != null)
+            {
+                await Parallel.ForEachAsync(_rootEntries, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = token },
+                    async (entry, token) =>
+                    {
+                        if (token.IsCancellationRequested)
+                            return;
 
-                    Parallel.ForEach(_rootEntries, new ParallelOptions { MaxDegreeOfParallelism = 4 },
-                        (entry, opt) =>
+                        Interlocked.Increment(ref processed_root_files_count);
+                        var file = Path.Combine(_rootDirectory, entry.RelativePath);
+
+                        // check if file is being processed by different thread
+                        if (!searched.TryAdd(file, 0))
+                            return;
+
+                        // status update
+                        var file_name = Path.GetFileName(file);
+                        current_items.TryAdd(file_name, 0);
+
+                        try
                         {
-                            if (token.IsCancellationRequested)
+                            // check the filename itself
+                            var (name_index, matched_length) = searcher(file, 0);
+                            if (name_index >= 0)
                             {
-                                opt.Break();
-                                return;
+                                var context = MakeContext(name_index, file.AsSpan(name_index, matched_length), file);
+                                var result = new SearchResult(file, null, name_index, context.left, context.mid, context.right, false);
+                                await channel.Writer.WriteAsync(result, token);
                             }
 
-                            Interlocked.Increment(ref count);
-                            var file = Path.Combine(_rootDirectory, entry.RelativePath);
-
-                            lock (searched)
-                                if (!searched.Add(file))
-                                    return;
-
-                            // status update
-                            var file_name = Path.GetFileName(file);
-                            lock (current_items)
+                            var ext = Path.GetExtension(file).ToLower();
+                            if (ext == ".bar")
                             {
-                                current_items.Add(file_name);
-                                Status = $"[{count}/{total_count}] {string.Join(", ", current_items)}";
-                            }
-
-                            try
-                            {
-                                // check the filename itself
-                                var name_index = file.IndexOf(query);
-                                if (name_index >= 0)
+                                // load bar
+                                using var stream = File.OpenRead(file);
+                                var bar_file = new BarFile(stream);
+                                if (bar_file.Load(out _))
                                 {
-                                    var context = MakeContext(name_index, query, file);
-
-                                    Dispatcher.UIThread.Post(() =>
+                                    foreach (var bar_entry in bar_file.Entries)
                                     {
-                                        SearchResults.Add(new SearchResult(file, null, name_index, context.left, context.mid, context.right, query, false));
-                                    });
-                                }
+                                        if (token.IsCancellationRequested) break;
 
-                                var ext = Path.GetExtension(file).ToLower();
-                                if (ext == ".bar")
-                                {
-                                    // load bar
-                                    using var stream = File.OpenRead(file);
-                                    var bar_file = new BarFile(stream);
-                                    if (bar_file.Load(out _))
-                                    {
-                                        foreach (var bar_entry in bar_file.Entries)
+                                        // check the filename itself
+                                        (name_index, matched_length) = searcher(bar_entry.RelativePath, 0);
+                                        if (name_index >= 0)
                                         {
-                                            if (token.IsCancellationRequested) break;
-
-                                            // check the filename itself
-                                            name_index = bar_entry.RelativePath.IndexOf(query);
-                                            if (name_index >= 0)
-                                            {
-                                                var context = MakeContext(name_index, query, bar_entry.RelativePath);
-                                                Dispatcher.UIThread.Post(() =>
-                                                {
-                                                    SearchResults.Add(new SearchResult(file, bar_entry.RelativePath, name_index, context.left, context.mid, context.right, query, false));
-                                                });
-                                            }
-
-                                            if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
-                                            var ddata = bar_entry.ReadDataDecompressed(stream);
-                                            SearchData(ddata, file, bar_entry.RelativePath, SearchResults, query, token);
+                                            var context = MakeContext(name_index, bar_entry.RelativePath.AsSpan(name_index, matched_length), bar_entry.RelativePath);
+                                            var result = new SearchResult(file, bar_entry.RelativePath, name_index, context.left, context.mid, context.right, false);
+                                            await channel.Writer.WriteAsync(result, token);
                                         }
+
+                                        if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
+                                        var ddata = bar_entry.ReadDataDecompressed(stream);
+                                        await SearchData(ddata, file, bar_entry.RelativePath, channel.Writer, searcher, token);
                                     }
                                 }
-                                else
-                                {
-                                    if (new FileInfo(file).Length > MAX_FILE_SIZE) return;
-
-                                    // process file directly
-                                    var data = File.ReadAllBytes(file);
-                                    var ddata = BarCompression.EnsureDecompressed(data, out _);
-                                    SearchData(ddata, file, null, SearchResults, query, token);
-                                }
                             }
-                            finally
+                            else
                             {
-                                lock (current_items)
-                                {
-                                    current_items.Remove(file_name);
-                                }
-                            }
-                        });
-                }
+                                if (new FileInfo(file).Length > MAX_FILE_SIZE) return;
 
-                Status = "Done";
-            });
+                                // process file directly
+                                var data = await File.ReadAllBytesAsync(file);
+                                var ddata = BarCompression.EnsureDecompressed(data, out _);
+                                await SearchData(ddata, file, null, channel.Writer, searcher, token);
+                            }
+                        }
+                        finally
+                        {
+                            current_items.TryRemove(file_name, out _);
+                        }
+                    });
+            }
+
+            search_finished = true;
+            channel.Writer.Complete();
+            await consumer;
+            await updater;
+            Status = "Done";
+        }
+        catch (OperationCanceledException)
+        { 
+            Status = "Search cancelled";
         }
         catch (Exception ex)
         {
@@ -232,89 +284,96 @@ public partial class SearchWindow : SimpleWindow
             CurrentlySearching = false;
         }
 
-        static bool ValidForSearch(string ext)
-        {
-            if (ext is ".jpg" or ".jpeg" or ".tga" or ".ddt" or ".png" or ".gif" or ".jpx" or ".webp")
-                return false;
+        // show elapsed time at end
+        var time_elapsed = Stopwatch.GetElapsedTime(time_started);
+        if (time_elapsed.TotalSeconds < 60)
+            Status += $" [{time_elapsed.TotalSeconds:0.0}s]";
+        else 
+            Status += $" [{time_elapsed.TotalMinutes:0.0}min]";
 
-            if (ext is ".wav" or ".mp3" or ".wmv" or ".opus" or ".vorbis" or ".ogg" or ".m4a")
-                return false;
-
-            if (ext is ".mp4" or ".mov" or ".webm" or ".avi" or ".mkv")
-                return false;
-
-            // FOR NOW IGNORE SPECIAL FORMATS WE CAN'T READ (this may change)
-            if (ext is ".data" or ".hkt" or ".tma" or ".tmm")
-                return false;
-
-            return true;
-        }
-
-        static void SearchData(Memory<byte> decompressed_data, string file_path, string? bar_entry_path, IList<SearchResult> results, string query, CancellationToken token)
-        {
-            if (token.IsCancellationRequested) return;
-
-            var text = "";
-
-            var ext = Path.GetExtension(bar_entry_path ?? file_path).ToLower();
-            if (!ValidForSearch(ext)) return;
-
-            if (ext == ".xmb")
+        static async ValueTask SearchData(ReadOnlyMemory<byte> decompressed_data, string file_path, string? bar_entry_path,
+                ChannelWriter<SearchResult> channel, Func<string, int, (int index, int matched_length)> searcher, CancellationToken token)
             {
-                // let's also parse XMB
-                var xml = BarFormatConverter.XMBtoXML(decompressed_data.Span);
-                if (xml == null) return;
+                if (token.IsCancellationRequested) return;
 
-                text = BarFormatConverter.FormatXML(xml);
-            }
-            else
-            {
-                var unicode = MainWindow.DetectIfUnicode(decompressed_data.Span);
-                text = unicode ?
-                    Encoding.Unicode.GetString(decompressed_data.Span) :
-                    Encoding.UTF8.GetString(decompressed_data.Span);
-            }
+                ReadOnlySpan<byte> span = decompressed_data.Span;
 
-            // now search
-            var start_index = 0;
-            while (true)
-            {
-                var found_index = text.IndexOf(query, start_index);
-                if (found_index == -1) break;
-                start_index = found_index + 1;
+                var text = "";
 
-                var context = MakeContext(found_index, query, text);
+                var ext = Path.GetExtension(bar_entry_path ?? file_path).ToLower();
+                if (InvalidSearchExtensions.Contains(ext)) return;
 
-                if (token.IsCancellationRequested) break;
-
-                var result = new SearchResult(file_path, bar_entry_path, found_index, context.left, context.mid, context.right, query, true);
-                Dispatcher.UIThread.Post(() =>
+                if (ext == ".xmb")
                 {
-                    results.Add(result);
-                });
-            }
-        }
+                    // let's also parse XMB
+                    var xml = BarFormatConverter.XMBtoXML(span);
+                    if (xml == null) return;
 
-        static (string left, string mid, string right) MakeContext(int index, string query, string text)
+                    text = BarFormatConverter.FormatXML(xml);
+                }
+                else
+                {
+                    var unicode = MainWindow.DetectIfUnicode(span);
+                    var encoding = unicode ? Encoding.Unicode : Encoding.UTF8;
+                    var charCount = encoding.GetCharCount(span);
+                    var chars = ArrayPool<char>.Shared.Rent(charCount);
+                    try
+                    {
+                        var actualCount = encoding.GetChars(span, chars);
+                        text = new string(chars, 0, actualCount);
+                    }
+                    finally
+                    {
+                        ArrayPool<char>.Shared.Return(chars);
+                    }
+                }
+
+                // now search
+                var start_index = 0;
+                while (true)
+                {
+                    var (found_index, matched_length) = searcher(text, start_index);
+                    if (found_index == -1) break;
+                    start_index = found_index + 1;
+
+                    var context = MakeContext(found_index, text.AsSpan(found_index, matched_length), text);
+
+                    if (token.IsCancellationRequested) break;
+
+                    var result = new SearchResult(file_path, bar_entry_path, found_index, context.left, context.mid, context.right, true);
+                    await channel.WriteAsync(result, token);
+                }
+            }
+
+        static (string left, string mid, string right) MakeContext(int index, ReadOnlySpan<char> matched_text, string text)
         {
             const int LEFT_CONTEXT_SIZE = 15;
             const int RIGHT_CONTEXT_SIZE = 25;
 
             var match_begin = index;
-            var match_end = index + query.Length;
+            var match_end = index + matched_text.Length;
 
             var from = Math.Max(0, match_begin - LEFT_CONTEXT_SIZE);
             var to = Math.Min(text.Length, match_end + RIGHT_CONTEXT_SIZE);
             var full_context = text[from..to];
             var left_context = MakeItSafe(full_context[..(match_begin - from)]);
-            var right_context = MakeItSafe(full_context[(match_begin - from + query.Length)..]);
+            var right_context = MakeItSafe(full_context[(match_begin - from + matched_text.Length)..]);
+            var mid_context = MakeItSafe(text[match_begin..match_end]);
 
-            return (left_context, query, right_context);
+            return (left_context, mid_context, right_context);
         }
 
         static string MakeItSafe(string text) => GetUnsafeCharsRgx().Replace(text, " ");
     }
 
+    static readonly HashSet<string> InvalidSearchExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".jpg", ".jpeg", ".tga", ".ddt", ".png", ".gif", ".jpx", ".webp",
+        ".wav", ".mp3", ".wmv", ".opus", ".vorbis", ".ogg", ".m4a",
+        ".mp4", ".mov", ".webm", ".avi", ".mkv",
+        // FOR NOW WE IGNORE THE FOLLOWING UNTIL WE CAN READ THEM:
+        ".data", ".hkt", ".tma", ".tmm"
+    };
 
     bool _selectionInProgress = false;
     async void SearchResultOpen_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
@@ -392,8 +451,8 @@ public partial class SearchWindow : SimpleWindow
             var location = _owner._txtEditor.Document.GetLocation(index);
             _owner._txtEditor.ScrollTo(location.Line, location.Column);
 
-            if (index >= 0 && index + result.Query.Length < text.Length)
-                _owner._txtEditor.Select(index, result.Query.Length);
+            if (index >= 0 && index + result.ContextMain.Length < text.Length)
+                _owner._txtEditor.Select(index, result.ContextMain.Length);
         }
         finally
         {
@@ -415,10 +474,9 @@ public class SearchResult
     public string ContextLeft { get; }
     public string ContextMain { get; }
     public string ContextRight { get; }
-    public string Query { get; }
     public bool WithinContent { get; }
 
-    public SearchResult(string file, string? bar_entry, int index, string context_left, string context_main, string context_right, string query, bool within_content)
+    public SearchResult(string file, string? bar_entry, int index, string context_left, string context_main, string context_right, bool within_content)
     {
         RelevantFile = file;
         EntryWithinBARDisplay = bar_entry == null ? "" : ("BAR: " + bar_entry);
@@ -427,7 +485,6 @@ public class SearchResult
         ContextLeft = context_left;
         ContextMain = context_main;
         ContextRight = context_right;
-        Query = query;
         WithinContent = within_content;
 
         if (file.Length > 70)
