@@ -1540,6 +1540,39 @@ public partial class MainWindow : SimpleWindow
         bank_play_csc = new();
         _ = SelectedBankEntry.Play(bank_play_csc.Token);
     }
+    async void BankItem_Export(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (SelectedBankEntry == null || FmodBank == null)
+            return;
+
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            DefaultExtension = ".wav",
+            SuggestedFileName = Path.GetFileNameWithoutExtension(SelectedBankEntry.Path) + ".wav",
+            Title = "Export FMOD event"
+        });
+
+        if (file == null)
+            return;
+
+        bank_play_csc?.Cancel();
+        bank_play_csc = new();
+
+        try
+        {
+            SelectedBankEntry.Export(file.Path.LocalPath, bank_play_csc.Token);
+
+            _ = ShowSuccess("FMOD event export completed.\n");
+        }
+        catch (Exception ex)
+        {
+            _ = ShowError("FMOD event export failed.\n" + ex.Message);
+        }
+        finally
+        {
+
+        }
+    }
     #endregion
 
     #region Helpers

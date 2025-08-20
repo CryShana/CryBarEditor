@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Bank = FMOD.Studio.Bank;
@@ -45,7 +48,7 @@ public class FMODBank : IDisposable
 
         Events = new FMODEvent[events.Length];
         for (int i = 0; i < events.Length; i++)
-            Events[i] = new FMODEvent(system, events[i]);
+            Events[i] = new FMODEvent(system, events[i], _bankData, _bankMasterData, bankMasterStringsData);
     }
 
     (Bank bank, Bank? bank_master, Bank? bank_strings) LoadBanksIntoSystem(FMOD.Studio.System system)
@@ -158,10 +161,17 @@ public class FMODEvent
 
     public readonly FMOD.Studio.EventDescription eventDescription;
     readonly FMOD.Studio.System _system;
+    readonly byte[] _bankData;
+    readonly byte[]? _bankMasterData;
+    readonly byte[]? _bankMasterStringsData;
 
-    public FMODEvent(FMOD.Studio.System system, FMOD.Studio.EventDescription e)
+    public FMODEvent(FMOD.Studio.System system, FMOD.Studio.EventDescription e, byte[] bank, byte[]? bankMaster, byte[]? bankMasterStrings)
     {
         _system = system;
+        _bankData = bank;
+        _bankMasterData = bankMaster;
+        _bankMasterStringsData = bankMasterStrings;
+
         eventDescription = e;
         e.getPath(out string? path);
         if (string.IsNullOrEmpty(path))
@@ -224,5 +234,91 @@ public class FMODEvent
 
         instance.stop(FMOD.Studio.STOP_MODE.IMMEDIATE);
         instance.release();
-    } 
+    }
+
+    public void Export(string output_path_wav, CancellationToken token = default)
+    {
+        // Create a new Studio system for exporting
+        FMOD.Studio.System exportSystem;
+        FMOD.Studio.System.create(out exportSystem);
+
+        // Set the output to WAV writer before initialization
+        exportSystem.getCoreSystem(out var coreSystem);
+        coreSystem.setOutput(FMOD.OUTPUTTYPE.WAVWRITER_NRT);
+
+        // Set DSP buffer size for NRT rendering
+        coreSystem.setDSPBufferSize(512, 4);
+
+        // Convert path to IntPtr
+        nint pathPtr = Marshal.StringToHGlobalAnsi(output_path_wav);
+
+        Bank bank = default;
+        Bank? bankMaster = null;
+        Bank? bankMasterStrings = null;
+        try
+        {
+            // Initialize with WAV file path
+            var r = exportSystem.initialize(512, FMOD.Studio.INITFLAGS.NORMAL, FMOD.INITFLAGS.NORMAL, pathPtr);
+            if (r != FMOD.RESULT.OK) throw new Exception($"Failed to initialize export system: {r}");
+
+            // Reload the same banks into this new system
+            if (_bankMasterStringsData != null)
+            {
+                exportSystem.loadBankMemory(_bankMasterStringsData, FMOD.Studio.LOAD_BANK_FLAGS.NORMAL, out var bank_master_strings);
+                bankMasterStrings = bank_master_strings;
+            }
+
+            if (_bankMasterData != null)
+            {
+                exportSystem.loadBankMemory(_bankMasterData, FMOD.Studio.LOAD_BANK_FLAGS.NORMAL, out var bank_master);
+                bankMaster = bank_master;
+            }
+
+            exportSystem.loadBankMemory(_bankData, FMOD.Studio.LOAD_BANK_FLAGS.NORMAL, out bank);
+            
+            // get same event again from the new system
+            eventDescription.getID(out var eventId);
+            exportSystem.getEventByID(eventId, out var exportEventDescription);
+
+            // start the instance
+            r = exportEventDescription.createInstance(out var instance);
+            if (r != FMOD.RESULT.OK) throw new Exception("Failed to create event instance");
+
+            r = instance.start();
+            if (r != FMOD.RESULT.OK) throw new Exception("Failed to start event");
+
+            // process audio in non-realtime
+            int updateCount = 0;
+            const int maxUpdates = 10000; // Safety limit
+
+            while (!token.IsCancellationRequested && updateCount < maxUpdates)
+            {
+                exportSystem.update();
+
+                instance.getPlaybackState(out var state);
+                if (state == FMOD.Studio.PLAYBACK_STATE.STOPPED)
+                    break;
+
+                updateCount++;
+            }
+
+            // Clean up
+            instance.stop(FMOD.Studio.STOP_MODE.IMMEDIATE);
+            instance.release();
+        }
+        finally
+        {
+            bank.unload();
+            if (bankMaster.HasValue)
+                bankMaster.Value.unload();
+
+            if (bankMasterStrings.HasValue)
+                bankMasterStrings.Value.unload();
+
+            exportSystem.release();
+
+            Marshal.FreeHGlobal(pathPtr);
+        }
+    }
+
 }

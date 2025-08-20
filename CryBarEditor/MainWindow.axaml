@@ -220,7 +220,7 @@
 						</TextBlock>
 						
 						<ListBox ItemsSource="{Binding BankEntries}" Margin="0,10,0,0"
-								SelectionMode="Multiple"
+								SelectionMode="Single"
 								SelectedItems="{Binding SelectedBankEntries, Mode=TwoWay}"
 								SelectedItem="{Binding SelectedBankEntry, Mode=TwoWay}">
 							<ListBox.ItemTemplate>
@@ -238,6 +238,9 @@
 									<MenuItem Header="Play" 
 											Icon="{micons:MaterialIconExt Kind=Play}"
 											Click="BankItem_Play" />
+									<MenuItem Header="Export" 
+										Icon="{micons:MaterialIconExt Kind=Export}"
+										Click="BankItem_Export" />
 								</ContextMenu>
 							</ListBox.ContextMenu>
 						</ListBox>
