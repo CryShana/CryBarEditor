@@ -128,7 +128,7 @@ public partial class SearchWindow : SimpleWindow
                     _fileExclusionRegex = new Regex(pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase);
                 });
 
-                await _rebuildTask;
+                await _rebuildTask.ConfigureAwait(false);
             }
 
             _rebuildTask = null;
@@ -174,6 +174,9 @@ public partial class SearchWindow : SimpleWindow
         var query = Query;
         CurrentlySearching = true;
         SearchResults.Clear();
+
+        // we want to continue on different thread after this point - to not block UI
+        await Task.Delay(1).ConfigureAwait(false);
 
         var time_started = Stopwatch.GetTimestamp();
         var comparer = IsCaseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
