@@ -81,8 +81,8 @@ If you are writing XS scripts, you can also checkout my personal reference I wro
 ![CryBarEditor_6](https://assets.cryshana.me/HEMu7Ojws84P.png)
 ### Reading FMOD banks
 ![CryBarEditor_7](https://assets.cryshana.me/NgsOV5c6VEm8.avif);
-### Searching through all files (new searching)
-![CryBarEditor_8](https://assets.cryshana.me/c7XWA996Qma1.avif);
+### Searching through all files (new searching experience)
+![CryBarEditor_8](https://assets.cryshana.me/zFzSNeCHF0YM.avif);
 
 ## Thanks
 I wish to thank the developers of AoE3 Resource Manager, their code helped me with decoding of XMB and DDT files.
