@@ -80,9 +80,9 @@
 				x:Name="btnCaseSensitive"
 				Margin="5,0,0,0"
 				DockPanel.Dock="Right"
-				IsChecked="{Binding IsCaseInsensitive, Mode=TwoWay}"
+				IsChecked="{Binding IsCaseSensitive, Mode=TwoWay}"
 				IsEnabled="{Binding !CurrentlySearching}"
-				ToolTip.Tip="Case Insensitive">
+				ToolTip.Tip="Case Sensitive">
 				<micons:MaterialIcon FontSize="22" Kind="FormatLetterCase" />
 			</ToggleButton>
 			<TextBox

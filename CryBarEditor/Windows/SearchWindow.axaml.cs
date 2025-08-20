@@ -28,7 +28,7 @@ public partial class SearchWindow : SimpleWindow
     string _query = "";
     string _exclusionFilter = "";
     bool _isRegex = false;
-    bool _isCaseInsensitive = false;
+    bool _isCaseSensitive = true;
     bool _searching = false;
     CancellationTokenSource? _csc;
 
@@ -39,7 +39,7 @@ public partial class SearchWindow : SimpleWindow
     public string Status { get => _status; set { _status = value; OnSelfChanged(); } }
     public string ExclusionFilter { get => _exclusionFilter; set { _exclusionFilter = value; _ = RebuildExclusionRegex(); OnSelfChanged(); } }
     public bool IsRegex { get => _isRegex; set { _isRegex = value; OnSelfChanged(); } }
-    public bool IsCaseInsensitive { get => _isCaseInsensitive; set { _isCaseInsensitive = value; OnSelfChanged(); } }
+    public bool IsCaseSensitive { get => _isCaseSensitive; set { _isCaseSensitive = value; OnSelfChanged(); } }
     public ObservableCollectionExtended<SearchResult> SearchResults { get; } = new();
 
     private Regex? _fileExclusionRegex;
@@ -71,7 +71,8 @@ public partial class SearchWindow : SimpleWindow
         owner.OnBarFileLoaded += OnBarFileChanged;
 
         ExclusionFilter = _owner._searchExclusionFilter;
-        
+        IsCaseSensitive = _owner._searchCaseSensitive;
+        IsRegex = _owner._searchRegex;
     }
 
     protected override void OnLoaded(RoutedEventArgs e)
@@ -80,6 +81,11 @@ public partial class SearchWindow : SimpleWindow
         txtQuery.Focus();
     }
 
+    protected override void OnClosed(EventArgs e)
+    {
+        base.OnClosed(e);
+        EnsureSettingsSaved();
+    }
     void OnBarFileChanged(BarFile? file, FileStream? stream)
     {
         // different BAR file opened
@@ -140,8 +146,23 @@ public partial class SearchWindow : SimpleWindow
     }
 
     static string EscapeFilter(string filter) => Regex.Escape(filter).Replace("\\*", ".*");
-    
+
     bool IsFileExcluded(string filename) => _fileExclusionRegex?.IsMatch(filename) ?? false;
+
+    void EnsureSettingsSaved()
+    {
+        // save used filter
+        if (_owner != null &&
+            (_owner._searchExclusionFilter != _exclusionFilter ||
+             _owner._searchCaseSensitive != _isCaseSensitive ||
+             _owner._searchRegex != _isRegex))
+        {
+            _owner._searchExclusionFilter = _exclusionFilter;
+            _owner._searchCaseSensitive = _isCaseSensitive;
+            _owner._searchRegex = _isRegex;
+            _owner.SaveConfiguration();
+        }
+    }
 
     async void Search_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
@@ -162,12 +183,7 @@ public partial class SearchWindow : SimpleWindow
         if (_rebuildTask != null)
             await _rebuildTask;
 
-        // save used filter
-        if (_owner != null && _owner._searchExclusionFilter != _exclusionFilter)
-        {
-            _owner._searchExclusionFilter = _exclusionFilter;
-            _owner.SaveConfiguration();
-        }
+        EnsureSettingsSaved();
 
         _csc = new();
         var token = _csc.Token;
@@ -179,10 +195,12 @@ public partial class SearchWindow : SimpleWindow
         await Task.Delay(10).ConfigureAwait(false);
 
         var time_started = Stopwatch.GetTimestamp();
-        var comparer = IsCaseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var comparer = IsCaseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
 
         var regex_options = RegexOptions.Compiled;
-        if (IsCaseInsensitive) regex_options |= RegexOptions.IgnoreCase;
+        if (!IsCaseSensitive)
+            regex_options |= RegexOptions.IgnoreCase;
+
         var regex = IsRegex ? await Task.Run(() => new Regex(query, regex_options, TimeSpan.FromMilliseconds(800))) : null;
 
         // THIS IS THE SEARCH FUNCTION
