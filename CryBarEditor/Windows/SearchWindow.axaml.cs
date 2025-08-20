@@ -36,10 +36,15 @@ public partial class SearchWindow : SimpleWindow
 
     public string Query { get => _query; set { _query = value; OnSelfChanged(); OnPropertyChanged(nameof(CanSearch)); } }
     public string Status { get => _status; set { _status = value; OnSelfChanged(); } }
-    public string ExclusionFilter { get => _exclusionFilter; set { _exclusionFilter = value; OnSelfChanged(); } }
+    public string ExclusionFilter { get => _exclusionFilter; set { _exclusionFilter = value; _ = RebuildExclusionRegex(); OnSelfChanged(); } }
     public bool IsRegex { get => _isRegex; set { _isRegex = value; OnSelfChanged(); if (value) IsCaseInsensitive = false; } }
     public bool IsCaseInsensitive { get => _isCaseInsensitive; set { _isCaseInsensitive = value; OnSelfChanged(); } }
     public ObservableCollectionExtended<SearchResult> SearchResults { get; } = new();
+
+    private Regex? _fileExclusionRegex;
+    private Task? _rebuildTask;
+    private bool _rebuildPending;
+    private readonly SemaphoreSlim _rebuildSemaphore = new(1, 1);
 
     readonly string? _rootDirectory;
     readonly List<RootFileEntry>? _rootEntries;
@@ -82,6 +87,53 @@ public partial class SearchWindow : SimpleWindow
         base.OnClosing(e);
     }
 
+    async Task RebuildExclusionRegex()
+    {
+        _rebuildPending = true;
+
+        // If already rebuilding, just mark as pending and return
+        if (!await _rebuildSemaphore.WaitAsync(0))
+            return;
+
+        try
+        {
+            while (_rebuildPending)
+            {
+                _rebuildPending = false;
+                var filter = _exclusionFilter;
+
+                _rebuildTask = Task.Run(() =>
+                {
+                    if (string.IsNullOrWhiteSpace(filter))
+                    {
+                        _fileExclusionRegex = null;
+                        return;
+                    }
+
+                    var patterns = filter
+                        .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                        .Select(p => EscapeFilter(p));
+
+                    var pattern = $"^({string.Join("|", patterns)})$";
+                    _fileExclusionRegex = new Regex(pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase);
+                });
+
+                await _rebuildTask;
+            }
+            
+            _rebuildTask = null;
+        }
+        finally
+        {
+            _rebuildSemaphore.Release();
+        }
+    }
+
+    static string EscapeFilter(string filter) => Regex.Escape(filter).Replace("\\*", ".*");
+    
+    bool IsFileExcluded(string filename) => _fileExclusionRegex?.IsMatch(filename) ?? false;
+
+
     async void Search_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         const int MAX_FILE_SIZE = 100_000_000; // 100 MB
@@ -96,6 +148,10 @@ public partial class SearchWindow : SimpleWindow
             CurrentlySearching = false;
             return;
         }
+
+        // if rebuilding in progress, wait for it to finish
+        if (_rebuildTask != null)
+            await _rebuildTask;
 
         _csc = new();
         var token = _csc.Token;
@@ -128,8 +184,9 @@ public partial class SearchWindow : SimpleWindow
         var channel = Channel.CreateUnbounded<SearchResult>();
         var search_finished = false;
 
+        var root_files = _rootEntries?.Where(x => !IsFileExcluded(Path.GetFileName(x.RelativePath))).ToArray();
         var processed_root_files_count = 0;
-        var total_root_files_count = _rootEntries?.Count;
+        var total_root_files_count = root_files?.Length;
 
         // this channnel consumer will handle updating the UI more efficiently in batches
         var consumer = Task.Run(async () =>
@@ -160,6 +217,7 @@ public partial class SearchWindow : SimpleWindow
                 await Task.Delay(100, token);
             }
         }, token);
+        
 
         try
         {
@@ -169,31 +227,37 @@ public partial class SearchWindow : SimpleWindow
                 var file = _barFileStream.Name;
                 if (searched.TryAdd(file, 0))
                 {
-                    Status = Path.GetFileName(file);
-                    foreach (var bar_entry in _barFile.Entries)
+                    var filename = Path.GetFileName(file);
+                    if (!IsFileExcluded(filename))
                     {
-                        if (token.IsCancellationRequested) break;
-
-                        // check the filename itself
-                        var (name_index, matched_length) = searcher(bar_entry.RelativePath, 0);
-                        if (name_index >= 0)
+                        Status = filename;
+                        foreach (var bar_entry in _barFile.Entries)
                         {
-                            var context = MakeContext(name_index, bar_entry.RelativePath.AsSpan(name_index, matched_length), bar_entry.RelativePath);
-                            var result = new SearchResult(file, bar_entry.RelativePath, name_index, context.left, context.mid, context.right, false);
-                            await channel.Writer.WriteAsync(result, token);
-                        }
+                            if (token.IsCancellationRequested) break;
+                            if (IsFileExcluded(bar_entry.Name))
+                                continue;
 
-                        if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
-                        var ddata = bar_entry.ReadDataDecompressed(_barFileStream);
-                        await SearchData(ddata, file, bar_entry.RelativePath, channel.Writer, searcher, token);
+                            // check the filename itself
+                            var (name_index, matched_length) = searcher(bar_entry.RelativePath, 0);
+                            if (name_index >= 0)
+                            {
+                                var context = MakeContext(name_index, bar_entry.RelativePath.AsSpan(name_index, matched_length), bar_entry.RelativePath);
+                                var result = new SearchResult(file, bar_entry.RelativePath, name_index, context.left, context.mid, context.right, false);
+                                await channel.Writer.WriteAsync(result, token);
+                            }
+
+                            if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
+                            var ddata = bar_entry.ReadDataDecompressed(_barFileStream);
+                            await SearchData(ddata, file, bar_entry.RelativePath, channel.Writer, searcher, token);
+                        }
                     }
                 }
             }
 
             // go through all root files (in parallel)
-            if (_rootEntries != null && _rootDirectory != null)
+            if (root_files != null && _rootDirectory != null)
             {
-                await Parallel.ForEachAsync(_rootEntries, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = token },
+                await Parallel.ForEachAsync(root_files, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = token },
                     async (entry, token) =>
                     {
                         if (token.IsCancellationRequested)
@@ -232,6 +296,8 @@ public partial class SearchWindow : SimpleWindow
                                     foreach (var bar_entry in bar_file.Entries)
                                     {
                                         if (token.IsCancellationRequested) break;
+                                        if (IsFileExcluded(bar_entry.Name))
+                                            continue;
 
                                         // check the filename itself
                                         (name_index, matched_length) = searcher(bar_entry.RelativePath, 0);
@@ -272,7 +338,7 @@ public partial class SearchWindow : SimpleWindow
             Status = "Done";
         }
         catch (OperationCanceledException)
-        { 
+        {
             Status = "Search cancelled";
         }
         catch (Exception ex)
@@ -288,62 +354,62 @@ public partial class SearchWindow : SimpleWindow
         var time_elapsed = Stopwatch.GetElapsedTime(time_started);
         if (time_elapsed.TotalSeconds < 60)
             Status += $" [{time_elapsed.TotalSeconds:0.0}s]";
-        else 
+        else
             Status += $" [{time_elapsed.TotalMinutes:0.0}min]";
 
         static async ValueTask SearchData(ReadOnlyMemory<byte> decompressed_data, string file_path, string? bar_entry_path,
                 ChannelWriter<SearchResult> channel, Func<string, int, (int index, int matched_length)> searcher, CancellationToken token)
+        {
+            if (token.IsCancellationRequested) return;
+
+            ReadOnlySpan<byte> span = decompressed_data.Span;
+
+            var text = "";
+
+            var ext = Path.GetExtension(bar_entry_path ?? file_path).ToLower();
+            if (InvalidSearchExtensions.Contains(ext)) return;
+
+            if (ext == ".xmb")
             {
-                if (token.IsCancellationRequested) return;
+                // let's also parse XMB
+                var xml = BarFormatConverter.XMBtoXML(span);
+                if (xml == null) return;
 
-                ReadOnlySpan<byte> span = decompressed_data.Span;
-
-                var text = "";
-
-                var ext = Path.GetExtension(bar_entry_path ?? file_path).ToLower();
-                if (InvalidSearchExtensions.Contains(ext)) return;
-
-                if (ext == ".xmb")
+                text = BarFormatConverter.FormatXML(xml);
+            }
+            else
+            {
+                var unicode = MainWindow.DetectIfUnicode(span);
+                var encoding = unicode ? Encoding.Unicode : Encoding.UTF8;
+                var charCount = encoding.GetCharCount(span);
+                var chars = ArrayPool<char>.Shared.Rent(charCount);
+                try
                 {
-                    // let's also parse XMB
-                    var xml = BarFormatConverter.XMBtoXML(span);
-                    if (xml == null) return;
-
-                    text = BarFormatConverter.FormatXML(xml);
+                    var actualCount = encoding.GetChars(span, chars);
+                    text = new string(chars, 0, actualCount);
                 }
-                else
+                finally
                 {
-                    var unicode = MainWindow.DetectIfUnicode(span);
-                    var encoding = unicode ? Encoding.Unicode : Encoding.UTF8;
-                    var charCount = encoding.GetCharCount(span);
-                    var chars = ArrayPool<char>.Shared.Rent(charCount);
-                    try
-                    {
-                        var actualCount = encoding.GetChars(span, chars);
-                        text = new string(chars, 0, actualCount);
-                    }
-                    finally
-                    {
-                        ArrayPool<char>.Shared.Return(chars);
-                    }
-                }
-
-                // now search
-                var start_index = 0;
-                while (true)
-                {
-                    var (found_index, matched_length) = searcher(text, start_index);
-                    if (found_index == -1) break;
-                    start_index = found_index + 1;
-
-                    var context = MakeContext(found_index, text.AsSpan(found_index, matched_length), text);
-
-                    if (token.IsCancellationRequested) break;
-
-                    var result = new SearchResult(file_path, bar_entry_path, found_index, context.left, context.mid, context.right, true);
-                    await channel.WriteAsync(result, token);
+                    ArrayPool<char>.Shared.Return(chars);
                 }
             }
+
+            // now search
+            var start_index = 0;
+            while (true)
+            {
+                var (found_index, matched_length) = searcher(text, start_index);
+                if (found_index == -1) break;
+                start_index = found_index + 1;
+
+                var context = MakeContext(found_index, text.AsSpan(found_index, matched_length), text);
+
+                if (token.IsCancellationRequested) break;
+
+                var result = new SearchResult(file_path, bar_entry_path, found_index, context.left, context.mid, context.right, true);
+                await channel.WriteAsync(result, token);
+            }
+        }
 
         static (string left, string mid, string right) MakeContext(int index, ReadOnlySpan<char> matched_text, string text)
         {
@@ -387,7 +453,6 @@ public partial class SearchWindow : SimpleWindow
         _selectionInProgress = true;
         try
         {
-
             var file = Path.GetRelativePath(_owner.RootDirectory, result.RelevantFile);
             var bar_entry = result.EntryWithinBAR;
             RootFileEntry? toSelect = null;

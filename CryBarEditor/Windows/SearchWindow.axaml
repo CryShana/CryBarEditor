@@ -102,7 +102,7 @@
 				HorizontalAlignment="Stretch"
 				IsEnabled="{Binding !CurrentlySearching}"
 				Text="{Binding ExclusionFilter, Mode=TwoWay}"
-				Watermark="*.txt, temp*, *debug*, specific_file.dat" />
+				Watermark="*.mythscn, *.blob, specific_file.bar" />
 		</DockPanel>
 		<TextBlock Margin="0,0,0,10" DockPanel.Dock="Top">
 			<Run Foreground="Gray" Text="{Binding Status}" />
