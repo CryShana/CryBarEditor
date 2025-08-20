@@ -52,11 +52,10 @@ Just download the latest version .zip and extract it into a folder, run the .exe
 
 ## Planned features
 Currently planned:
-- Creating BAR archive from selected files
-- Creating modified BAR archive by only replacing selected entries in existing BAR archive
 - Decoding + Encoding TMA and TMM formats
+- Exporting FMOD sounds
 - More features for additive modding (supporting more files, and generating some template)
-- Maybe another side panel for export directory for quickly editing/viewing exported files - all within same app
+- Maybe another side panel for export directory for quickly editing/viewing exported files - all within same ap
 
 ## Modding Basics
 Please read [Modding Basics](Documentation/Modding.md) document to get started.
@@ -72,7 +71,7 @@ If you are writing XS scripts, you can also checkout my personal reference I wro
 ![CryBarEditor_1](https://assets.cryshana.me/34Cmg3iPHLA9.png)
 ### Previewing image
 ![CryBarEditor_2](https://assets.cryshana.me/g18ndgdKDzLQ.png)
-### Previewing DDT image and searching
+### Previewing DDT image and (old searching)
 ![CryBarEditor_3](https://assets.cryshana.me/okCtQiWGpAlx.png)
 ### Exporting selected files
 ![CryBarEditor_4](https://assets.cryshana.me/pOaZBwQHtRsN.png)
@@ -82,6 +81,8 @@ If you are writing XS scripts, you can also checkout my personal reference I wro
 ![CryBarEditor_6](https://assets.cryshana.me/HEMu7Ojws84P.png)
 ### Reading FMOD banks
 ![CryBarEditor_7](https://assets.cryshana.me/NgsOV5c6VEm8.avif);
+### Searching through all files (new searching)
+![CryBarEditor_8](https://assets.cryshana.me/c7XWA996Qma1.avif);
 
 ## Thanks
 I wish to thank the developers of AoE3 Resource Manager, their code helped me with decoding of XMB and DDT files.

@@ -18,6 +18,7 @@ using System.Buffers;
 using System.Threading.Channels;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using Avalonia.Interactivity;
 
 namespace CryBarEditor;
 
@@ -70,6 +71,13 @@ public partial class SearchWindow : SimpleWindow
         owner.OnBarFileLoaded += OnBarFileChanged;
 
         ExclusionFilter = _owner._searchExclusionFilter;
+        
+    }
+
+    protected override void OnLoaded(RoutedEventArgs e)
+    {
+        base.OnLoaded(e);
+        txtQuery.Focus();
     }
 
     void OnBarFileChanged(BarFile? file, FileStream? stream)
