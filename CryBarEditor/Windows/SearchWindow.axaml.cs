@@ -68,6 +68,8 @@ public partial class SearchWindow : SimpleWindow
 
         OnBarFileChanged(owner.BarFile, owner.BarFileStream);
         owner.OnBarFileLoaded += OnBarFileChanged;
+
+        ExclusionFilter = _owner._searchExclusionFilter;
     }
 
     void OnBarFileChanged(BarFile? file, FileStream? stream)
@@ -120,7 +122,7 @@ public partial class SearchWindow : SimpleWindow
 
                 await _rebuildTask;
             }
-            
+
             _rebuildTask = null;
         }
         finally
@@ -132,7 +134,6 @@ public partial class SearchWindow : SimpleWindow
     static string EscapeFilter(string filter) => Regex.Escape(filter).Replace("\\*", ".*");
     
     bool IsFileExcluded(string filename) => _fileExclusionRegex?.IsMatch(filename) ?? false;
-
 
     async void Search_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
@@ -152,6 +153,13 @@ public partial class SearchWindow : SimpleWindow
         // if rebuilding in progress, wait for it to finish
         if (_rebuildTask != null)
             await _rebuildTask;
+
+        // save used filter
+        if (_owner != null && _owner._searchExclusionFilter != _exclusionFilter)
+        {
+            _owner._searchExclusionFilter = _exclusionFilter;
+            _owner.SaveConfiguration();
+        }
 
         _csc = new();
         var token = _csc.Token;

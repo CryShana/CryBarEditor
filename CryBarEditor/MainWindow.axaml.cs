@@ -47,6 +47,7 @@ public partial class MainWindow : SimpleWindow
     string _previewedFileNote = "";
     string _previewedFileData = "";
     string? _latestVersion = null;
+    public string _searchExclusionFilter = "";
     int _contextSelectedItemsCount = 0;
 
     FMODBank? _fmodBank = null;
@@ -1920,6 +1921,8 @@ public partial class MainWindow : SimpleWindow
 
             if (File.Exists(config.BarFile))
                 LoadBAR(config.BarFile, false);
+
+            _searchExclusionFilter = config.SearchExclusionFilter ?? "";
         }
         catch
         {
@@ -1927,7 +1930,7 @@ public partial class MainWindow : SimpleWindow
         }
     }
 
-    void SaveConfiguration()
+    public void SaveConfiguration()
     {
         var config_path = Path.Combine(AppContext.BaseDirectory, CONFIG_FILE);
 
@@ -1938,7 +1941,8 @@ public partial class MainWindow : SimpleWindow
                 RootDirectory = _rootDirectory,
                 ExportRootDirectory = _exportRootDirectory,
                 BarFile = _barStream?.Name,
-                LastVersionCheck = _latestVersion
+                LastVersionCheck = _latestVersion,
+                SearchExclusionFilter = _searchExclusionFilter
             };
 
             File.WriteAllText(config_path, JsonSerializer.Serialize(_lastConfiguration, CryBarJsonContext.Default.Configuration));
