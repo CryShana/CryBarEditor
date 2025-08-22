@@ -17,7 +17,8 @@ public static class AdditiveModding
         { "proto_unit_commands.xml", new("proto_unit_command_mods.xml", "<protounitcommandsmods>\n</<protounitcommandsmods>") },
         { "abilities.xml", new("abilities_mods.xml", "<abilitiesmods>\n</abilitiesmods>") },
         { "major_gods.xml", new("major_gods_mods.xml", "<civsmods>\n</civsmods>") },
-        { "minor_gods.xml", new("minor_gods_mods.xml", "<minorgodsmods>\n</minorgodsmods>") }
+        { "minor_gods.xml", new("minor_gods_mods.xml", "<minorgodsmods>\n</minorgodsmods>") },
+        { "abstract_unit_types.xml", new("abstract_unit_types_mods.xml", "<abstractunittypesmods>\n</abstractunittypesmods>") } 
         // TODO: add more here if they exist
     }.ToFrozenDictionary();
 
