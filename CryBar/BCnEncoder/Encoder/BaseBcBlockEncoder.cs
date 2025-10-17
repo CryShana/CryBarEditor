@@ -27,7 +27,7 @@ namespace CryBar.BCnEncoder.Encoder
                 };
                 Parallel.For(0, blocks.Length, options, i =>
                  {
-                     var outputBlocks = MemoryMarshal.Cast<byte, T>(outputData);
+                     var outputBlocks = MemoryMarshal.Cast<byte, T>(outputData.AsSpan());
                      outputBlocks[i] = EncodeBlock(blocks[i], quality);
 
                      if (context.Progress != null)
@@ -41,7 +41,7 @@ namespace CryBar.BCnEncoder.Encoder
             }
             else
             {
-                var outputBlocks = MemoryMarshal.Cast<byte, T>(outputData);
+                var outputBlocks = MemoryMarshal.Cast<byte, T>(outputData.AsSpan());
                 for (var i = 0; i < blocks.Length; i++)
                 {
                     context.CancellationToken.ThrowIfCancellationRequested();

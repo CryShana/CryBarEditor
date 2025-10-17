@@ -18,6 +18,7 @@ public static class AdditiveModding
         { "abilities.xml", new("abilities_mods.xml", "<abilitiesmods>\n</abilitiesmods>") },
         { "major_gods.xml", new("major_gods_mods.xml", "<civsmods>\n</civsmods>") },
         { "minor_gods.xml", new("minor_gods_mods.xml", "<minorgodsmods>\n</minorgodsmods>") },
+        { "simdata.xml", new("simdata_mods.xml", "<simdatabasemods>\n</simdatabasemods>") },
         { "abstract_unit_types.xml", new("abstract_unit_types_mods.xml", "<abstractunittypesmods>\n</abstractunittypesmods>") } 
         // TODO: add more here if they exist
     }.ToFrozenDictionary();

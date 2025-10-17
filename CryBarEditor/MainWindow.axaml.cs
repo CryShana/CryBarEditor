@@ -142,7 +142,7 @@ public partial class MainWindow : SimpleWindow
         Path.GetExtension(SelectedRootFileEntry?.RelativePath ?? "").ToLower() == ".ddt" ||
         Path.GetExtension(SelectedBarEntry?.RelativePath ?? "").ToLower() == ".ddt";
     public bool SelectedCanHaveAdditiveMod
-        => AdditiveModding.IsSupportedFor(SelectedBarEntry?.RelativePath ?? SelectedRootFileEntry?.RelativePath, out _);
+        => AdditiveModding.IsSupportedFor(SelectedBarEntry?.RelativePath ?? SelectedRootFileEntry?.RelativePath, out _) && CanExport;
     public int ContextSelectedItemsCount { get => _contextSelectedItemsCount; set { _contextSelectedItemsCount = value; OnSelfChanged(); } }
 
     public RootFileEntry? SelectedRootFileEntry
@@ -198,6 +198,7 @@ public partial class MainWindow : SimpleWindow
     }
     void RefreshSelectedProperties()
     {
+        OnPropertyChanged(nameof(CanExport));
         OnPropertyChanged(nameof(SelectedIsDDT));
         OnPropertyChanged(nameof(CanExportAndIsDDT));
         OnPropertyChanged(nameof(SelectedCanHaveAdditiveMod));
