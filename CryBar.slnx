@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="CryBar/CryBar.csproj" />
+  <Project Path="CryBarEditor/CryBarEditor.csproj" />
+</Solution>

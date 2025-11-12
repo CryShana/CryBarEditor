@@ -1,7 +1,8 @@
-﻿using System;
+﻿using Metsys.Bson;
+using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
 namespace CryBarEditor.Classes;
@@ -16,7 +17,9 @@ public static partial class XStoRM
     public static partial Regex GetIncludeRgx();
 
     // trDelayedRuleActivation(string name, bool checkForTrigger)
-    [GeneratedRegex("""trDelayedRuleActivation\(([^\),;]+),*[^\);]*\)\s*;""")]
+    // 1st group -> 1st param (name)
+    // 2nd group -> 2nd param (bool) <optional>
+    [GeneratedRegex("""trDelayedRuleActivation\(\s*([^\),;]+)\s*,?\s*([^\);]*)\s*\)\s*;""")]
     public static partial Regex GetDelayedRuleActivationRgx();
 
     public static bool Convert(string input_path, string output_path, string class_name)
@@ -79,26 +82,18 @@ public static partial class XStoRM
                 var delayedActivations = GetDelayedRuleActivationRgx().Matches(text_with_includes);
                 if (delayedActivations.Count > 0)
                 {
+                    // ensure:
+                    // - trDelayedRuleActivation(name...) has 2nd param set to false explicitly
+                    // - trDelayedRuleActivation(name,...) follows xsDisableRule(name)
+                    // (we dont care if xsDisableRule already exists, otherwise extra analysis is necessary to solve a non-issue)
                     text_with_includes = GetDelayedRuleActivationRgx()
-                        .Replace(text_with_includes, "__delayedRuleActivations.add($1);");
-
-                    // add this on top
-                    text_with_includes = $$"""
-                    string[] __delayedRuleActivations = default;
-                    rule __DelayedRuleActivations
-                    highFrequency
-                    active
-                    {
-                        for(int i = 0; i < __delayedRuleActivations.size(); i++) 
+                        .Replace(text_with_includes, m =>
                         {
-                            string triggerName = __delayedRuleActivations[i];
-                            xsEnableRule(triggerName);
-                        }
-                        __delayedRuleActivations.clear();
-                    }
-                    
-                    {{text_with_includes}}
-                    """;
+                            var rule_name = m.Groups[1].Value;
+                            return $"""
+                            xsDisableRule({rule_name}); trDelayedRuleActivation({rule_name}, false);
+                            """;
+                        });
                 }
 
                 // DO THE WRAPPING
