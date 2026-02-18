@@ -1,38 +1,33 @@
-using CryBar;
-using CryBarEditor.Classes;
-
-using Avalonia.Media;
 using Avalonia.Controls;
-using Avalonia.Threading;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
-
-using System;
-using System.IO;
-using System.Xml;
-using System.Linq;
-using System.Text;
-using System.Buffers;
-using System.Net.Http;
-using System.Text.Json;
-using System.Threading;
-using System.Diagnostics;
-using System.Threading.Tasks;
-using System.Collections.Generic;
-using System.Text.RegularExpressions;
-
-using AvaloniaEdit.Folding;
+using Avalonia.Threading;
 using AvaloniaEdit.Document;
+using AvaloniaEdit.Folding;
 using AvaloniaEdit.TextMate;
-using TextMateSharp.Grammars;
-
+using CommunityToolkit.HighPerformance;
+using CryBar;
+using CryBarEditor.Classes;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Tga;
 using SixLabors.ImageSharp.PixelFormats;
-
-using CommunityToolkit.HighPerformance;
-using Configuration = CryBarEditor.Classes.Configuration;
+using System;
+using System.Buffers;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Net.Http;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Xml;
+using TextMateSharp.Grammars;
+using Configuration = CryBarEditor.Classes.Configuration;
 
 namespace CryBarEditor;
 
@@ -936,7 +931,8 @@ public partial class MainWindow : SimpleWindow
         SetEditorText(ext, text);
     }
 
-    public async Task Export<T>(IList<T> files, bool should_convert,
+    public async Task Export<T>(IList<T> files,
+        bool should_convert,
         Func<T, string> getFullRelPath,
         Action<T, FileStream> copy,
         Func<T, Memory<byte>> read)
@@ -1297,99 +1293,14 @@ public partial class MainWindow : SimpleWindow
     }
 
     async void MenuItem_ExportSelectedRaw(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
-    {
-        if (!Directory.Exists(_exportRootDirectory))
-            return;
-
-        var item = (MenuItem)sender!;
-        var list = item.Parent?.Parent?.Parent as ListBox;
-        if (list == null)
-            return;
-
-        item.IsEnabled = false;
-
-        try
-        {
-            if (list.ItemsSource == BarEntries)
-            {
-                var to_export = SelectedBarFileEntries.ToArray();
-                await Export(to_export, false, F_GetFullRelativePathBAR, F_CopyBAR, F_ReadBAR);
-            }
-            else
-            {
-                var to_export = SelectedRootFileEntries.ToArray();
-                await Export(to_export, false, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
-            }
-        }
-        finally
-        {
-            item.IsEnabled = true;
-        }
-    }
+        => MenuItem_Export(sender, copy: true, convert: false);
 
     async void MenuItem_ExportSelectedConverted(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
-    {
-        if (!Directory.Exists(_exportRootDirectory))
-            return;
-
-        var item = (MenuItem)sender!;
-        var list = item.Parent?.Parent?.Parent as ListBox;
-        if (list == null)
-            return;
-
-        item.IsEnabled = false;
-
-        try
-        {
-            if (list.ItemsSource == BarEntries)
-            {
-                var to_export = SelectedBarFileEntries.ToArray();
-                await Export(to_export, true, F_GetFullRelativePathBAR, F_CopyBAR, F_ReadBAR);
-            }
-            else
-            {
-                var to_export = SelectedRootFileEntries.ToArray();
-                await Export(to_export, true, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
-            }
-        }
-        finally
-        {
-            item.IsEnabled = true;
-        }
-    }
+        => MenuItem_Export(sender, copy: false, convert: true);
 
     async void MenuItem_ExportSelectedRawConverted(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
-    {
-        if (!Directory.Exists(_exportRootDirectory))
-            return;
+        => MenuItem_Export(sender, copy: true, convert: true);
 
-        var item = (MenuItem)sender!;
-        var list = item.Parent?.Parent?.Parent as ListBox;
-        if (list == null)
-            return;
-
-        item.IsEnabled = false;
-
-        try
-        {
-            if (list.ItemsSource == BarEntries)
-            {
-                var to_export = SelectedBarFileEntries.ToArray();
-                await Export(to_export, false, F_GetFullRelativePathBAR, F_CopyBAR, F_ReadBAR);
-                await Export(to_export, true, F_GetFullRelativePathBAR, F_CopyBAR, F_ReadBAR);
-            }
-            else
-            {
-                var to_export = SelectedRootFileEntries.ToArray();
-                await Export(to_export, false, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
-                await Export(to_export, true, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
-            }
-        }
-        finally
-        {
-            item.IsEnabled = true;
-        }
-    }
 
     async void MenuItem_ReplaceImageAndExportDDT(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
@@ -1473,6 +1384,53 @@ public partial class MainWindow : SimpleWindow
             {
                 p.Report(null);
             }
+        }
+        finally
+        {
+            item.IsEnabled = true;
+        }
+    }
+
+    async void MenuItem_Export(object? sender, bool copy, bool convert)
+    {
+        if (!Directory.Exists(_exportRootDirectory))
+            return;
+
+        var item = (MenuItem)sender!;
+        var list = item.Parent?.Parent?.Parent as ListBox;
+        if (list == null)
+            return;
+
+        item.IsEnabled = false;
+
+        bool withinBAR = list.ItemsSource == BarEntries;
+        try
+        {
+            if (withinBAR)
+            {
+                var to_export = SelectedBarFileEntries.ToArray();
+                if (copy)
+                {
+                    await Export(to_export, false, F_GetFullRelativePathBAR, F_CopyBAR, F_ReadBAR);
+                }
+                if (convert)
+                {
+                    await Export(to_export, true, F_GetFullRelativePathBAR, F_CopyBAR, F_ReadBAR);
+                }
+            }
+            else
+            {
+                var to_export = SelectedRootFileEntries.ToArray();
+                if (copy)
+                {
+                    await Export(to_export, false, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
+                }
+                if (convert)
+                {
+                    await Export(to_export, true, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
+                }
+            }
+
         }
         finally
         {
