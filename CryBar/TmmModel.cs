@@ -31,9 +31,9 @@ public class TmmModel
 
         var offset = 4;
 
-        // this seems to always be 34 (0x22 0x00 0x00 x00)
+        // this seems to always be 34 or 35 (a version perhaps?)
         var u1 = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
-        if (u1 != 34) return false;
+        if (u1 < 30 || u1 > 255) return false;
 
         // this seems to always be "DP"
         if (data.Slice(offset, 2) is not [0x44, 0x50])
@@ -55,10 +55,6 @@ public class TmmModel
 
             var name = Encoding.Unicode.GetString(data.Slice(offset, name_length)); offset += name_length;
             model_names[i] = name;
-
-            // every model name ends with this
-            if (data.Slice(offset, 2) is not [0xe8, 0x07])
-                return false;
 
             offset += 4 * 4; // TODO: find out what this data is, it's after every model name
         }
