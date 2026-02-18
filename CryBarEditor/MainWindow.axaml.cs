@@ -886,10 +886,13 @@ public partial class MainWindow : SimpleWindow
                     return;
                 }
 
-                // TODO: show
-                tmm.ParseModel(0);
+                // TODO
+                //tmm.ParseModel(0);
 
-                PreviewedFileNote = "(Preview not yet supported)";
+                ext = ".txt";
+                text = "Model names:\n- " + string.Join("\n- ", tmm.ModelNames);
+
+                PreviewedFileNote = "(Partial preview)";
             }
             else
             {
