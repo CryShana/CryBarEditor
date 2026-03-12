@@ -8,7 +8,7 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <ApplicationIcon>crybar.ico</ApplicationIcon>
     <AssemblyVersion>1.0.8</AssemblyVersion>
-    <FileVersion>1.0.8</FileVersion>
+    <FileVersion>1.0.9</FileVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
@@ -45,5 +45,5 @@
   <PropertyGroup>
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
   </PropertyGroup>
-  
+
 </Project>
