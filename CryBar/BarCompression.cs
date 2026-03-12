@@ -46,12 +46,13 @@ public static class BarCompression
     {
         const int HEADER_SIZE = 4 + 4 + 4 + 4;
 
-        var compressed = new byte[HEADER_SIZE + data.Length];
+        // LZ4 can produce output larger than input for small/incompressible data
+        var maxCompressedSize = LZ4Codec.MaximumOutputSize(data.Length);
+        var compressed = new byte[HEADER_SIZE + maxCompressedSize];
         var c = LZ4Codec.Encode(data, compressed.AsSpan(HEADER_SIZE), LZ4Level.L11_OPT);
         if (c < 0)
         {
-            // buffer was too small
-            throw new Exception("Buffer for compression was too small, this should not occur unless compressed size was bigger than uncompressed");
+            throw new Exception("LZ4 compression failed unexpectedly");
         }
 
         var cspan = compressed.AsSpan();

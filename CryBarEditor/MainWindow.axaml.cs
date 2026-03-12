@@ -58,8 +58,8 @@ public partial class MainWindow : SimpleWindow
     List<RootFileEntry>? _loadedRootFiles = null;
 
     double _imageZoomLevel = 1.0;
-    FileSystemWatcher? _rootWatcher = null;
-    FileSystemWatcher? _exportWatcher = null;
+    readonly FileWatcherHelper _rootWatcher = new();
+    readonly FileWatcherHelper _exportWatcher = new();
 
     /// <summary>
     /// This is used to find relative path for Root directory files
@@ -245,6 +245,14 @@ public partial class MainWindow : SimpleWindow
         F_ReadBAR = f => f.ReadDataRaw(_barStream!);
         F_ReadSizeRoot = f => new FileInfo(Path.Combine(_rootDirectory, f.RelativePath)).Length;
         F_ReadSizeBAR = f => f.SizeUncompressed;
+
+        // file watcher events
+        _rootWatcher.Created += RootDir_Created;
+        _rootWatcher.Deleted += RootDir_Deleted;
+        _rootWatcher.Renamed += RootDir_Renamed;
+        _exportWatcher.Created += ExportDir_Created;
+        _exportWatcher.Deleted += ExportDir_Deleted;
+        _exportWatcher.Renamed += ExportDir_Renamed;
 
         // events
         PointerWheelChanged += ScrollChanged;
@@ -581,24 +589,10 @@ public partial class MainWindow : SimpleWindow
             if (_exportRootDirectory == dir)
                 throw new InvalidOperationException("Root directory is the same as export directory");
 
-            if (_rootWatcher != null)
-            {
-                _rootWatcher.Renamed -= RootDir_Renamed;
-                _rootWatcher.Created -= RootDir_Created;
-                _rootWatcher.Deleted -= RootDir_Deleted;
-                _rootWatcher.Dispose();
-                _rootWatcher = null;
-            }
-
             RootDirectory = dir;
             LoadFilesFromRoot();
 
-            _rootWatcher = new FileSystemWatcher(RootDirectory);
-            _rootWatcher.IncludeSubdirectories = true;
-            _rootWatcher.EnableRaisingEvents = true;
-            _rootWatcher.Renamed += RootDir_Renamed;
-            _rootWatcher.Created += RootDir_Created;
-            _rootWatcher.Deleted += RootDir_Deleted;
+            _rootWatcher.Watch(dir);
 
             if (update_config) SaveConfiguration();
         }
@@ -832,11 +826,11 @@ public partial class MainWindow : SimpleWindow
 
             if (ext == ".xmb")
             {
-                var xml = BarFormatConverter.XMBtoXML(data.Span);
-                if (xml != null)
+                var xmlText = ConversionHelper.ConvertXmbToXmlText(data.Span);
+                if (xmlText != null)
                 {
                     PreviewedFileNote = "(Converted to XML)";
-                    text = BarFormatConverter.FormatXML(xml);
+                    text = xmlText;
                     ext = ".xml";
                 }
                 else
@@ -934,11 +928,22 @@ public partial class MainWindow : SimpleWindow
         SetEditorText(ext, text);
     }
 
-    public async Task Export<T>(IList<T> files,
+    public Task Export<T>(IList<T> files,
         bool should_convert,
         Func<T, string> getFullRelPath,
         Action<T, FileStream> copy,
-        Func<T, Memory<byte>> read)
+        Func<T, Memory<byte>> read,
+        ExportOptions? options = null)
+    {
+        return ExportCore(files, should_convert, getFullRelPath, copy, read, options);
+    }
+
+    async Task ExportCore<T>(IList<T> files,
+        bool should_convert,
+        Func<T, string> getFullRelPath,
+        Action<T, FileStream> copy,
+        Func<T, Memory<byte>> read,
+        ExportOptions? options)
     {
         var progress = new Progress<string?>();
         IProgress<string?> p = progress;
@@ -948,6 +953,9 @@ public partial class MainWindow : SimpleWindow
         p.Report("Starting export...");
 
         var sw = Stopwatch.StartNew();
+        var isDirectExport = options?.DirectExport == true && !string.IsNullOrEmpty(options.DirectExportPath);
+        var shouldDecompress = options?.Decompress == true;
+        var exportBaseDir = isDirectExport ? options!.DirectExportPath! : _exportRootDirectory;
 
         List<string> failed = new();
         foreach (var f in files)
@@ -962,17 +970,22 @@ public partial class MainWindow : SimpleWindow
                 if (should_convert)
                 {
                     if (ext == ".xmb")
-                    {
                         relative_path = relative_path[..^4];    // remove .XMB extension
-                    }
                     else if (ext == ".ddt")
-                    {
                         relative_path = relative_path[..^4] + ".tga";    // change .DDT to .TGA
-                    }
                 }
 
                 // DETERMINE EXPORT PATH
-                var exported_path = Path.Combine(_exportRootDirectory, relative_path);
+                string exported_path;
+                if (isDirectExport)
+                {
+                    // Direct export: flat, just the filename in the chosen directory
+                    exported_path = Path.Combine(exportBaseDir, Path.GetFileName(relative_path));
+                }
+                else
+                {
+                    exported_path = Path.Combine(exportBaseDir, relative_path);
+                }
 
                 // CREATE MISSING DIRECTORIES
                 var dirs = Path.GetDirectoryName(exported_path);
@@ -984,40 +997,36 @@ public partial class MainWindow : SimpleWindow
                 // EXPORT DATA
                 if (should_convert)
                 {
-                    // optionally decompress first
                     var data = BarCompression.EnsureDecompressed(read(f), out _);
 
-                    if (ext == ".xmb")
+                    var xmlBytes = ext == ".xmb" ? ConversionHelper.ConvertXmbToXmlBytes(data.Span) : null;
+                    if (xmlBytes != null)
                     {
-                        var xml = BarFormatConverter.XMBtoXML(data.Span)!;
-                        var xml_text = BarFormatConverter.FormatXML(xml);
-                        var xml_bytes = Encoding.UTF8.GetBytes(xml_text);
-                        file.Write(xml_bytes);
+                        file.Write(xmlBytes);
                         continue;
                     }
-                    else if (ext == ".ddt")
+
+                    var tgaBytes = ext == ".ddt" ? await ConversionHelper.ConvertDdtToTgaBytes(data) : null;
+                    if (tgaBytes != null)
                     {
-                        var ddt = new DDTImage(data);
-                        var image = await BarFormatConverter.ParseDDT(ddt);
-                        if (image == null) throw new InvalidDataException("Failed to convert DDT file");
-
-                        using var memory = new MemoryStream();
-                        await image.SaveAsTgaAsync(memory, new TgaEncoder
-                        {
-                            BitsPerPixel = TgaBitsPerPixel.Pixel32
-                        });
-                        image.Dispose();
-
-                        file.Write(memory.GetBuffer().AsSpan(0, (int)memory.Position));
+                        file.Write(tgaBytes);
                         continue;
                     }
                 }
 
-                copy(f, file);
+                if (shouldDecompress)
+                {
+                    // Decompress and write (no conversion)
+                    var data = BarCompression.EnsureDecompressed(read(f), out _);
+                    file.Write(data.Span);
+                }
+                else
+                {
+                    copy(f, file);
+                }
             }
             catch
             {
-                // TODO: handle error and show it somewhere
                 failed.Add(relative_path);
             }
         }
@@ -1200,58 +1209,100 @@ public partial class MainWindow : SimpleWindow
     }
     #endregion
 
-    #region ContextMenu events
-    void MenuItem_CopyFileName(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    #region Context Menu Helpers
+    /// <summary>
+    /// Resolves the ListBox that owns this context menu item.
+    /// </summary>
+    ListBox? GetContextListBox(object? sender)
     {
-        var item = (MenuItem)sender!;
-        var list = item.Parent?.Parent?.Parent as ListBox;
-        if (list == null) return;
+        var item = sender as MenuItem;
+        return item?.Parent?.Parent?.Parent as ListBox;
+    }
 
-        if (list.ItemsSource == BarEntries)
+    /// <summary>
+    /// Returns whether the context menu was opened from the BAR entries list (vs Root files list).
+    /// </summary>
+    bool IsContextFromBAR(ListBox list) => list.ItemsSource == BarEntries;
+
+    /// <summary>
+    /// Gets the full relative path for the currently selected entry, regardless of which list it's in.
+    /// Returns null if no valid selection exists.
+    /// </summary>
+    string? GetContextSelectedRelativePath(ListBox list)
+    {
+        if (IsContextFromBAR(list))
         {
-            // BAR entry list
-            var entry = SelectedBarEntry;
-            if (entry != null)
+            if (SelectedBarEntry == null) return null;
+            return GetBARFullRelativePath(SelectedBarEntry);
+        }
+        else
+        {
+            if (SelectedRootFileEntry == null) return null;
+            return GetRootFullRelativePath(SelectedRootFileEntry);
+        }
+    }
+
+    /// <summary>
+    /// Gets the display name of the currently selected entry.
+    /// </summary>
+    string? GetContextSelectedName(ListBox list)
+    {
+        if (IsContextFromBAR(list))
+            return SelectedBarEntry?.Name;
+        return SelectedRootFileEntry?.Name;
+    }
+
+    /// <summary>
+    /// Builds ExportFileInfo list from the current selection in the given ListBox.
+    /// </summary>
+    List<ExportFileInfo> GetContextSelectedExportFiles(ListBox list)
+    {
+        var files = new List<ExportFileInfo>();
+        if (IsContextFromBAR(list))
+        {
+            foreach (var entry in SelectedBarFileEntries)
             {
-                Clipboard?.SetTextAsync(entry.Name);
+                files.Add(new ExportFileInfo
+                {
+                    RelativePath = entry.RelativePath,
+                    FullRelativePath = GetBARFullRelativePath(entry),
+                    IsCompressed = entry.IsCompressed
+                });
             }
         }
         else
         {
-            // file entry list
-            var entry = SelectedRootFileEntry;
-            if (entry != null)
+            foreach (var entry in SelectedRootFileEntries)
             {
-                Clipboard?.SetTextAsync(entry.Name);
+                files.Add(new ExportFileInfo
+                {
+                    RelativePath = entry.RelativePath,
+                    FullRelativePath = GetRootFullRelativePath(entry),
+                    IsCompressed = false // root files don't have a compression flag
+                });
             }
         }
+        return files;
+    }
+    #endregion
+
+    #region ContextMenu events
+    void MenuItem_CopyFileName(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var list = GetContextListBox(sender);
+        if (list == null) return;
+
+        var name = GetContextSelectedName(list);
+        if (name != null) Clipboard?.SetTextAsync(name);
     }
 
     void MenuItem_CopyFilePath(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
-        var item = (MenuItem)sender!;
-        var list = item.Parent?.Parent?.Parent as ListBox;
+        var list = GetContextListBox(sender);
         if (list == null) return;
 
-        if (list.ItemsSource == BarEntries)
-        {
-            // BAR entry list
-            var entry = SelectedBarEntry;
-            if (entry != null && _barFile != null)
-            {
-                // we must consider BAR root path to get the correct relative path
-                Clipboard?.SetTextAsync(GetBARFullRelativePath(entry));
-            }
-        }
-        else
-        {
-            // file entry list
-            var entry = SelectedRootFileEntry;
-            if (entry != null)
-            {
-                Clipboard?.SetTextAsync(GetRootFullRelativePath(entry));
-            }
-        }
+        var path = GetContextSelectedRelativePath(list);
+        if (path != null) Clipboard?.SetTextAsync(path);
     }
 
     void MenuItem_ExportSelectedOpenDirectory(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
@@ -1259,31 +1310,16 @@ public partial class MainWindow : SimpleWindow
         if (!Directory.Exists(_exportRootDirectory))
             return;
 
-        var item = (MenuItem)sender!;
-        var list = item.Parent?.Parent?.Parent as ListBox;
-        if (list == null)
-            return;
+        var list = GetContextListBox(sender);
+        if (list == null) return;
 
-        string relative_path_full;
-        if (list.ItemsSource == BarEntries && SelectedBarEntry != null)
-        {
-            relative_path_full = GetBARFullRelativePath(SelectedBarEntry);
-        }
-        else if (list.ItemsSource == RootFileEntries && SelectedRootFileEntry != null)
-        {
-            relative_path_full = GetRootFullRelativePath(SelectedRootFileEntry);
-        }
-        else
-        {
-            return;
-        }
+        var relative_path_full = GetContextSelectedRelativePath(list);
+        if (relative_path_full == null) return;
 
         var export_path = Path.Combine(_exportRootDirectory, relative_path_full);
         var export_dir = Path.GetDirectoryName(export_path);
         if (!string.IsNullOrEmpty(export_dir))
             Directory.CreateDirectory(export_dir);
-
-        // TODO: only for windows, maybe make methods for other platforms? But will people even use it elsewhere?
 
         var process_info = new ProcessStartInfo
         {
@@ -1304,25 +1340,89 @@ public partial class MainWindow : SimpleWindow
     async void MenuItem_ExportSelectedRawConverted(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
         => MenuItem_Export(sender, copy: true, convert: true);
 
+    async void MenuItem_AdvancedExport(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var list = GetContextListBox(sender);
+        if (list == null) return;
+
+        var files = GetContextSelectedExportFiles(list);
+        if (files.Count == 0) return;
+
+        var window = new AdvancedExportWindow(files, _exportRootDirectory, isDirectExport: false, directExportPath: null);
+        await window.ShowDialog(this);
+
+        var options = window.GetResult();
+        if (options == null) return;
+
+        await RunExportWithOptions(list, options);
+    }
+
+    async void MenuItem_ExportTo(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var list = GetContextListBox(sender);
+        if (list == null) return;
+
+        var files = GetContextSelectedExportFiles(list);
+        if (files.Count == 0) return;
+
+        // Pick a destination folder
+        var folders = await StorageProvider.OpenFolderPickerAsync(new Avalonia.Platform.Storage.FolderPickerOpenOptions
+        {
+            Title = "Export files to...",
+            AllowMultiple = false
+        });
+
+        if (folders.Count == 0) return;
+        var directPath = folders[0].Path.LocalPath;
+
+        var window = new AdvancedExportWindow(files, _exportRootDirectory, isDirectExport: true, directExportPath: directPath);
+        await window.ShowDialog(this);
+
+        var options = window.GetResult();
+        if (options == null) return;
+
+        await RunExportWithOptions(list, options);
+    }
+
+    async Task RunExportWithOptions(ListBox list, ExportOptions options)
+    {
+        bool withinBAR = IsContextFromBAR(list);
+
+        if (withinBAR)
+        {
+            var to_export = SelectedBarFileEntries.ToArray();
+            if (options.Copy)
+                await Export(to_export, false, F_GetFullRelativePathBAR, F_CopyBAR, F_ReadBAR, options);
+            if (options.Convert)
+                await Export(to_export, true, F_GetFullRelativePathBAR, F_CopyBAR, F_ReadBAR, options);
+        }
+        else
+        {
+            var to_export = SelectedRootFileEntries.ToArray();
+            if (options.Copy)
+                await Export(to_export, false, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot, options);
+            if (options.Convert)
+                await Export(to_export, true, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot, options);
+        }
+    }
 
     async void MenuItem_ReplaceImageAndExportDDT(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         if (!Directory.Exists(_exportRootDirectory))
             return;
 
-        var item = (MenuItem)sender!;
-        var list = item.Parent?.Parent?.Parent as ListBox;
-        if (list == null)
-            return;
+        var list = GetContextListBox(sender);
+        if (list == null) return;
 
+        var item = (MenuItem)sender!;
         item.IsEnabled = false;
 
         try
         {
-            string relative_path_full = "";
-            string title = "";
+            string? relative_path_full;
+            string title;
             Memory<byte> data;
-            if (list.ItemsSource == BarEntries)
+            if (IsContextFromBAR(list))
             {
                 if (SelectedBarEntry == null || _barStream == null)
                     return;
@@ -1365,9 +1465,6 @@ public partial class MainWindow : SimpleWindow
                 p.Report("Encoding image into DDT");
                 var modified_ddt_data = await DDTImage.EncodeImageToDDT(image, ddt.Version, ddt.UsageFlag, ddt.AlphaFlag, ddt.FormatFlag, ddt.MipmapLevels, ddt.ColorTable);
 
-                // CHECK: should I consider decompression of the original and apply it?
-
-                // export it
                 p.Report("Exporting final DDT");
                 var output_path = Path.Combine(_exportRootDirectory, relative_path_full);
                 var dir = Path.GetDirectoryName(output_path);
@@ -1399,41 +1496,31 @@ public partial class MainWindow : SimpleWindow
         if (!Directory.Exists(_exportRootDirectory))
             return;
 
-        var item = (MenuItem)sender!;
-        var list = item.Parent?.Parent?.Parent as ListBox;
-        if (list == null)
-            return;
+        var list = GetContextListBox(sender);
+        if (list == null) return;
 
+        var item = (MenuItem)sender!;
         item.IsEnabled = false;
 
-        bool withinBAR = list.ItemsSource == BarEntries;
+        bool withinBAR = IsContextFromBAR(list);
         try
         {
             if (withinBAR)
             {
                 var to_export = SelectedBarFileEntries.ToArray();
                 if (copy)
-                {
                     await Export(to_export, false, F_GetFullRelativePathBAR, F_CopyBAR, F_ReadBAR);
-                }
                 if (convert)
-                {
                     await Export(to_export, true, F_GetFullRelativePathBAR, F_CopyBAR, F_ReadBAR);
-                }
             }
             else
             {
                 var to_export = SelectedRootFileEntries.ToArray();
                 if (copy)
-                {
                     await Export(to_export, false, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
-                }
                 if (convert)
-                {
                     await Export(to_export, true, F_GetFullRelativePathRoot, F_CopyRoot, F_ReadRoot);
-                }
             }
-
         }
         finally
         {
@@ -1446,30 +1533,16 @@ public partial class MainWindow : SimpleWindow
         if (!Directory.Exists(_exportRootDirectory))
             return;
 
-        var item = (MenuItem)sender!;
-        var list = item.Parent?.Parent?.Parent as ListBox;
-        if (list == null)
-            return;
+        var list = GetContextListBox(sender);
+        if (list == null) return;
 
+        var item = (MenuItem)sender!;
         item.IsEnabled = false;
 
         try
         {
-            string relative_path_full = "";
-            if (list.ItemsSource == BarEntries)
-            {
-                if (SelectedBarEntry == null)
-                    return;
-
-                relative_path_full = GetBARFullRelativePath(SelectedBarEntry);
-            }
-            else
-            {
-                if (SelectedRootFileEntry == null)
-                    return;
-
-                relative_path_full = GetRootFullRelativePath(SelectedRootFileEntry);
-            }
+            var relative_path_full = GetContextSelectedRelativePath(list);
+            if (relative_path_full == null) return;
 
             if (!AdditiveModding.IsSupportedFor(relative_path_full, out var format))
                 return;
@@ -1724,12 +1797,11 @@ public partial class MainWindow : SimpleWindow
         try
         {
             var xmb_data = File.ReadAllBytes(file);
-            var xml_decompressed = BarCompression.EnsureDecompressed(xmb_data, out _);
-            var xml = BarFormatConverter.XMBtoXML(xml_decompressed.Span);
-            if (xml == null) throw new Exception("Failed to parse XMB file");
+            var decompressed = BarCompression.EnsureDecompressed(xmb_data, out _);
+            var xmlText = ConversionHelper.ConvertXmbToXmlText(decompressed.Span);
+            if (xmlText == null) throw new Exception("Failed to parse XMB file");
 
-            var formatted_xml = BarFormatConverter.FormatXML(xml);
-            File.WriteAllText(out_file, formatted_xml);
+            File.WriteAllText(out_file, xmlText);
 
             _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file));
         }
@@ -1750,18 +1822,12 @@ public partial class MainWindow : SimpleWindow
         try
         {
             var ddt_data = BarCompression.EnsureDecompressed(File.ReadAllBytes(file), out _);
-
-            var ddt = new DDTImage(ddt_data);
-            var image = await BarFormatConverter.ParseDDT(ddt);
-            if (image == null) throw new InvalidDataException("Failed to convert DDT file");
+            var tgaBytes = await ConversionHelper.ConvertDdtToTgaBytes(ddt_data);
+            if (tgaBytes == null) throw new InvalidDataException("Failed to convert DDT file");
 
             using (var stream = File.Create(out_file))
             {
-                await image.SaveAsTgaAsync(stream, new TgaEncoder
-                {
-                    BitsPerPixel = TgaBitsPerPixel.Pixel32
-                });
-                image.Dispose();
+                stream.Write(tgaBytes);
             }
 
             _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file));
@@ -1980,27 +2046,7 @@ public partial class MainWindow : SimpleWindow
 
     void ResetExportWatcher()
     {
-        if (_exportWatcher != null)
-        {
-            _exportWatcher.Renamed -= ExportDir_Renamed;
-            _exportWatcher.Created -= ExportDir_Created;
-            _exportWatcher.Deleted -= ExportDir_Deleted;
-            _exportWatcher.Dispose();
-            _exportWatcher = null;
-        }
-
-        if (string.IsNullOrEmpty(_exportRootDirectory))
-            return;
-
-        if (!Directory.Exists(_exportRootDirectory))
-            return;
-
-        _exportWatcher = new FileSystemWatcher(ExportRootDirectory);
-        _exportWatcher.IncludeSubdirectories = true;
-        _exportWatcher.EnableRaisingEvents = true;
-        _exportWatcher.Renamed += ExportDir_Renamed;
-        _exportWatcher.Created += ExportDir_Created;
-        _exportWatcher.Deleted += ExportDir_Deleted;
+        _exportWatcher.Watch(_exportRootDirectory);
     }
 
     void ContextMenu_Opened(object? sender, Avalonia.Interactivity.RoutedEventArgs e)

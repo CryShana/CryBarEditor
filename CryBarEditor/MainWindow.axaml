@@ -42,20 +42,20 @@
 		<converters:IsOverridenToBoolConverter x:Key="overridenConverter" />
 		
 		<ContextMenu x:Key="SharedContextMenu" Opened="ContextMenu_Opened">
-			<MenuItem Header="Copy file name" 
+			<MenuItem Header="Copy file name"
 					  Icon="{micons:MaterialIconExt Kind=ContentCopy}"
 					  Click="MenuItem_CopyFileName" />
-			
-			<MenuItem Header="Copy file path" 
+
+			<MenuItem Header="Copy file path"
 					  Icon="{micons:MaterialIconExt Kind=ContentCopy}"
 					  Click="MenuItem_CopyFilePath" />
-			
+
 			<Separator IsVisible="{Binding CanExport}" />
-			
+
 			<MenuItem Header="Open export directory"
 					IsVisible="{Binding CanExport}" Icon="{micons:MaterialIconExt Kind=OpenInNew}"
 					Click="MenuItem_ExportSelectedOpenDirectory" />
-			
+
 			<MenuItem Header="{Binding ContextSelectedItemsCount, StringFormat='Export {0} selected (copy)'}"
 					IsVisible="{Binding CanExport}" Icon="{micons:MaterialIconExt Kind=Export}"
 					Click="MenuItem_ExportSelectedRaw" />
@@ -68,6 +68,16 @@
 					IsVisible="{Binding CanExport}" Icon="{micons:MaterialIconExt Kind=Export}"
 					Click="MenuItem_ExportSelectedRawConverted" />
 
+			<Separator />
+
+			<MenuItem Header="{Binding ContextSelectedItemsCount, StringFormat='Advanced Export ({0} selected)...'}"
+					Icon="{micons:MaterialIconExt Kind=CogOutline}"
+					Click="MenuItem_AdvancedExport" />
+
+			<MenuItem Header="{Binding ContextSelectedItemsCount, StringFormat='Export {0} selected to...'}"
+					Icon="{micons:MaterialIconExt Kind=FolderMoveOutline}"
+					Click="MenuItem_ExportTo" />
+
 			<Separator IsVisible="{Binding SelectedIsDDT}"/>
 
 			<MenuItem Header="Replace image and export DDT"
@@ -78,7 +88,7 @@
 
 			<MenuItem Header="Create additive mod" Icon="{micons:MaterialIconExt Kind=FileEditOutline}"
 					IsVisible="{Binding SelectedCanHaveAdditiveMod}"
-					Click="MenuItem_CreateNewAdditiveMod"/>	
+					Click="MenuItem_CreateNewAdditiveMod"/>
 		</ContextMenu>
 	</Window.Resources>
 
@@ -117,7 +127,7 @@
 				<DockPanel Grid.Row="1" Grid.Column="0">
 					<Label DockPanel.Dock="Top" Content="Root Directory" FontWeight="Bold"  FontSize="16"/>
 					<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
-						<Button Content="{micons:MaterialIconExt Kind=FolderArrowUpOutline, Size=20}" Padding="4"
+						<Button Content="{micons:MaterialIconExt Kind=FolderArrowUpOutline}" Padding="4"
 								Click="LoadDir_Click" Margin="0,0,6,6" />
 						<Label DockPanel.Dock="Top" Content="{Binding RootDirectory}" Foreground="Gray" Margin="0,2,0,0"  />
 					</DockPanel>
@@ -163,7 +173,7 @@
 					<DockPanel IsVisible="{Binding !IsBankFileSelected}">
 						<Label DockPanel.Dock="Top" Content="BAR File" FontWeight="Bold" FontSize="16"/>
 						<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
-							<Button Content="{micons:MaterialIconExt Kind=ArchiveArrowUpOutline, Size=20}" Padding="4" Click="LoadBAR_Click" Margin="0,0,6,6"/>
+							<Button Content="{micons:MaterialIconExt Kind=ArchiveArrowUpOutline}" Padding="4" Click="LoadBAR_Click" Margin="0,0,6,6"/>
 							<Label DockPanel.Dock="Top" Content="{Binding LoadedBARFilePathOrRelative}" Foreground="Gray" Margin="0,2,0,0" />
 						</DockPanel>
 						<TextBox DockPanel.Dock="Top" Text="{Binding EntryQuery, Mode=TwoWay}" Watermark="Filter BAR entries" />
@@ -210,7 +220,7 @@
 					<DockPanel IsVisible="{Binding IsBankFileSelected}">
 						<Label DockPanel.Dock="Top" Content="FMOD Bank" FontWeight="Bold" FontSize="16"/>
 						<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
-							<Button Content="{micons:MaterialIconExt Kind=FileMusic, Size=20}" Padding="4" Click="LoadBank_Click" Margin="0,0,6,6"/>
+							<Button Content="{micons:MaterialIconExt Kind=FileMusic}" Padding="4" Click="LoadBank_Click" Margin="0,0,6,6"/>
 							<Label DockPanel.Dock="Top" Content="{Binding LoadedBankFilePathOrRelative}" Foreground="Gray" Margin="0,2,0,0" />
 						</DockPanel>
 						<TextBox DockPanel.Dock="Top" Text="{Binding BankQuery, Mode=TwoWay}" Watermark="Filter events" />
@@ -253,7 +263,7 @@
 				<DockPanel Grid.Row="1" Grid.Column="4">
 					<Label DockPanel.Dock="Top" Content="Export Root Directory" FontWeight="Bold" FontSize="16"/>
 					<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
-						<Button Content="{micons:MaterialIconExt Kind=FolderArrowDownOutline, Size=20}" Padding="4" Click="SelectExportRootDir_Click" Margin="0,0,6,6"/>
+						<Button Content="{micons:MaterialIconExt Kind=FolderArrowDownOutline}" Padding="4" Click="SelectExportRootDir_Click" Margin="0,0,6,6"/>
 						<Label Content="{Binding ExportRootDirectory}" Foreground="Gray" Margin="0,2,0,0"  />
 					</DockPanel>
 					<TextBlock DockPanel.Dock="Top" Margin="0,10,0,0" FontSize="16">

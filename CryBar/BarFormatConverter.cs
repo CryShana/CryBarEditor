@@ -30,7 +30,7 @@ public static class BarFormatConverter
 
         // let's limit ourselves to just this data
         xmb_data = xmb_data.Slice(0, 6 + data_length);
-        if (xmb_data.Slice(offset, 2) is not [88, 82])
+        if (xmb_data.Length < offset + 2 || xmb_data.Slice(offset, 2) is not [88, 82])
         {
             // XR not found (marks the root node)
             return null;

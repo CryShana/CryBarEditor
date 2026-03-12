@@ -1,0 +1,116 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+		xmlns:micons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+		xmlns:ce="using:CryBarEditor"
+        mc:Ignorable="d" d:DesignWidth="460" d:DesignHeight="420"
+        x:Class="CryBarEditor.AdvancedExportWindow"
+		x:DataType="ce:AdvancedExportWindow"
+		WindowStartupLocation="CenterOwner"
+		ExtendClientAreaChromeHints="NoChrome"
+		ExtendClientAreaToDecorationsHint="True"
+		Foreground="#d9d9d9"
+		Background="#141414"
+		DataContext="{Binding RelativeSource={RelativeSource Self}}"
+		CanResize="False" Width="460" Height="420"
+        Title="Advanced Export">
+	<Border Padding="10" BorderThickness="2" BorderBrush="#d9d9d9">
+		<DockPanel>
+			<!-- Title -->
+			<TextBlock DockPanel.Dock="Top" Text="Advanced Export" FontWeight="Bold" FontSize="18" Margin="0,0,0,8" />
+
+			<!-- File summary -->
+			<Border DockPanel.Dock="Top" Background="#1c1c1c" Padding="8" CornerRadius="4" Margin="0,0,0,8">
+				<StackPanel>
+					<TextBlock Text="{Binding FileSummary}" TextWrapping="Wrap" />
+				</StackPanel>
+			</Border>
+
+			<!-- Destination info -->
+			<Border DockPanel.Dock="Top" Background="#1e2a1e" Padding="8" CornerRadius="4" Margin="0,0,0,8"
+					IsVisible="{Binding !IsDirectExport}">
+				<StackPanel Orientation="Horizontal">
+					<micons:MaterialIcon Kind="FolderOutline" Width="18" Height="18" Margin="0,0,6,0" Foreground="#78f542" VerticalAlignment="Center" />
+					<TextBlock Text="Exporting to output directory — relative paths preserved"
+							   VerticalAlignment="Center" Foreground="#a0d8a0" />
+				</StackPanel>
+			</Border>
+
+			<Border DockPanel.Dock="Top" Background="#2a2a1e" Padding="8" CornerRadius="4" Margin="0,0,0,8"
+					IsVisible="{Binding IsDirectExport}">
+				<StackPanel>
+					<StackPanel Orientation="Horizontal">
+						<micons:MaterialIcon Kind="FileExportOutline" Width="18" Height="18" Margin="0,0,6,0" Foreground="#edc042" VerticalAlignment="Center" />
+						<TextBlock Text="Direct export — files placed directly, no folder structure"
+								   VerticalAlignment="Center" Foreground="#e0d8a0" />
+					</StackPanel>
+					<TextBlock Text="{Binding DirectExportPath}" Foreground="Gray" Margin="24,4,0,0"
+							   TextTrimming="CharacterEllipsis" />
+				</StackPanel>
+			</Border>
+
+			<!-- Export mode checkboxes -->
+			<TextBlock DockPanel.Dock="Top" Text="Export mode" FontWeight="Bold" Margin="0,0,0,4" />
+
+			<CheckBox DockPanel.Dock="Top" IsChecked="{Binding DoCopy}" Margin="0,0,0,2">
+				<StackPanel Orientation="Horizontal">
+					<TextBlock Text="Copy (raw file)" VerticalAlignment="Center" />
+					<TextBlock Text=" — exports as-is from source" Foreground="Gray" VerticalAlignment="Center" />
+				</StackPanel>
+			</CheckBox>
+
+			<CheckBox DockPanel.Dock="Top" IsChecked="{Binding DoConvert}" Margin="0,0,0,2">
+				<StackPanel Orientation="Horizontal">
+					<TextBlock Text="Convert" VerticalAlignment="Center" />
+					<TextBlock Text=" — XMB→XML, DDT→TGA" Foreground="Gray" VerticalAlignment="Center" />
+				</StackPanel>
+			</CheckBox>
+
+			<!-- Recommendation -->
+			<Border DockPanel.Dock="Top" Background="#1c2636" Padding="6" CornerRadius="4" Margin="0,4,0,4"
+					IsVisible="{Binding HasRecommendation}">
+				<StackPanel Orientation="Horizontal">
+					<micons:MaterialIcon Kind="LightbulbOnOutline" Width="16" Height="16"
+										 Margin="0,0,6,0" Foreground="#77c1e0" VerticalAlignment="Center" />
+					<TextBlock Text="{Binding Recommendation}" Foreground="#a0c8e0"
+							   TextWrapping="Wrap" VerticalAlignment="Center" />
+				</StackPanel>
+			</Border>
+
+			<!-- Decompress option -->
+			<Border DockPanel.Dock="Top" Background="#2a1e1e" Padding="6" CornerRadius="4" Margin="0,4,0,4"
+					IsVisible="{Binding ShowDecompressOption}">
+				<StackPanel>
+					<CheckBox IsChecked="{Binding DoDecompress}" Margin="0,0,0,2">
+						<StackPanel Orientation="Horizontal">
+							<micons:MaterialIcon Kind="AlertOutline" Width="16" Height="16"
+												 Margin="0,0,4,0" Foreground="#f5a742" VerticalAlignment="Center" />
+							<TextBlock Text="Auto-decompress compressed files" VerticalAlignment="Center" />
+						</StackPanel>
+					</CheckBox>
+					<TextBlock Text="{Binding CompressedFileNote}" Foreground="#d8a0a0" Margin="24,0,0,0"
+							   TextWrapping="Wrap" FontSize="11" />
+				</StackPanel>
+			</Border>
+
+			<!-- Overwrite warning -->
+			<Border DockPanel.Dock="Top" Background="#2a1e1e" Padding="6" CornerRadius="4" Margin="0,4,0,4"
+					IsVisible="{Binding HasOverwriteWarning}">
+				<StackPanel Orientation="Horizontal">
+					<micons:MaterialIcon Kind="AlertCircleOutline" Width="16" Height="16"
+										 Margin="0,0,6,0" Foreground="#f55142" VerticalAlignment="Center" />
+					<TextBlock Text="{Binding OverwriteWarning}" Foreground="#d8a0a0"
+							   TextWrapping="Wrap" VerticalAlignment="Center" />
+				</StackPanel>
+			</Border>
+
+			<!-- Buttons -->
+			<DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0" LastChildFill="False">
+				<Button DockPanel.Dock="Right" Content="Cancel" Click="CancelClick" IsCancel="True" Margin="8,0,0,0" />
+				<Button DockPanel.Dock="Right" Content="Export" Click="ExportClick" IsDefault="True"
+						IsEnabled="{Binding CanExport}" />
+			</DockPanel>
+		</DockPanel>
+	</Border>
+</Window>

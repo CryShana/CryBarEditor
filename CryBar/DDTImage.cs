@@ -77,6 +77,7 @@ public class DDTImage
     public bool ParseHeader()
     {
         var data = _data.Span;
+        if (data.Length < 16) return false;
 
         var rts4 = data is [0x52, 0x54, 0x53, 0x34, ..];
         var rts3 = data is [0x52, 0x54, 0x53, 0x33, ..];
