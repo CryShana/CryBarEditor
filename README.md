@@ -20,6 +20,9 @@ The purpose of this tool is to enable fast and easy modding of Age of Mythology 
     - XMB (decoding + encoding)
     - DDT (decoding + encoding)
     - TMM (decoding)
+    - TMM.DATA (decoding)
+    - TMA (header decoding)
+- Rich preview for TMM models (bones, mesh groups, materials, attachments) and TMM.DATA (vertex/triangle stats)
 - Syntax highlighting for common formats (json,xml,ini,xs,...) and folding support for XML
 
 ### Extras
@@ -53,10 +56,11 @@ Just download the latest version .zip and extract it into a folder, run the .exe
 
 ## Planned features
 Currently planned:
-- Decoding + Encoding TMA and TMM formats
+- Full TMA animation body parsing (currently header-only)
+- TMM encoding (writing modified models back)
 - Somehow exporting all FMOD sound files within event (manual decoding?)
 - More features for additive modding (supporting more files, and generating some template)
-- Maybe another side panel for export directory for quickly editing/viewing exported files - all within same ap
+- Maybe another side panel for export directory for quickly editing/viewing exported files - all within same app
 
 ## Modding Basics
 Please read [Modding Basics](Documentation/Modding.md) document to get started.
