@@ -331,13 +331,13 @@ public class DDTImage
     {
         // always take the smallest dimension
         int size = Math.Min(width, height);
+        if (size <= 0) return 0;
 
-        byte levels = 0; 
-        int new_size = size;
-        for (int i = 0; new_size > 4 ; i++)
+        byte levels = 1; // always at least the base level
+        while (size > 4)
         {
             levels++;
-            new_size = size >> i;
+            size >>= 1;
         }
 
         return levels;

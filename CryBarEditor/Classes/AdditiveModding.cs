@@ -14,7 +14,7 @@ public static class AdditiveModding
         { "techtree.xml", new("techtree_mods.xml", "<techtreemods>\n</techtreemods>") },
         { "powers.xml", new("powers_mods.xml", "<powersmods>\n</powersmods>") },
         { "string_table.txt", new("stringmods.txt", "") },
-        { "proto_unit_commands.xml", new("proto_unit_command_mods.xml", "<protounitcommandsmods>\n</<protounitcommandsmods>") },
+        { "proto_unit_commands.xml", new("proto_unit_command_mods.xml", "<protounitcommandsmods>\n</protounitcommandsmods>") },
         { "abilities.xml", new("abilities_mods.xml", "<abilitiesmods>\n</abilitiesmods>") },
         { "major_gods.xml", new("major_gods_mods.xml", "<civsmods>\n</civsmods>") },
         { "minor_gods.xml", new("minor_gods_mods.xml", "<minorgodsmods>\n</minorgodsmods>") },

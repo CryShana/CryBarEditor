@@ -29,8 +29,8 @@ public partial class Prompt : SimpleWindow
     public bool PromptIsInformation => _type == PromptType.Information;
     public bool PromptIsProgress => _type == PromptType.Progress;
 
-    public bool ShowProgressIcon { get => _showSuccess; set { _showSuccess = value; OnSelfChanged(); } }
-    public bool ShowSuccessIcon { get => _showProgress; set { _showProgress = value; OnSelfChanged(); } }
+    public bool ShowProgressIcon { get => _showProgress; set { _showProgress = value; OnSelfChanged(); } }
+    public bool ShowSuccessIcon { get => _showSuccess; set { _showSuccess = value; OnSelfChanged(); } }
 
     public Prompt()
     {
