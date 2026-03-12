@@ -1,7 +1,10 @@
+using CryBar.TMM;
+
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Tga;
 using SixLabors.ImageSharp.PixelFormats;
 
+using System.Globalization;
 using System.Text;
 
 namespace CryBar;
@@ -64,6 +67,83 @@ public static class ConversionHelper
     }
 
     /// <summary>
+    /// Converts a TMM+TMM.DATA pair to Wavefront OBJ format.
+    /// Positions, UVs, and normals (decoded from TBN) are included.
+    /// Faces are grouped by mesh group/material.
+    /// </summary>
+    /// <param name="tmmData">Raw .tmm file bytes (decompressed).</param>
+    /// <param name="tmmDataData">Raw .tmm.data file bytes (decompressed).</param>
+    /// <returns>OBJ text as bytes, or null if parsing failed.</returns>
+    public static byte[]? ConvertTmmToObjBytes(ReadOnlyMemory<byte> tmmData, ReadOnlyMemory<byte> tmmDataData)
+    {
+        var tmm = new TmmFile(tmmData);
+        if (!tmm.Parse()) return null;
+
+        var dataFile = new TmmDataFile(tmmDataData, tmm.NumVertices, tmm.NumTriangleVerts, tmm.NumBones > 0);
+        if (!dataFile.Parse() || dataFile.Vertices == null || dataFile.Indices == null) return null;
+
+        var ic = CultureInfo.InvariantCulture;
+        var vertices = dataFile.Vertices;
+        var sb = new StringBuilder(vertices.Length * 80); // rough pre-allocation
+        sb.AppendLine("# Exported from CryBarEditor");
+        sb.AppendLine($"# Vertices: {tmm.NumVertices}, Triangles: {tmm.NumTriangleVerts / 3}");
+        sb.AppendLine();
+
+        // Write positions, UVs, and normals in separate OBJ sections (single data pass)
+        var uvSection = new StringBuilder(vertices.Length * 30);
+        var normalSection = new StringBuilder(vertices.Length * 40);
+
+        foreach (var v in vertices)
+        {
+            float px = (float)v.PosX, py = (float)v.PosY, pz = (float)v.PosZ;
+            sb.AppendLine($"v {px.ToString(ic)} {py.ToString(ic)} {pz.ToString(ic)}");
+
+            float u = (float)v.U, vFlipped = 1.0f - (float)v.V;
+            uvSection.AppendLine($"vt {u.ToString(ic)} {vFlipped.ToString(ic)}");
+
+            var (nx, ny, nz) = TbnDecoder.DecodeNormal(v.TbnX, v.TbnY, v.TbnZ);
+            normalSection.AppendLine($"vn {nx.ToString(ic)} {ny.ToString(ic)} {nz.ToString(ic)}");
+        }
+
+        sb.AppendLine();
+        sb.Append(uvSection);
+        sb.AppendLine();
+        sb.Append(normalSection);
+        sb.AppendLine();
+
+        // Write faces grouped by mesh group
+        int globalVertexOffset = 0;
+        for (int g = 0; g < tmm.MeshGroups.Length; g++)
+        {
+            var mg = tmm.MeshGroups[g];
+            var matName = mg.MaterialIndex < tmm.Materials.Length
+                ? tmm.Materials[mg.MaterialIndex] : $"material_{mg.MaterialIndex}";
+
+            sb.AppendLine($"g mesh_group_{g}");
+            sb.AppendLine($"usemtl {matName}");
+
+            var triCount = mg.IndexCount / 3;
+            for (uint t = 0; t < triCount; t++)
+            {
+                var baseIdx = mg.IndexStart + t * 3;
+                if (baseIdx + 2 >= dataFile.Indices.Length) break;
+
+                // OBJ indices are 1-based; add global vertex offset for this mesh group
+                var a = dataFile.Indices[baseIdx] + globalVertexOffset + 1;
+                var b = dataFile.Indices[baseIdx + 1] + globalVertexOffset + 1;
+                var c = dataFile.Indices[baseIdx + 2] + globalVertexOffset + 1;
+
+                sb.AppendLine($"f {a}/{a}/{a} {b}/{b}/{b} {c}/{c}/{c}");
+            }
+            sb.AppendLine();
+
+            globalVertexOffset += (int)mg.VertexCount;
+        }
+
+        return Encoding.UTF8.GetBytes(sb.ToString());
+    }
+
+    /// <summary>
     /// Determines the converted file extension for a given source extension.
     /// Returns null if no conversion is applicable.
     /// </summary>
@@ -73,6 +153,7 @@ public static class ConversionHelper
         {
             ".xmb" => null, // XMB extension is removed, revealing the underlying extension (e.g. .xml.xmb → .xml)
             ".ddt" => ".tga",
+            ".tmm" => ".obj",
             _ => null
         };
     }
@@ -82,6 +163,6 @@ public static class ConversionHelper
     /// </summary>
     public static bool IsConvertibleExtension(string extension)
     {
-        return extension.ToLower() is ".xmb" or ".ddt";
+        return extension.ToLower() is ".xmb" or ".ddt" or ".tmm";
     }
 }

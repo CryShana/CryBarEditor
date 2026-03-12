@@ -9,7 +9,6 @@
 ## Description
 The purpose of this tool is to enable fast and easy modding of Age of Mythology Retold.
 
-
 ## Features
 ### Highlights
 - **Read BAR archives**
@@ -20,6 +19,7 @@ The purpose of this tool is to enable fast and easy modding of Age of Mythology 
     - BAR (decoding)
     - XMB (decoding + encoding)
     - DDT (decoding + encoding)
+    - TMM (decoding)
 - Syntax highlighting for common formats (json,xml,ini,xs,...) and folding support for XML
 
 ### Extras
@@ -28,6 +28,7 @@ The purpose of this tool is to enable fast and easy modding of Age of Mythology 
   - Convert XML -> XMB
   - Convert XMB -> XML
   - Convert DDT -> TGA
+  - Convert TMM -> OBJ
   - Convert image -> DDT
   - Compress with Alz4/L33t
   - Decompress file with Alz4/L33t

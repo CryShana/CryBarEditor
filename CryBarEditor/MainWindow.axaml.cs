@@ -8,6 +8,7 @@ using AvaloniaEdit.Folding;
 using AvaloniaEdit.TextMate;
 using CommunityToolkit.HighPerformance;
 using CryBar;
+using CryBar.TMM;
 using CryBarEditor.Classes;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Tga;
@@ -867,26 +868,88 @@ public partial class MainWindow : SimpleWindow
             }
             else if (ext == ".tmm")
             {
-                var tmm = new TmmModel(data);
-                if (!tmm.ParseHeader())
+                var tmm = new TmmFile(data);
+                if (!tmm.Parse())
                 {
                     PreviewedFileNote = "(Failed to parse TMM)";
                     return;
                 }
 
-                if (tmm.ModelNames.Length == 0)
+                ext = ".txt";
+                text = tmm.GetSummary();
+                PreviewedFileNote = $"TMM v{tmm.Version}";
+            }
+            else if (ext == ".tma")
+            {
+                var tma = new TmaFile(data);
+                if (!tma.Parse())
                 {
-                    PreviewedFileNote = "(TMM contains 0 models)";
+                    PreviewedFileNote = "(Failed to parse TMA)";
                     return;
                 }
 
-                // TODO
-                //tmm.ParseModel(0);
-
                 ext = ".txt";
-                text = "Model names:\n- " + string.Join("\n- ", tmm.ModelNames);
+                text = tma.GetSummary();
+                PreviewedFileNote = $"TMA v{tma.Version}";
+            }
+            else if (relative_path.EndsWith(".tmm.data", StringComparison.OrdinalIgnoreCase))
+            {
+                // Try to find the companion .tmm file
+                // TMM.DATA files are in ArtModelCacheModelData*.bar but TMMs are in ArtModelCacheMeta.bar
+                var tmmBaseName = Path.GetFileName(relative_path[..^5]); // e.g. "petrobolos.tmm"
+                TmmFile? companionTmm = null;
 
-                PreviewedFileNote = "(Partial preview)";
+                // First: check current BAR
+                if (_barFile?.Entries != null && _barStream != null)
+                {
+                    var tmmEntry = _barFile.Entries.FirstOrDefault(
+                        e => e.Name.Equals(tmmBaseName, StringComparison.OrdinalIgnoreCase));
+                    if (tmmEntry != null)
+                    {
+                        var tmmRawData = BarCompression.EnsureDecompressed(
+                            tmmEntry.ReadDataRaw(_barStream), out _);
+                        companionTmm = new TmmFile(tmmRawData);
+                        if (!companionTmm.Parse()) companionTmm = null;
+                    }
+                }
+
+                // Second: search all .bar files in the same directory
+                if (companionTmm == null && _barStream != null)
+                {
+                    companionTmm = FindCompanionInSiblingBars<TmmFile>(
+                        _barStream.Name, tmmBaseName,
+                        (entry, stream) =>
+                        {
+                            var raw = BarCompression.EnsureDecompressed(entry.ReadDataRaw(stream), out _);
+                            var tmm = new TmmFile(raw);
+                            return tmm.Parse() ? tmm : null;
+                        });
+                }
+
+                if (companionTmm != null)
+                {
+                    var dataFile = new TmmDataFile(data,
+                        companionTmm.NumVertices, companionTmm.NumTriangleVerts,
+                        companionTmm.NumBones > 0);
+
+                    if (dataFile.Parse())
+                    {
+                        ext = ".txt";
+                        text = dataFile.GetSummary();
+                        PreviewedFileNote = "TMM Data";
+                    }
+                    else
+                    {
+                        PreviewedFileNote = "(Failed to parse TMM data)";
+                        return;
+                    }
+                }
+                else
+                {
+                    ext = ".txt";
+                    text = $"TMM Data file ({data_size:N0} bytes)\nCompanion .tmm not found in BAR - cannot decode without vertex/index counts.";
+                    PreviewedFileNote = "TMM Data (no companion)";
+                }
             }
             else
             {
@@ -1004,6 +1067,44 @@ public partial class MainWindow : SimpleWindow
                         {
                             file.Write(tgaBytes);
                             continue;
+                        }
+
+                        // TMM→OBJ: find companion .tmm.data
+                        if (ext == ".tmm")
+                        {
+                            var tmmFileName = Path.GetFileName(getFullRelPath(f)); // e.g. "petrobolos.tmm"
+                            var dataFileName = tmmFileName + ".data";
+                            Memory<byte>? companionData = null;
+
+                            // Check current BAR first
+                            if (_barFile?.Entries != null && _barStream != null)
+                            {
+                                var barDataEntry = _barFile.Entries.FirstOrDefault(e =>
+                                    e.Name.Equals(dataFileName, StringComparison.OrdinalIgnoreCase));
+                                if (barDataEntry != null)
+                                    companionData = BarCompression.EnsureDecompressed(
+                                        barDataEntry.ReadDataRaw(_barStream), out _);
+                            }
+
+                            // Search all .bar files in the same directory
+                            if (companionData == null && _barStream != null)
+                            {
+                                var found = FindCompanionInSiblingBars<Memory<byte>>(
+                                    _barStream.Name, dataFileName,
+                                    (entry, stream) => BarCompression.EnsureDecompressed(
+                                        entry.ReadDataRaw(stream), out _));
+                                if (found.Length > 0) companionData = found;
+                            }
+
+                            if (companionData != null)
+                            {
+                                var objBytes = ConversionHelper.ConvertTmmToObjBytes(data, companionData.Value);
+                                if (objBytes != null)
+                                {
+                                    file.Write(objBytes);
+                                    continue;
+                                }
+                            }
                         }
                     }
 
@@ -1621,6 +1722,45 @@ public partial class MainWindow : SimpleWindow
         return Path.Combine(_barFile.RootPath ?? "", entry.RelativePath);
     }
 
+    /// <summary>
+    /// Searches all .bar files in the same directory as the given BAR file for an entry matching the given name.
+    /// Skips the current BAR file. Returns the result of the factory function, or default if not found.
+    /// </summary>
+    static T? FindCompanionInSiblingBars<T>(string currentBarPath, string entryName,
+        Func<BarFileEntry, FileStream, T?> factory)
+    {
+        var barDir = Path.GetDirectoryName(currentBarPath);
+        if (barDir == null) return default;
+
+        try
+        {
+            foreach (var siblingBarPath in Directory.GetFiles(barDir, "*.bar"))
+            {
+                if (siblingBarPath.Equals(currentBarPath, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                try
+                {
+                    using var sibStream = File.OpenRead(siblingBarPath);
+                    var sibBar = new BarFile(sibStream);
+                    if (!sibBar.Load(out _)) continue;
+
+                    var entry = sibBar.Entries?.FirstOrDefault(e =>
+                        e.Name.Equals(entryName, StringComparison.OrdinalIgnoreCase));
+                    if (entry != null)
+                    {
+                        var result = factory(entry, sibStream);
+                        if (result != null) return result;
+                    }
+                }
+                catch { /* skip unreadable BAR files */ }
+            }
+        }
+        catch { /* ignore directory enumeration errors */ }
+
+        return default;
+    }
+
     string? _rootRelevantPathCached = null;
     string GetRootRelevantPath()
     {
@@ -1815,6 +1955,39 @@ public partial class MainWindow : SimpleWindow
         catch (Exception ex)
         {
             _ = ShowError("Failed to convert to TGA:\n" + ex.Message);
+        }
+    }
+
+    async void MenuItem_ConvertTMMtoOBJ(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var file = await PickFile(sender, "Convert TMM to OBJ", [new("TMM Model") { Patterns = ["*.tmm"] }]);
+        if (file == null) return;
+
+        // Auto-discover companion .tmm.data file
+        var dataFilePath = file + ".data";
+        if (!File.Exists(dataFilePath))
+        {
+            var dataFile = await PickFile(sender, "Select companion .tmm.data file",
+                [new("TMM Data") { Patterns = ["*.data"] }]);
+            if (dataFile == null) return;
+            dataFilePath = dataFile;
+        }
+
+        var out_file = PickOutFile(file, new_extension: ".obj", overwrite: true);
+        try
+        {
+            var tmmBytes = BarCompression.EnsureDecompressed(File.ReadAllBytes(file), out _);
+            var tmmDataBytes = BarCompression.EnsureDecompressed(File.ReadAllBytes(dataFilePath), out _);
+            var objBytes = ConversionHelper.ConvertTmmToObjBytes(tmmBytes, tmmDataBytes);
+            if (objBytes == null) throw new InvalidDataException("Failed to convert TMM file");
+
+            File.WriteAllBytes(out_file, objBytes);
+
+            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file));
+        }
+        catch (Exception ex)
+        {
+            _ = ShowError("Failed to convert to OBJ:\n" + ex.Message);
         }
     }
 

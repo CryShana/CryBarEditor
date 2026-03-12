@@ -1,6 +1,7 @@
 using System.Xml;
 
 using CryBar;
+using CryBar.TMM;
 
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
@@ -458,18 +459,18 @@ public class IntegrationTests
         using var s = stream;
 
         var raw = entry.ReadDataRaw(stream);
-        var tmm = new TmmModel(raw);
-        var parsed = tmm.ParseHeader();
+        var tmm = new TmmFile(BarCompression.EnsureDecompressed(raw, out _));
+        var parsed = tmm.Parse();
 
-        Assert.True(parsed, "TMM header should parse successfully");
-        Assert.NotNull(tmm.ModelNames);
-        Assert.Equal(2, tmm.ModelNames.Length);
-        Assert.Contains("armory_a_age2", tmm.ModelNames[0]);
-        Assert.Contains("armory_a_age2", tmm.ModelNames[1]);
+        Assert.True(parsed, "TMM should parse successfully");
+        Assert.NotNull(tmm.ImportNames);
+        Assert.Equal(2, tmm.ImportNames.Length);
+        Assert.Contains("armory_a_age2", tmm.ImportNames[0]);
+        Assert.Contains("armory_a_age2", tmm.ImportNames[1]);
 
         // One should be .fbximport, one should be .fbx
-        Assert.Contains(tmm.ModelNames, n => n.EndsWith(".fbximport"));
-        Assert.Contains(tmm.ModelNames, n => n.EndsWith(".fbx"));
+        Assert.Contains(tmm.ImportNames, n => n.EndsWith(".fbximport"));
+        Assert.Contains(tmm.ImportNames, n => n.EndsWith(".fbx"));
     }
 
     #endregion
@@ -552,6 +553,193 @@ public class IntegrationTests
 
         Assert.Equal(CompressionType.None, compressionType);
         Assert.True(result.Span.SequenceEqual(raw), "Uncompressed data should pass through unchanged");
+    }
+
+    #endregion
+
+    #region TMM Full Parsing (TmmFile)
+
+    [SkippableFact]
+    public void ArtModelCacheMetaBar_ArmoryTmm_FullParse()
+    {
+        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+
+        var (bar, entry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "armory_a_age2.tmm");
+        using var s = stream;
+
+        var raw = entry.ReadDataRaw(stream);
+        var tmm = new TmmFile(BarCompression.EnsureDecompressed(raw, out _));
+        var parsed = tmm.Parse();
+
+        Assert.True(parsed, "Full TMM parse should succeed");
+        Assert.NotNull(tmm.ImportNames);
+        Assert.True(tmm.ImportNames.Length > 0, "Should have import names");
+        Assert.NotNull(tmm.MeshGroups);
+        Assert.True(tmm.MeshGroups.Length > 0, "Should have mesh groups");
+        Assert.NotNull(tmm.Materials);
+        Assert.True(tmm.Materials.Length > 0, "Should have materials");
+        Assert.NotNull(tmm.ShaderTechniques);
+
+        // Verify summary doesn't throw
+        var summary = tmm.GetSummary();
+        Assert.Contains("TMM Model", summary);
+        Assert.Contains("Mesh Groups", summary);
+    }
+
+    [SkippableFact]
+    public void ArtModelCacheMetaBar_ShutenDojiTmm_HasBones()
+    {
+        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+
+        var (bar, entry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "shuten_doji.tmm");
+        using var s = stream;
+
+        var raw = entry.ReadDataRaw(stream);
+        var tmm = new TmmFile(BarCompression.EnsureDecompressed(raw, out _));
+        var parsed = tmm.Parse();
+
+        Assert.True(parsed, "Shuten Doji TMM should parse");
+        Assert.NotNull(tmm.Bones);
+        Assert.True(tmm.Bones.Length > 0, "Shuten Doji should have bones (it's a rigged character)");
+        Assert.Contains(tmm.Bones, b => b.ParentId == -1); // root bone
+    }
+
+    #endregion
+
+    #region TMM.DATA Full Parsing (TmmDataFile)
+
+    [SkippableFact]
+    public void TmmData_Greek_Petrobolos_FullParse()
+    {
+        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+
+        // Load the companion .tmm first
+        var (bar, tmmEntry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "petrobolos.tmm");
+        var tmmRaw = BarCompression.EnsureDecompressed(tmmEntry.ReadDataRaw(stream), out _);
+        var tmm = new TmmFile(tmmRaw);
+        Assert.True(tmm.Parse(), "Companion TMM should parse");
+        stream.Dispose();
+
+        // Load the .tmm.data
+        var (bar2, dataEntry, stream2) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheModelDataGreek.bar", "petrobolos.tmm.data");
+        using var s = stream2;
+
+        var dataRaw = BarCompression.EnsureDecompressed(dataEntry.ReadDataRaw(stream2), out _);
+        var dataFile = new TmmDataFile(dataRaw, tmm.NumVertices, tmm.NumTriangleVerts, tmm.NumBones > 0);
+        var parsed = dataFile.Parse();
+
+        Assert.True(parsed, "TMM.DATA should parse successfully");
+        Assert.NotNull(dataFile.Vertices);
+        Assert.Equal((int)tmm.NumVertices, dataFile.Vertices.Length);
+        Assert.NotNull(dataFile.Indices);
+        Assert.Equal((int)tmm.NumTriangleVerts, dataFile.Indices.Length);
+
+        var summary = dataFile.GetSummary();
+        Assert.Contains("Vertices:", summary);
+    }
+
+    [SkippableFact]
+    public void TmmData_Japanese_ShutenDoji_FullParse()
+    {
+        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+
+        // Load companion .tmm
+        var (bar, tmmEntry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "shuten_doji.tmm");
+        var tmmRaw = BarCompression.EnsureDecompressed(tmmEntry.ReadDataRaw(stream), out _);
+        var tmm = new TmmFile(tmmRaw);
+        Assert.True(tmm.Parse(), "Companion TMM should parse");
+        stream.Dispose();
+
+        // Load .tmm.data
+        var (bar2, dataEntry, stream2) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheModelDataJapanese.bar", "shuten_doji.tmm.data");
+        using var s = stream2;
+
+        var dataRaw = BarCompression.EnsureDecompressed(dataEntry.ReadDataRaw(stream2), out _);
+        var dataFile = new TmmDataFile(dataRaw, tmm.NumVertices, tmm.NumTriangleVerts, tmm.NumBones > 0);
+        Assert.True(dataFile.Parse(), "TMM.DATA should parse");
+
+        Assert.NotNull(dataFile.Vertices);
+        Assert.NotNull(dataFile.Indices);
+
+        // Shuten Doji is rigged, so should have skin weights
+        Assert.NotNull(dataFile.SkinWeights);
+        Assert.Equal((int)tmm.NumVertices, dataFile.SkinWeights.Length);
+    }
+
+    [SkippableFact]
+    public void TmmObjExport_Greek_Petrobolos()
+    {
+        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+
+        // Load .tmm
+        var (bar, tmmEntry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "petrobolos.tmm");
+        var tmmRaw = BarCompression.EnsureDecompressed(tmmEntry.ReadDataRaw(stream), out _);
+        stream.Dispose();
+
+        // Load .tmm.data
+        var (bar2, dataEntry, stream2) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheModelDataGreek.bar", "petrobolos.tmm.data");
+        var dataRaw = BarCompression.EnsureDecompressed(dataEntry.ReadDataRaw(stream2), out _);
+        stream2.Dispose();
+
+        // Convert to OBJ
+        var objBytes = ConversionHelper.ConvertTmmToObjBytes(tmmRaw, dataRaw);
+
+        Assert.NotNull(objBytes);
+        Assert.True(objBytes.Length > 0);
+
+        var objText = System.Text.Encoding.UTF8.GetString(objBytes);
+        Assert.Contains("v ", objText);   // vertex positions
+        Assert.Contains("vt ", objText);  // texture coords
+        Assert.Contains("vn ", objText);  // normals
+        Assert.Contains("f ", objText);   // faces
+        Assert.Contains("usemtl ", objText); // material assignments
+    }
+
+    #endregion
+
+    #region TMA - Animation File Exploration
+
+    [SkippableFact]
+    public void TmaFile_CanFindAnimationEntries()
+    {
+        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+
+        var barPath = Path.Combine(GamePath, @"modelcache\ArtModelCacheAnimationData.bar");
+        Skip.IfNot(File.Exists(barPath), "Animation BAR not found");
+
+        using var stream = File.OpenRead(barPath);
+        var bar = new BarFile(stream);
+        bar.Load(out var error);
+        Assert.True(bar.Loaded, $"Failed to load animation BAR: {error}");
+
+        var tmaEntries = bar.Entries!.Where(e => e.Name.EndsWith(".tma", StringComparison.OrdinalIgnoreCase)).ToList();
+        Assert.True(tmaEntries.Count > 0, "Should find .tma entries in animation BAR");
+    }
+
+    [SkippableFact]
+    public void TmaFile_HeaderExploration()
+    {
+        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+
+        var barPath = Path.Combine(GamePath, @"modelcache\ArtModelCacheAnimationData.bar");
+        Skip.IfNot(File.Exists(barPath), "Animation BAR not found");
+
+        using var stream = File.OpenRead(barPath);
+        var bar = new BarFile(stream);
+        bar.Load(out _);
+
+        var tmaEntry = bar.Entries!.FirstOrDefault(e => e.Name.EndsWith(".tma", StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(tmaEntry);
+
+        var raw = BarCompression.EnsureDecompressed(tmaEntry.ReadDataRaw(stream), out _);
+        Assert.True(raw.Length >= 8, $"TMA file too small: {raw.Length} bytes");
+
+        // Parse TMA header
+        var tma = new TmaFile(raw);
+        var parsed = tma.Parse();
+
+        Assert.True(parsed, $"TMA header should parse for {tmaEntry.Name}");
+        Assert.True(tma.Version > 0, "TMA should have a positive version");
     }
 
     #endregion

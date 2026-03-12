@@ -63,7 +63,7 @@
 			<CheckBox DockPanel.Dock="Top" IsChecked="{Binding DoConvert}" Margin="0,0,0,2">
 				<StackPanel Orientation="Horizontal">
 					<TextBlock Text="Convert" VerticalAlignment="Center" />
-					<TextBlock Text=" — XMB→XML, DDT→TGA" Foreground="Gray" VerticalAlignment="Center" />
+					<TextBlock Text=" — XMB→XML, DDT→TGA, TMM->OBJ" Foreground="Gray" VerticalAlignment="Center" />
 				</StackPanel>
 			</CheckBox>
 
