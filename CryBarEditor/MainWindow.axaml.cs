@@ -928,22 +928,12 @@ public partial class MainWindow : SimpleWindow
         SetEditorText(ext, text);
     }
 
-    public Task Export<T>(IList<T> files,
+    public async Task Export<T>(IList<T> files,
         bool should_convert,
         Func<T, string> getFullRelPath,
         Action<T, FileStream> copy,
         Func<T, Memory<byte>> read,
         ExportOptions? options = null)
-    {
-        return ExportCore(files, should_convert, getFullRelPath, copy, read, options);
-    }
-
-    async Task ExportCore<T>(IList<T> files,
-        bool should_convert,
-        Func<T, string> getFullRelPath,
-        Action<T, FileStream> copy,
-        Func<T, Memory<byte>> read,
-        ExportOptions? options)
     {
         var progress = new Progress<string?>();
         IProgress<string?> p = progress;
@@ -967,12 +957,13 @@ public partial class MainWindow : SimpleWindow
             {
                 // FINALIZE RELATIVE PATH
                 var ext = Path.GetExtension(relative_path).ToLower();
-                if (should_convert)
+                bool isConvertible = should_convert && ConversionHelper.IsConvertibleExtension(ext);
+                if (isConvertible)
                 {
                     if (ext == ".xmb")
-                        relative_path = relative_path[..^4];    // remove .XMB extension
-                    else if (ext == ".ddt")
-                        relative_path = relative_path[..^4] + ".tga";    // change .DDT to .TGA
+                        relative_path = relative_path[..^4];    // remove .XMB extension, revealing underlying (e.g. .xml)
+                    else
+                        relative_path = relative_path[..^ext.Length] + ConversionHelper.GetConvertedExtension(ext);
                 }
 
                 // DETERMINE EXPORT PATH
@@ -995,29 +986,28 @@ public partial class MainWindow : SimpleWindow
                 using var file = File.Create(exported_path);
 
                 // EXPORT DATA
-                if (should_convert)
+                if (isConvertible || shouldDecompress)
                 {
                     var data = BarCompression.EnsureDecompressed(read(f), out _);
 
-                    var xmlBytes = ext == ".xmb" ? ConversionHelper.ConvertXmbToXmlBytes(data.Span) : null;
-                    if (xmlBytes != null)
+                    if (isConvertible)
                     {
-                        file.Write(xmlBytes);
-                        continue;
+                        var xmlBytes = ext == ".xmb" ? ConversionHelper.ConvertXmbToXmlBytes(data.Span) : null;
+                        if (xmlBytes != null)
+                        {
+                            file.Write(xmlBytes);
+                            continue;
+                        }
+
+                        var tgaBytes = ext == ".ddt" ? await ConversionHelper.ConvertDdtToTgaBytes(data) : null;
+                        if (tgaBytes != null)
+                        {
+                            file.Write(tgaBytes);
+                            continue;
+                        }
                     }
 
-                    var tgaBytes = ext == ".ddt" ? await ConversionHelper.ConvertDdtToTgaBytes(data) : null;
-                    if (tgaBytes != null)
-                    {
-                        file.Write(tgaBytes);
-                        continue;
-                    }
-                }
-
-                if (shouldDecompress)
-                {
-                    // Decompress and write (no conversion)
-                    var data = BarCompression.EnsureDecompressed(read(f), out _);
+                    // Conversion didn't apply or failed — write decompressed data
                     file.Write(data.Span);
                 }
                 else
@@ -1257,32 +1247,22 @@ public partial class MainWindow : SimpleWindow
     /// </summary>
     List<ExportFileInfo> GetContextSelectedExportFiles(ListBox list)
     {
-        var files = new List<ExportFileInfo>();
         if (IsContextFromBAR(list))
         {
-            foreach (var entry in SelectedBarFileEntries)
+            return SelectedBarFileEntries.Select(e => new ExportFileInfo
             {
-                files.Add(new ExportFileInfo
-                {
-                    RelativePath = entry.RelativePath,
-                    FullRelativePath = GetBARFullRelativePath(entry),
-                    IsCompressed = entry.IsCompressed
-                });
-            }
+                RelativePath = e.RelativePath,
+                FullRelativePath = GetBARFullRelativePath(e),
+                IsCompressed = e.IsCompressed
+            }).ToList();
         }
-        else
+
+        return SelectedRootFileEntries.Select(e => new ExportFileInfo
         {
-            foreach (var entry in SelectedRootFileEntries)
-            {
-                files.Add(new ExportFileInfo
-                {
-                    RelativePath = entry.RelativePath,
-                    FullRelativePath = GetRootFullRelativePath(entry),
-                    IsCompressed = false // root files don't have a compression flag
-                });
-            }
-        }
-        return files;
+            RelativePath = e.RelativePath,
+            FullRelativePath = GetRootFullRelativePath(e),
+            IsCompressed = false // root files don't have a compression flag
+        }).ToList();
     }
     #endregion
 
