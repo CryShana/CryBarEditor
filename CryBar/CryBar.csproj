@@ -7,11 +7,18 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
+  <!-- Suppress warnings from embedded BCnEncoder library -->
+  <ItemGroup>
+    <Compile Update="BCnEncoder\**\*.cs">
+      <NoWarn>CS0162;CS0414;CS0649;CS8600;CS8602;CS8603;CS8618;CS8765;CS8767;CS8769;CA2022</NoWarn>
+    </Compile>
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.HighPerformance" Version="8.4.0" />
     <PackageReference Include="K4os.Compression.LZ4" Version="1.3.8" />
     <PackageReference Include="K4os.Compression.LZ4.Streams" Version="1.3.8" />
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.11" />
   </ItemGroup>
-  
+
 </Project>
