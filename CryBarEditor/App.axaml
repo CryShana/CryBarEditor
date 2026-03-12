@@ -9,5 +9,10 @@
         <FluentTheme />
 		<StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml" />
 		<micons:MaterialIconStyles />
+		<Style Selector="micons|MaterialIcon">
+			<Setter Property="Width" Value="18" />
+			<Setter Property="Height" Value="18" />
+			<Setter Property="Margin" Value="1" />
+		</Style>
 	</Application.Styles>
 </Application>

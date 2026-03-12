@@ -19,9 +19,11 @@ public partial class AdvancedExportWindow : SimpleWindow
     readonly ExportOptions _result;
     readonly string _exportRootDirectory;
     readonly IReadOnlyList<ExportFileInfo> _files;
+    int _compressedNonConvertibleCount;
+    int _compressedConvertibleCount;
 
     public bool DoCopy { get => _doCopy; set { _doCopy = value; OnSelfChanged(); OnPropertyChanged(nameof(CanExport)); } }
-    public bool DoConvert { get => _doConvert; set { _doConvert = value; OnSelfChanged(); OnPropertyChanged(nameof(CanExport)); } }
+    public bool DoConvert { get => _doConvert; set { _doConvert = value; OnSelfChanged(); OnPropertyChanged(nameof(CanExport)); OnPropertyChanged(nameof(ShowDecompressOption)); OnPropertyChanged(nameof(CompressedFileNote)); } }
     public bool DoDecompress { get => _doDecompress; set { _doDecompress = value; OnSelfChanged(); } }
 
     public bool CanExport => DoCopy || DoConvert;
@@ -30,8 +32,15 @@ public partial class AdvancedExportWindow : SimpleWindow
     public string Recommendation { get; }
     public bool HasRecommendation => !string.IsNullOrEmpty(Recommendation);
 
-    public bool ShowDecompressOption { get; }
-    public string CompressedFileNote { get; }
+    int UnhandledCompressedCount => DoConvert
+        ? _compressedNonConvertibleCount
+        : _compressedNonConvertibleCount + _compressedConvertibleCount;
+
+    public bool ShowDecompressOption => UnhandledCompressedCount > 0;
+    public string CompressedFileNote => UnhandledCompressedCount > 0
+        ? $"{UnhandledCompressedCount} of {_files.Count} file(s) are compressed and won't be auto-decompressed by conversion. " +
+          "Enable this to ensure correct output."
+        : "";
 
     public bool IsDirectExport { get; }
     public string? DirectExportPath { get; }
@@ -46,7 +55,6 @@ public partial class AdvancedExportWindow : SimpleWindow
         _files = [];
         FileSummary = "";
         Recommendation = "";
-        CompressedFileNote = "";
         OverwriteWarning = "";
 
         DataContext = this;
@@ -79,21 +87,17 @@ public partial class AdvancedExportWindow : SimpleWindow
         FileSummary = $"{files.Count} file(s) selected: {string.Join(", ", extGroups)}";
 
         // Detect compressed and convertible files
-        int compressedCount = files.Count(f => f.IsCompressed);
         int convertibleCount = files.Count(f => ConversionHelper.IsConvertibleExtension(
             Path.GetExtension(f.RelativePath)));
 
-        ShowDecompressOption = compressedCount > 0;
+        _compressedConvertibleCount = files.Count(f => f.IsCompressed &&
+            ConversionHelper.IsConvertibleExtension(Path.GetExtension(f.RelativePath)));
+        _compressedNonConvertibleCount = files.Count(f => f.IsCompressed &&
+            !ConversionHelper.IsConvertibleExtension(Path.GetExtension(f.RelativePath)));
+
+        int compressedCount = _compressedConvertibleCount + _compressedNonConvertibleCount;
         if (compressedCount > 0)
-        {
             _doDecompress = true; // default to on
-            CompressedFileNote = $"{compressedCount} of {files.Count} file(s) have the Compressed flag. " +
-                "Without decompression, converted files may fail or produce corrupt output.";
-        }
-        else
-        {
-            CompressedFileNote = "";
-        }
 
         _result.AnyCompressed = compressedCount > 0;
         _result.AnyConvertible = convertibleCount > 0;

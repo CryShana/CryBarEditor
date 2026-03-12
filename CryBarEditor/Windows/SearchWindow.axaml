@@ -74,7 +74,7 @@
 				IsChecked="{Binding IsRegex, Mode=TwoWay}"
 				IsEnabled="{Binding !CurrentlySearching}"
 				ToolTip.Tip="Regular Expression">
-				<micons:MaterialIcon FontSize="22" Kind="Regex" />
+				<micons:MaterialIcon Width="16" Height="16" Kind="Regex" />
 			</ToggleButton>
 			<ToggleButton
 				x:Name="btnCaseSensitive"
@@ -83,7 +83,7 @@
 				IsChecked="{Binding IsCaseSensitive, Mode=TwoWay}"
 				IsEnabled="{Binding !CurrentlySearching}"
 				ToolTip.Tip="Case Sensitive">
-				<micons:MaterialIcon FontSize="22" Kind="FormatLetterCase" />
+				<micons:MaterialIcon Width="16" Height="16" Kind="FormatLetterCase" />
 			</ToggleButton>
 			<TextBox
 				x:Name="txtQuery"
