@@ -41,4 +41,9 @@
   <ItemGroup>
     <ProjectReference Include="..\CryBar\CryBar.csproj" />
   </ItemGroup>
+
+  <PropertyGroup>
+    <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+  </PropertyGroup>
+  
 </Project>

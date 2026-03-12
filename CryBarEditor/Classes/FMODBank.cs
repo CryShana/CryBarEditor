@@ -24,7 +24,9 @@ public class FMODBank : IDisposable
 
     public FMODEvent[] Events { get; init; }
 
+#pragma warning disable CS0414
     bool _disposed;
+#pragma warning restore
 
     FMODBank(
         FMOD.Studio.System system,
