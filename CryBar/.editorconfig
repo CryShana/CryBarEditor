@@ -1,0 +1,4 @@
+root = true
+
+[BCnEncoder/**/*.cs]
+dotnet_analyzer_diagnostic.severity = none

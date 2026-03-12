@@ -1,3 +1,5 @@
+#pragma warning disable CS8602, CS8603, CS8765, CS0649, CS0162, CS8600, CS8769, CS8767
+
 /// ================ Half.cs ====================
 /// The code is free to use for any reason without any restrictions.
 /// Ladislav Lang (2009), Joannes Vermorel (2017)

@@ -1,3 +1,5 @@
+#pragma warning disable CS8602, CS8603, CS8765, CS0649, CS0162
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
