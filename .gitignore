@@ -3,3 +3,8 @@ obj
 out
 .vs
 .vscode
+
+# to keep own MD notes local. If needed, manually add exceptions here
+*.md
+!README.md 
+
