@@ -1,10 +1,11 @@
 bin
 obj
 out
-.vs
-.vscode
 
-# to keep own MD notes local. If needed, manually add exceptions here
+# ignore all hidden folders, manually add exceptions below
+.*
+
+# to keep own MD notes local. If needed, manually add exceptions below
 *.md
 !README.md 
 
