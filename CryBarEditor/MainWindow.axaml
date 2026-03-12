@@ -71,7 +71,7 @@
 			<Separator />
 
 			<MenuItem Header="{Binding ContextSelectedItemsCount, StringFormat='Advanced Export ({0} selected)...'}"
-					Icon="{micons:MaterialIconExt Kind=CogOutline}"
+					Icon="{micons:MaterialIconExt Kind=CogOutline}" IsVisible="{Binding CanExport}"
 					Click="MenuItem_AdvancedExport" />
 
 			<MenuItem Header="{Binding ContextSelectedItemsCount, StringFormat='Export {0} selected to...'}"

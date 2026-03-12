@@ -110,9 +110,9 @@ public partial class AdvancedExportWindow : SimpleWindow
         else
             Recommendation = "No convertible files in selection — 'Copy' is the best option.";
 
-        // Set sensible defaults
-        DoCopy = true;
+        // Set sensible defaults (by default only one is selected)
         DoConvert = convertibleCount > 0;
+        DoCopy = !DoConvert;
 
         // Check for overwrites
         if (!isDirectExport && Directory.Exists(exportRootDirectory))
