@@ -1542,7 +1542,29 @@ public partial class MainWindow : SimpleWindow
         _flatPreview.IsVisible = false;
         _tmmTabControl.IsVisible = true;
         _tmmTabControl.SelectedIndex = _tmmSelectedTabIndex;
+        _tmmTabControl.SelectionChanged -= TmmTabControl_SelectionChanged;
+        _tmmTabControl.SelectionChanged += TmmTabControl_SelectionChanged;
         _tmmMetadataEditor.Document = new TextDocument(metadataText);
+    }
+
+    void TmmTabControl_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_tmmTabControl.SelectedIndex == 1)
+        {
+            // Flush pending mesh on first switch to 3D tab, or re-render if already loaded
+            if (_pendingMeshData != null)
+                FlushPendingMesh();
+            else
+                _glPreview?.RequestNextFrameRendering();
+        }
+    }
+
+    void FlushPendingMesh()
+    {
+        if (_pendingMeshData == null) return;
+        var mesh = _pendingMeshData;
+        _pendingMeshData = null;
+        LoadMeshIntoScene(mesh);
     }
 
     void HideTmmPreview()
@@ -1586,8 +1608,15 @@ public partial class MainWindow : SimpleWindow
 
         if (ct.IsCancellationRequested) return;
 
-        LoadMeshIntoScene(meshData!);
+        // Store pending mesh; only initialize GL and upload when 3D tab is visible
+        _pendingMeshData = meshData;
+        if (_tmmTabControl.SelectedIndex == 1)
+            FlushPendingMesh();
+        else
+            Update3DStatus(""); // ready, will load when tab is selected
     }
+
+    PreviewMeshData? _pendingMeshData;
 
     void EnsureGlPreviewInitialized()
     {

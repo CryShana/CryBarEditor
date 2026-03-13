@@ -57,12 +57,6 @@ public class GlPreviewControl : OpenGlControlBase, ICustomHitTest
         }
         """;
 
-    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
-    {
-        base.OnAttachedToVisualTree(e);
-        RequestNextFrameRendering();
-    }
-
     public void LoadMesh(PreviewMeshData meshData, bool resetCamera = false)
     {
         _meshDirty = true;
