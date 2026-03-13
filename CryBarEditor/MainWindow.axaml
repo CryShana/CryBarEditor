@@ -272,10 +272,11 @@
 									<MenuItem Header="Export"
 										Icon="{micons:MaterialIconExt Kind=Export}"
 										Click="BankItem_Export" />
-									<Separator/>
+									<Separator IsVisible="{Binding #mainWindow.((ce:MainWindow)DataContext).CanExportAllSounds}"/>
 									<MenuItem Header="Export All Sounds (via soundset)"
 										Icon="{micons:MaterialIconExt Kind=MusicBoxMultiple}"
-										Click="BankItem_ExportAllSounds" />
+										Click="BankItem_ExportAllSounds"
+										IsVisible="{Binding #mainWindow.((ce:MainWindow)DataContext).CanExportAllSounds}" />
 								</ContextMenu>
 							</ListBox.ContextMenu>
 						</ListBox>

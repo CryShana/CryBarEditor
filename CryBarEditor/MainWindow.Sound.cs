@@ -19,6 +19,13 @@ public partial class MainWindow
     Dictionary<string, SoundManifestEntry>? _cachedSoundManifest;
 
     /// <summary>
+    /// Whether the currently selected FMOD event has multiple sounds resolvable via soundset.
+    /// </summary>
+    public bool CanExportAllSounds => _lastSoundsetResolution is { Soundset.Sounds.Count: > 1 };
+
+    SoundsetResolution? _lastSoundsetResolution;
+
+    /// <summary>
     /// Cache of parsed soundset definition files, keyed by source file identifier.
     /// </summary>
     readonly Dictionary<string, List<SoundsetDefinition>> _cachedSoundsetFiles = new(StringComparer.OrdinalIgnoreCase);
@@ -232,11 +239,17 @@ public partial class MainWindow
     string BuildSoundsetPreviewText(FMODEvent fmodEvent)
     {
         if (_fileIndex == null)
+        {
+            _lastSoundsetResolution = null;
+            OnPropertyChanged(nameof(CanExportAllSounds));
             return "\nContained Sounds:\n  (file index not available — load a root directory first)";
+        }
 
         try
         {
             var resolution = ResolveFmodEventSounds(fmodEvent);
+            _lastSoundsetResolution = resolution;
+            OnPropertyChanged(nameof(CanExportAllSounds));
             if (resolution == null)
             {
                 var eventName = SoundsetParser.ExtractEventName(fmodEvent.Path);
