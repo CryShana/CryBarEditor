@@ -80,9 +80,13 @@ If you are writing XS scripts, you can also checkout my personal reference I wro
 ### Real-time status if file is overriden (in export directory)
 ![CryBarEditor_6](https://assets.cryshana.me/HEMu7Ojws84P.png)
 ### Reading FMOD banks
-![CryBarEditor_7](https://assets.cryshana.me/NgsOV5c6VEm8.avif);
+![CryBarEditor_7](https://cryshana.me/f/FS3uvBisZEtL.avif)
 ### Searching through all files (new searching experience)
-![CryBarEditor_8](https://assets.cryshana.me/zFzSNeCHF0YM.avif);
+![CryBarEditor_8](https://assets.cryshana.me/zFzSNeCHF0YM.avif)
+### 3D Preview of TMM models
+![CryBarEditor_9](https://assets.cryshana.me/LEhijgdvkF2M.avif)
+### Advanced export
+![CryBarEditor_10](https://assets.cryshana.me/9vougwHtzSd9.avif)
 
 ## Thanks
 I wish to thank the developers of AoE3 Resource Manager, their code helped me with decoding of XMB and DDT files.

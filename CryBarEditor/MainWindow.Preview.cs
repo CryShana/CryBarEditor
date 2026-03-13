@@ -65,6 +65,8 @@ public partial class MainWindow
         if (e == null || _fmodBank == null)
             return;
 
+        HideTmmPreview();
+
         PreviewedFileName = $"FMOD event: \"${e.Path}\"";
         PreviewedFileNote = "";
         PreviewedFileData = $"Length: {e.LengthMs}ms";
