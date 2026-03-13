@@ -159,7 +159,7 @@ public class IntegrationTests
         var raw1 = entry.ReadDataRaw(stream);
         var raw2 = entry.ReadDataRaw(stream);
 
-        // Copy should be deterministic — same data each time
+        // Copy should be deterministic - same data each time
         Assert.Equal(raw1, raw2);
         Assert.Equal(entry.SizeInArchive, raw1.Length);
     }
@@ -837,7 +837,7 @@ public class IntegrationTests
             Assert.Equal(16, bone.InverseBindPose.Length);
         }
 
-        // Track and controller parsing is best-effort — keyframe data size formulas are not
+        // Track and controller parsing is best-effort - keyframe data size formulas are not
         // fully verified against all real files (Raw + Quat64 encoding size may be incorrect).
         if (tma.Tracks != null)
         {

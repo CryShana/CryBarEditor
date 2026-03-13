@@ -114,11 +114,11 @@ public partial class AdvancedExportWindow : SimpleWindow
 
         // Build recommendation
         if (convertibleCount > 0 && convertibleCount == files.Count)
-            Recommendation = "All selected files are convertible — 'Convert' is recommended.";
+            Recommendation = "All selected files are convertible - 'Convert' is recommended.";
         else if (convertibleCount > 0)
             Recommendation = $"{convertibleCount} file(s) can be converted. Use 'Copy + Convert' to get both versions.";
         else
-            Recommendation = "No convertible files in selection — 'Copy' is the best option.";
+            Recommendation = "No convertible files in selection - 'Copy' is the best option.";
 
         // Set sensible defaults (by default only one is selected)
         DoConvert = convertibleCount > 0;

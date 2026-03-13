@@ -13,6 +13,7 @@ The purpose of this tool is to enable fast and easy modding of Age of Mythology 
 ### Highlights
 - **Read BAR archives**
 - **Read FMOD banks** (play, view and export FMOD events)
+- **Preview 3D TMM models** (export to OBJ or glTF with or without materials)
 - Pick a **Root directory** (usually `\games` folder) for fast switching between BAR and other files
 - Pick an **Export root directory** for fast exporting either from BAR or from Root directory
 - Supports following formats:
@@ -32,6 +33,7 @@ The purpose of this tool is to enable fast and easy modding of Age of Mythology 
   - Convert XMB -> XML
   - Convert DDT -> TGA
   - Convert TMM -> OBJ (optionally with materials)
+  - Convert TMM -> glTF (optionally with materials)
   - Convert image -> DDT
   - Compress with Alz4/L33t
   - Decompress file with Alz4/L33t

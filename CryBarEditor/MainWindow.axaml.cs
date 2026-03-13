@@ -27,11 +27,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
-using Ab4d.SharpEngine;
-using Ab4d.SharpEngine.AvaloniaUI;
-using Ab4d.SharpEngine.Cameras;
-using Ab4d.SharpEngine.Common;
-using Ab4d.SharpEngine.glTF;
+using CryBarEditor.Controls;
 using TextMateSharp.Grammars;
 using Configuration = CryBarEditor.Classes.Configuration;
 
@@ -69,12 +65,10 @@ public partial class MainWindow : SimpleWindow
     readonly FileWatcherHelper _exportWatcher = new();
 
     // 3D preview
-    SharpEngineSceneView? _sceneView;
-    PointerCameraController? _pointerCameraController;
-    SkiaSharpBitmapIO? _bitmapIO;
-    readonly GlbPreviewCache _glbCache = new(maxItems: 10);
+    GlPreviewControl? _glPreview;
+    readonly PreviewMeshCache _meshCache = new(maxItems: 10);
     int _tmmSelectedTabIndex = 0;
-    CancellationTokenSource? _glbConversionCts;
+    CancellationTokenSource? _meshConversionCts;
 
     /// <summary>
     /// This is used to find relative path for Root directory files
@@ -987,7 +981,7 @@ public partial class MainWindow : SimpleWindow
                     return;
                 }
 
-                PreviewedFileNote = $"TMM v{tmm.Version} — {tmm.NumBones} bones, {tmm.NumMaterials} mats";
+                PreviewedFileNote = $"TMM v{tmm.Version} - {tmm.NumBones} bones, {tmm.NumMaterials} mats";
                 ShowTmmPreview(tmm.GetSummary(relative_path));
 
                 var tmmFileName = Path.GetFileName(relative_path);
@@ -1005,7 +999,7 @@ public partial class MainWindow : SimpleWindow
 
                 ext = ".txt";
                 text = tma.GetSummary();
-                PreviewedFileNote = $"TMA v{tma.Version} — {tma.NumBones} bones, {tma.NumTracks} tracks";
+                PreviewedFileNote = $"TMA v{tma.Version} - {tma.NumBones} bones, {tma.NumTracks} tracks";
             }
             else if (relative_path.EndsWith(".tmm.data", StringComparison.OrdinalIgnoreCase))
             {
@@ -1216,7 +1210,7 @@ public partial class MainWindow : SimpleWindow
                         }
                     }
 
-                    // Conversion didn't apply or failed — write decompressed data
+                    // Conversion didn't apply or failed - write decompressed data
                     file.Write(data.Span);
                 }
                 else
@@ -1535,7 +1529,7 @@ public partial class MainWindow : SimpleWindow
             _tmmSelectedTabIndex = _tmmTabControl.SelectedIndex;
         _tmmTabControl.IsVisible = false;
         _flatPreview.IsVisible = true;
-        _glbConversionCts?.Cancel();
+        _meshConversionCts?.Cancel();
     }
 
     void Update3DStatus(string text)
@@ -1545,93 +1539,48 @@ public partial class MainWindow : SimpleWindow
 
     async Task LoadTmm3DPreview(string tmmFileName, Memory<byte> tmmData, CancellationToken token)
     {
-        var oldCts = _glbConversionCts;
-        _glbConversionCts = CancellationTokenSource.CreateLinkedTokenSource(token);
-        var ct = _glbConversionCts.Token;
+        var oldCts = _meshConversionCts;
+        _meshConversionCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var ct = _meshConversionCts.Token;
         oldCts?.Cancel();
         oldCts?.Dispose();
 
         Update3DStatus("Loading...");
 
-        if (!_glbCache.TryGet(tmmFileName, out var glbBytes))
+        if (!_meshCache.TryGet(tmmFileName, out var meshData))
         {
             var companionData = ResolveCompanionData(tmmFileName + ".data");
             if (companionData == null) { Update3DStatus("No .tmm.data found"); return; }
             if (ct.IsCancellationRequested) return;
 
-            var materials = await BuildGlbMaterials(tmmFileName);
+            meshData = await Task.Run(() =>
+                MeshDataBuilder.BuildFromTmm(tmmData, companionData.Value), ct);
+
+            if (meshData == null) { Update3DStatus("Conversion failed"); return; }
             if (ct.IsCancellationRequested) return;
 
-            glbBytes = await Task.Run(() =>
-                materials != null
-                    ? ConversionHelper.ConvertTmmToGlbBytes(tmmData, companionData.Value, materials)
-                    : ConversionHelper.ConvertTmmToGlbBytes(tmmData, companionData.Value),
-                ct);
-
-            if (glbBytes == null) { Update3DStatus("Conversion failed"); return; }
-            if (ct.IsCancellationRequested) return;
-
-            _glbCache.Add(tmmFileName, glbBytes);
+            _meshCache.Add(tmmFileName, meshData);
         }
 
         if (ct.IsCancellationRequested) return;
 
-        LoadGlbIntoScene(glbBytes!);
+        LoadMeshIntoScene(meshData!);
     }
 
-    void EnsureSceneViewInitialized()
+    void EnsureGlPreviewInitialized()
     {
-        if (_sceneView != null) return;
-
-        _sceneView = new SharpEngineSceneView();
-
-        var camera = new TargetPositionCamera("PreviewCamera")
-        {
-            Heading = -30,
-            Attitude = -20,
-            Distance = 5
-        };
-        _sceneView.SceneView.Camera = camera;
-        _sceneView.SceneView.BackgroundColor = new Color4(0.04f, 0.04f, 0.04f, 1f);
-
-        _3dViewContainer.Child = _sceneView;
-
-        _pointerCameraController = new PointerCameraController(_sceneView, _sceneView);
+        if (_glPreview != null) return;
+        _glPreview = new GlPreviewControl();
+        _3dViewContainer.Child = _glPreview;
     }
 
-    void LoadGlbIntoScene(byte[] glbBytes)
+    void LoadMeshIntoScene(PreviewMeshData meshData)
     {
         try
         {
-            EnsureSceneViewInitialized();
-
-            if (_sceneView!.GpuDevice == null)
-            {
-                _sceneView.Initialize();
-                if (_sceneView.GpuDevice == null)
-                {
-                    Update3DStatus("Vulkan not available");
-                    return;
-                }
-            }
-
-            _sceneView.Scene.RootNode.DisposeAllChildren(true, true, true, true);
-
-            _bitmapIO ??= new SkiaSharpBitmapIO();
-            var importer = new glTFImporter(_bitmapIO, _sceneView.GpuDevice);
-            using var stream = new MemoryStream(glbBytes);
-            var model = importer.Import(stream, _ => null!);
-
-            if (model != null)
-            {
-                _sceneView.Scene.RootNode.Add(model);
-                FitCameraToScene();
-                Update3DStatus("");
-            }
-            else
-            {
-                Update3DStatus("Import failed");
-            }
+            EnsureGlPreviewInitialized();
+            _glPreview!.LoadMesh(meshData);
+            Update3DStatus("");
         }
         catch (Exception ex)
         {
@@ -1639,11 +1588,7 @@ public partial class MainWindow : SimpleWindow
         }
     }
 
-    void FitCameraToScene()
-    {
-        if (_sceneView?.SceneView.Camera is TargetPositionCamera cam)
-            cam.FitIntoView(FitIntoViewType.CheckBounds, true, 1.1f, true);
-    }
+    void FitCameraToScene() => _glPreview?.ResetCamera();
 
     void ResetCamera_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
@@ -2655,11 +2600,10 @@ public partial class MainWindow : SimpleWindow
 
     protected override void OnClosing(WindowClosingEventArgs e)
     {
-        _glbConversionCts?.Cancel();
-        _glbConversionCts?.Dispose();
-        _sceneView?.Dispose();
-        _sceneView = null;
-        _glbCache.Clear();
+        _meshConversionCts?.Cancel();
+        _meshConversionCts?.Dispose();
+        _glPreview = null;
+        _meshCache.Clear();
         base.OnClosing(e);
     }
 }

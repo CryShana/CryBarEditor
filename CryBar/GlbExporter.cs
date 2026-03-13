@@ -285,15 +285,15 @@ public static class GlbExporter
         }
     }
 
-    static void WriteTexCoords(byte[] buf, int offset, TmmVertex[] vertices)
+    static void WriteTexCoords(byte[] buf, int offset, TmmVertex[] vertices, bool flipV = false)
     {
         for (int i = 0; i < vertices.Length; i++)
         {
             var v = vertices[i];
             float u = (float)v.U;
-            float vFlipped = 1.0f - (float)v.V;
+            float vCoord = flipV ? 1.0f - (float)v.V : (float)v.V;
             BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), u); offset += 4;
-            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), vFlipped); offset += 4;
+            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), vCoord); offset += 4;
         }
     }
 

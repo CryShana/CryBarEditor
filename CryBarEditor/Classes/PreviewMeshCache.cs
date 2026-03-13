@@ -4,23 +4,23 @@ using System.Collections.Generic;
 namespace CryBarEditor.Classes;
 
 /// <summary>
-/// Thread-safe LRU cache for GLB byte arrays, keyed by TMM file name (case-insensitive).
+/// Thread-safe LRU cache for PreviewMeshData, keyed by TMM file name (case-insensitive).
 /// </summary>
-public class GlbPreviewCache
+public class PreviewMeshCache
 {
     readonly int _maxItems;
-    readonly Dictionary<string, LinkedListNode<(string Key, byte[] Data)>> _map;
-    readonly LinkedList<(string Key, byte[] Data)> _list = new();
+    readonly Dictionary<string, LinkedListNode<(string Key, PreviewMeshData Data)>> _map;
+    readonly LinkedList<(string Key, PreviewMeshData Data)> _list = new();
     readonly object _lock = new();
 
-    public GlbPreviewCache(int maxItems = 10)
+    public PreviewMeshCache(int maxItems = 10)
     {
         _maxItems = maxItems;
-        _map = new Dictionary<string, LinkedListNode<(string Key, byte[] Data)>>(
+        _map = new Dictionary<string, LinkedListNode<(string Key, PreviewMeshData Data)>>(
             maxItems, StringComparer.OrdinalIgnoreCase);
     }
 
-    public bool TryGet(string key, out byte[]? data)
+    public bool TryGet(string key, out PreviewMeshData? data)
     {
         lock (_lock)
         {
@@ -36,7 +36,7 @@ public class GlbPreviewCache
         }
     }
 
-    public void Add(string key, byte[] data)
+    public void Add(string key, PreviewMeshData data)
     {
         lock (_lock)
         {

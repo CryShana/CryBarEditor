@@ -39,7 +39,7 @@ public class TmaFile
     /// <summary>Total frame count in the animation.</summary>
     public uint FrameCount { get; private set; }
 
-    /// <summary>Animation duration (seconds or ticks — unit depends on game context).</summary>
+    /// <summary>Animation duration (seconds or ticks - depends on context).</summary>
     public float Duration { get; private set; }
 
     /// <summary>Root bone bounding-box min (x,y,z,w).</summary>
@@ -108,7 +108,7 @@ public class TmaFile
         if (!TryReadFloat(data, ref offset, out var duration)) return false;
         Duration = duration;
 
-        // Basic header is valid — mark parsed so callers get version/track/frame/duration info
+        // Basic header is valid - mark parsed so callers get version/track/frame/duration info
         // even if the body layout differs from the documented v12 format.
         Parsed = true;
 
@@ -145,7 +145,7 @@ public class TmaFile
             if (!TryReadUTF16String(data, ref offset, out var boneName)) return false;
             if (!TryReadInt32(data, ref offset, out var parentId)) return false;
 
-            // local transform, bind pose, inverse bind pose — each 4×4 = 64 bytes = 16 floats
+            // local transform, bind pose, inverse bind pose - each 4×4 = 64 bytes = 16 floats
             if (offset + 192 > data.Length) return false;
             var localTransform  = ReadFloats(data, ref offset, 16);
             var bindPose        = ReadFloats(data, ref offset, 16);
@@ -164,7 +164,7 @@ public class TmaFile
 
         // ── Animation Tracks ────────────────────────────────────────────────
         // NOTE: Track keyframe data skipping is not fully verified against real game files.
-        // The data size formulas (TranslationDataBytes/RotationDataBytes) may be incorrect —
+        // The data size formulas (TranslationDataBytes/RotationDataBytes) may be incorrect -
         // testing shows misalignment after track 1 in some files, suggesting that
         // Raw encoding may include frame-index arrays or other prefix data not in the docs.
         // Bones are parsed correctly; track/controller/error sections may silently fail.

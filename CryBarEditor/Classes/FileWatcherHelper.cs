@@ -4,7 +4,7 @@ using System.IO;
 namespace CryBarEditor.Classes;
 
 /// <summary>
-/// Manages FileSystemWatcher lifecycle — setup, event binding, and disposal.
+/// Manages FileSystemWatcher lifecycle - setup, event binding, and disposal.
 /// </summary>
 public class FileWatcherHelper : IDisposable
 {

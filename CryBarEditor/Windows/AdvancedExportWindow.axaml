@@ -32,7 +32,7 @@
 					IsVisible="{Binding !IsDirectExport}">
 				<StackPanel Orientation="Horizontal">
 					<micons:MaterialIcon Kind="FolderOutline" Width="18" Height="18" Margin="0,0,6,0" Foreground="#78f542" VerticalAlignment="Center" />
-					<TextBlock Text="Exporting to output directory — relative paths preserved"
+					<TextBlock Text="Exporting to output directory - relative paths preserved"
 							   VerticalAlignment="Center" Foreground="#a0d8a0" />
 				</StackPanel>
 			</Border>
@@ -42,7 +42,7 @@
 				<StackPanel>
 					<StackPanel Orientation="Horizontal">
 						<micons:MaterialIcon Kind="FileExportOutline" Width="18" Height="18" Margin="0,0,6,0" Foreground="#edc042" VerticalAlignment="Center" />
-						<TextBlock Text="Direct export — files placed directly, no folder structure"
+						<TextBlock Text="Direct export - files placed directly, no folder structure"
 								   VerticalAlignment="Center" Foreground="#e0d8a0" />
 					</StackPanel>
 					<TextBlock Text="{Binding DirectExportPath}" Foreground="Gray" Margin="24,4,0,0"
@@ -56,14 +56,14 @@
 			<CheckBox DockPanel.Dock="Top" IsChecked="{Binding DoCopy}" Margin="0,0,0,2">
 				<StackPanel Orientation="Horizontal">
 					<TextBlock Text="Copy (raw file)" VerticalAlignment="Center" />
-					<TextBlock Text=" — exports as-is from source" Foreground="Gray" VerticalAlignment="Center" />
+					<TextBlock Text=" - exports as-is from source" Foreground="Gray" VerticalAlignment="Center" />
 				</StackPanel>
 			</CheckBox>
 
 			<CheckBox DockPanel.Dock="Top" IsChecked="{Binding DoConvert}" Margin="0,0,0,2">
 				<StackPanel Orientation="Horizontal">
 					<TextBlock Text="Convert" VerticalAlignment="Center" />
-					<TextBlock Text=" — XMB→XML, DDT→TGA, TMM→OBJ" Foreground="Gray" VerticalAlignment="Center" />
+					<TextBlock Text=" - XMB→XML, DDT→TGA, TMM→OBJ" Foreground="Gray" VerticalAlignment="Center" />
 				</StackPanel>
 			</CheckBox>
 
@@ -72,7 +72,7 @@
 					  IsVisible="{Binding ShowExportMaterialsOption}">
 				<StackPanel Orientation="Horizontal">
 					<TextBlock Text="Export TMM materials" VerticalAlignment="Center" />
-					<TextBlock Text=" — extracts .mtl and textures alongside .obj" Foreground="Gray" VerticalAlignment="Center" />
+					<TextBlock Text=" - extracts textures alongside model" Foreground="Gray" VerticalAlignment="Center" />
 				</StackPanel>
 			</CheckBox>
 
@@ -81,7 +81,7 @@
 					  IsVisible="{Binding ShowTmmToGltfOption}">
 				<StackPanel>
 					<TextBlock Text="TMM &#x2192; glTF instead of OBJ" VerticalAlignment="Center" />
-					<TextBlock Text="Single .glb file with PBR materials, tangents, and skeleton data"
+					<TextBlock Text="Single .glb file with materials, tangents, skeleton data"
 							   Foreground="Gray" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
 				</StackPanel>
 			</CheckBox>

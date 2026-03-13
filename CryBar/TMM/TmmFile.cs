@@ -339,7 +339,7 @@ public class TmmFile
         }
         sb.AppendLine();
 
-        // Materials — each name is a relative path (without extension) to a .material XML file
+        // Materials - relative paths without extension - to a .material XML file
         sb.AppendLine($"Materials ({materials.Length}):");
         foreach (var mat in materials)
             sb.AppendLine($"  {mat}.material");
