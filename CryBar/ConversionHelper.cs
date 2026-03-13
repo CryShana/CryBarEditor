@@ -1,6 +1,7 @@
 using CryBar.TMM;
 
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Formats.Tga;
 using SixLabors.ImageSharp.PixelFormats;
 
@@ -48,7 +49,10 @@ public static class ConversionHelper
         using var image = await BarFormatConverter.ParseDDT(ddt, token: token);
         if (image == null) return null;
         using var memory = new MemoryStream();
-        await image.SaveAsPngAsync(memory, token);
+        await image.SaveAsPngAsync(memory, new PngEncoder
+        {
+            CompressionLevel = PngCompressionLevel.BestSpeed
+        }, token);
         return memory.ToArray();
     }
 

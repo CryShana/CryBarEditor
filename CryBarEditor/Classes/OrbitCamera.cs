@@ -23,6 +23,13 @@ public class OrbitCamera
         return Matrix4x4.CreateLookAt(eye, target, Vector3.UnitY);
     }
 
+    public Matrix4x4 GetViewMatrix(out Vector3 eyePosition)
+    {
+        eyePosition = GetEyePosition();
+        var target = new Vector3(TargetX, TargetY, TargetZ);
+        return Matrix4x4.CreateLookAt(eyePosition, target, Vector3.UnitY);
+    }
+
     public Matrix4x4 GetProjectionMatrix(float aspectRatio)
     {
         float fovRad = Fov * MathF.PI / 180f;
@@ -74,6 +81,6 @@ public class OrbitCamera
         float fovRad = Fov * System.MathF.PI / 180f;
         Distance = radius > 0 ? radius / System.MathF.Sin(fovRad / 2f) * 1.1f : 5f;
         Azimuth = -30f;
-        Elevation = -20f;
+        Elevation = 20f;
     }
 }

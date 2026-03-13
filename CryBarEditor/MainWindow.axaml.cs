@@ -1286,15 +1286,31 @@ public partial class MainWindow : SimpleWindow
         var resolved = await ResolveTmmMaterials(tmmFileName);
         if (resolved == null) return null;
 
+        // Launch all texture conversions in parallel
+        var textureTasks = new Dictionary<string, Task<byte[]?>>();
+        foreach (var mat in resolved.Value.Materials)
+        {
+            foreach (var (_, texPath) in mat.Textures)
+            {
+                if (!textureTasks.ContainsKey(texPath) &&
+                    resolved.Value.Textures.TryGetValue(texPath, out var texInfo))
+                {
+                    textureTasks[texPath] = ConversionHelper.ConvertDdtToPngBytes(texInfo.DdtData);
+                }
+            }
+        }
+        await Task.WhenAll(textureTasks.Values);
+
+        // Build material list using completed results
         var matList = new List<GlbExporter.GlbMaterial>();
         foreach (var mat in resolved.Value.Materials)
         {
             byte[]? baseColorPng = null, normalPng = null;
             foreach (var (texName, texPath) in mat.Textures)
             {
-                if (resolved.Value.Textures.TryGetValue(texPath, out var texInfo))
+                if (textureTasks.TryGetValue(texPath, out var task))
                 {
-                    var pngBytes = await ConversionHelper.ConvertDdtToPngBytes(texInfo.DdtData);
+                    var pngBytes = task.Result;
                     if (pngBytes != null)
                     {
                         switch (texName.ToLowerInvariant())
@@ -1327,11 +1343,17 @@ public partial class MainWindow : SimpleWindow
             if (resolved == null) return;
 
             var exportDir = Path.GetDirectoryName(exportedObjPath)!;
-            var resolvedTextures = new Dictionary<string, string>();
 
-            foreach (var (texPath, (texFileName, ddtData)) in resolved.Value.Textures)
+            // Launch all texture conversions in parallel
+            var textureTasks = resolved.Value.Textures.ToDictionary(
+                kvp => kvp.Key,
+                kvp => ConversionHelper.ConvertDdtToTgaBytes(kvp.Value.DdtData));
+            await Task.WhenAll(textureTasks.Values);
+
+            var resolvedTextures = new Dictionary<string, string>();
+            foreach (var (texPath, (texFileName, _)) in resolved.Value.Textures)
             {
-                var texTgaBytes = await ConversionHelper.ConvertDdtToTgaBytes(ddtData);
+                var texTgaBytes = textureTasks[texPath].Result;
                 if (texTgaBytes != null)
                 {
                     var tgaFileName = texFileName + ".tga";
@@ -2299,29 +2321,31 @@ public partial class MainWindow : SimpleWindow
     }
 
     async void MenuItem_ConvertDDTtoTGA(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        => await ConvertDdtToFormat(sender, "TGA", ".tga", d => ConversionHelper.ConvertDdtToTgaBytes(d));
+
+    async void MenuItem_ConvertDDTtoPNG(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        => await ConvertDdtToFormat(sender, "PNG", ".png", d => ConversionHelper.ConvertDdtToPngBytes(d));
+
+    async Task ConvertDdtToFormat(object? sender, string formatName, string extension,
+        Func<ReadOnlyMemory<byte>, Task<byte[]?>> converter)
     {
-        var file = await PickFile(sender, "Convert DDT to TGA", [new("DDT Image") { Patterns = ["*.ddt"] }]);
+        var file = await PickFile(sender, $"Convert DDT to {formatName}", [new("DDT Image") { Patterns = ["*.ddt"] }]);
         if (file == null) return;
 
-        var ext = Path.GetExtension(file).ToLower();
-
-        var out_file = PickOutFile(file, new_extension: ".tga", overwrite: true);
+        var out_file = PickOutFile(file, new_extension: extension, overwrite: true);
         try
         {
             var ddt_data = BarCompression.EnsureDecompressed(File.ReadAllBytes(file), out _);
-            var tgaBytes = await ConversionHelper.ConvertDdtToTgaBytes(ddt_data);
-            if (tgaBytes == null) throw new InvalidDataException("Failed to convert DDT file");
+            var convertedBytes = await converter(ddt_data);
+            if (convertedBytes == null) throw new InvalidDataException("Failed to convert DDT file");
 
-            using (var stream = File.Create(out_file))
-            {
-                stream.Write(tgaBytes);
-            }
+            File.WriteAllBytes(out_file, convertedBytes);
 
             _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file));
         }
         catch (Exception ex)
         {
-            _ = ShowError("Failed to convert to TGA:\n" + ex.Message);
+            _ = ShowError($"Failed to convert to {formatName}:\n" + ex.Message);
         }
     }
 

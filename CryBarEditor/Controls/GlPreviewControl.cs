@@ -4,13 +4,17 @@ using Avalonia;
 using Avalonia.Input;
 using Avalonia.OpenGL;
 using Avalonia.OpenGL.Controls;
+using Avalonia.Rendering;
 using CryBarEditor.Classes;
 using static Avalonia.OpenGL.GlConsts;
 
 namespace CryBarEditor.Controls;
 
-public class GlPreviewControl : OpenGlControlBase
+public class GlPreviewControl : OpenGlControlBase, ICustomHitTest
 {
+    // OpenGlControlBase has no background, so implement ICustomHitTest for pointer events
+    bool ICustomHitTest.HitTest(Point point) => true;
+
     readonly OrbitCamera _camera = new();
     PreviewMeshData? _meshData;
     bool _meshDirty;
@@ -18,7 +22,7 @@ public class GlPreviewControl : OpenGlControlBase
     // GL resources
     int _program;
     int _vao, _vbo, _ebo;
-    int _uMvp, _uNormalMatrix, _uLightDir, _uColor;
+    int _uMvp, _uLightDir, _uColor;
     bool _glInitialized;
 
     // Function pointer for glUniform3f (not exposed by Avalonia's GlInterface)
@@ -34,11 +38,10 @@ public class GlPreviewControl : OpenGlControlBase
         layout(location = 1) in vec3 aNormal;
         layout(location = 2) in vec2 aUv;
         uniform mat4 uMVP;
-        uniform mat4 uNormalMatrix;
         out vec3 vNormal;
         void main() {
             gl_Position = uMVP * vec4(aPos, 1.0);
-            vNormal = normalize(mat3(uNormalMatrix) * aNormal);
+            vNormal = normalize(aNormal);
         }
         """;
 
@@ -49,10 +52,16 @@ public class GlPreviewControl : OpenGlControlBase
         out vec4 FragColor;
         void main() {
             float diff = max(dot(normalize(vNormal), uLightDir), 0.0);
-            vec3 col = uColor * (0.15 + 0.85 * diff);
+            vec3 col = uColor * (0.25 + 0.75 * diff);
             FragColor = vec4(col, 1.0);
         }
         """;
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        RequestNextFrameRendering();
+    }
 
     public void LoadMesh(PreviewMeshData meshData)
     {
@@ -87,7 +96,6 @@ public class GlPreviewControl : OpenGlControlBase
 
         _program = CreateProgram(gl, vsPreamble + VertexShaderBody, fsPreamble + FragmentShaderBody);
         _uMvp = gl.GetUniformLocationString(_program, "uMVP");
-        _uNormalMatrix = gl.GetUniformLocationString(_program, "uNormalMatrix");
         _uLightDir = gl.GetUniformLocationString(_program, "uLightDir");
         _uColor = gl.GetUniformLocationString(_program, "uColor");
 
@@ -169,16 +177,11 @@ public class GlPreviewControl : OpenGlControlBase
 
         gl.UseProgram(_program);
 
-        // Compute matrices
+        // Compute matrices (GetViewMatrix returns eye position to avoid recomputing for light)
         float aspect = (float)w / h;
-        var view = _camera.GetViewMatrix();
+        var view = _camera.GetViewMatrix(out var eye);
         var proj = _camera.GetProjectionMatrix(aspect);
         var mvp = view * proj;
-
-        // Normal matrix = inverse-transpose of view.
-        // Transpose(Inverse(view)) for row-major, then Transpose again for column-major upload.
-        // Net result: upload Inverse(view) directly (the two transposes cancel).
-        Matrix4x4.Invert(view, out var viewInv);
 
         // System.Numerics is row-major, row-vector: v' = v * MVP
         // GLSL is column-major, column-vector: v' = MVP * v
@@ -186,14 +189,12 @@ public class GlPreviewControl : OpenGlControlBase
         // columns, which is the exact transpose needed for the convention switch.
         gl.UniformMatrix4fv(_uMvp, 1, false, &mvp.M11);
 
-        // Normal matrix = inverse-transpose(view). By the same row→column reinterpretation,
-        // passing inverse(view) raw gives GLSL the inverse-transpose.
-        gl.UniformMatrix4fv(_uNormalMatrix, 1, false, &viewInv.M11);
-
-        // Light direction (normalized, world space) - top-right-front
+        // Light direction follows camera so the visible side is always well-lit
         if (_glUniform3f != null)
         {
-            _glUniform3f(_uLightDir, 0.3f, 0.8f, 0.5f);
+            var target = new Vector3(_camera.TargetX, _camera.TargetY, _camera.TargetZ);
+            var lightDir = Vector3.Normalize(eye - target);
+            _glUniform3f(_uLightDir, lightDir.X, lightDir.Y, lightDir.Z);
             _glUniform3f(_uColor, 0.75f, 0.75f, 0.75f);
         }
 
