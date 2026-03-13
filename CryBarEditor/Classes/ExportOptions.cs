@@ -37,6 +37,12 @@ public class ExportOptions
     /// <summary>Whether any file in the selection is convertible (XMB/DDT)</summary>
     public bool AnyConvertible { get; set; }
 
+    /// <summary>Open exported files in the configured editor after export</summary>
+    public bool OpenInEditor { get; set; }
+
+    /// <summary>Override the base name (without extension) of the output file (single-file export only)</summary>
+    public string? OverrideBaseName { get; set; }
+
     /// <summary>Whether the user confirmed (OK) or cancelled the dialog</summary>
     public bool Confirmed { get; set; }
 }

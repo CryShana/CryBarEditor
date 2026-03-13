@@ -38,6 +38,9 @@ public partial class MainWindow : SimpleWindow
     public bool _searchCaseSensitive = true;
     public bool _searchRegex = false;
 
+    // EDITOR SETTINGS
+    string _editorCommand = "";
+
     FMODBank? _fmodBank = null;
     BarFile? _barFile = null;
     FileStream? _barStream = null;
@@ -134,6 +137,19 @@ public partial class MainWindow : SimpleWindow
         Path.GetExtension(SelectedBarEntry?.RelativePath ?? "").ToLower() == ".ddt";
     public bool SelectedCanHaveAdditiveMod
         => AdditiveModding.IsSupportedFor(SelectedBarEntry?.RelativePath ?? SelectedRootFileEntry?.RelativePath, out _) && CanExport;
+
+    public bool CanOpenInEditor
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(_editorCommand) || !CanExport)
+                return false;
+
+            var relPath = SelectedBarEntry != null ? GetBARFullRelativePath(SelectedBarEntry)
+                : SelectedRootFileEntry != null ? GetRootFullRelativePath(SelectedRootFileEntry) : null;
+            return relPath != null && IsFileOverriden(relPath);
+        }
+    }
     public int ContextSelectedItemsCount { get => _contextSelectedItemsCount; set { _contextSelectedItemsCount = value; OnSelfChanged(); } }
 
     public RootFileEntry? SelectedRootFileEntry
@@ -193,6 +209,7 @@ public partial class MainWindow : SimpleWindow
         OnPropertyChanged(nameof(SelectedIsDDT));
         OnPropertyChanged(nameof(CanExportAndIsDDT));
         OnPropertyChanged(nameof(SelectedCanHaveAdditiveMod));
+        OnPropertyChanged(nameof(CanOpenInEditor));
     }
     #endregion
 
@@ -366,25 +383,32 @@ public partial class MainWindow : SimpleWindow
     #region Helpers
     public bool IsImage(string extension) => extension is ".jpg" or ".jpeg" or ".png" or ".tga" or ".gif" or ".webp" or ".avif" or ".jpx" or ".bmp";
 
-    public bool IsFileOverriden(string relative_path_full)
+    /// <summary>
+    /// Resolves the actual file path for an exported file, handling XMB extension fallback.
+    /// Returns null if the file does not exist.
+    /// </summary>
+    public string? ResolveExportedFilePath(string relative_path_full)
     {
-        if (string.IsNullOrEmpty(relative_path_full))
-            return false;
-
-        if (!CanExport)
-            return false;
+        if (string.IsNullOrEmpty(relative_path_full) || !CanExport)
+            return null;
 
         var exported_path = Path.Combine(_exportRootDirectory, relative_path_full);
         if (File.Exists(exported_path))
-            return true;
+            return exported_path;
 
         // also check files that work without the XMB extension
-        if (exported_path.EndsWith(".xmb", StringComparison.OrdinalIgnoreCase) &&
-            File.Exists(exported_path[..^4]))
-            return true;
+        if (exported_path.EndsWith(".xmb", StringComparison.OrdinalIgnoreCase))
+        {
+            var trimmed = exported_path[..^4];
+            if (File.Exists(trimmed))
+                return trimmed;
+        }
 
-        return false;
+        return null;
     }
+
+    public bool IsFileOverriden(string relative_path_full)
+        => ResolveExportedFilePath(relative_path_full) != null;
 
     async Task<string?> PickFile(object? sender, string title, IReadOnlyList<FilePickerFileType>? filter = null, string? suggested_folder = null)
     {
@@ -494,6 +518,7 @@ public partial class MainWindow : SimpleWindow
             _searchExclusionFilter = config.SearchExclusionFilter ?? "";
             _searchCaseSensitive = config.SearchCaseSensitive ?? true;
             _searchRegex = config.SearchUseRegex ?? false;
+            _editorCommand = config.EditorCommand ?? "";
         }
         catch
         {
@@ -509,6 +534,7 @@ public partial class MainWindow : SimpleWindow
         _lastConfiguration.ExportDoDecompress = options.Decompress;
         _lastConfiguration.ExportDoExportMaterials = options.ExportMaterials;
         _lastConfiguration.ExportTmmToGltf = options.TmmToGltf;
+        _lastConfiguration.ExportOpenInEditor = options.OpenInEditor;
         SaveConfiguration();
     }
 
@@ -526,6 +552,7 @@ public partial class MainWindow : SimpleWindow
             _lastConfiguration.SearchExclusionFilter = _searchExclusionFilter;
             _lastConfiguration.SearchCaseSensitive = _searchCaseSensitive;
             _lastConfiguration.SearchUseRegex = _searchRegex;
+            _lastConfiguration.EditorCommand = _editorCommand;
 
             File.WriteAllText(config_path, JsonSerializer.Serialize(_lastConfiguration, CryBarJsonContext.Default.Configuration));
         }
@@ -554,6 +581,94 @@ public partial class MainWindow : SimpleWindow
     {
         var prompt = new Prompt(PromptType.Progress, title, progress_reporter: progress);
         await prompt.ShowDialog(this);
+    }
+    #endregion
+
+    #region Settings & Editor
+    async void MenuItem_Settings(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var window = new SettingsWindow(_editorCommand);
+        await window.ShowDialog(this);
+
+        if (window.Confirmed)
+        {
+            _editorCommand = window.EditorCommand;
+            SaveConfiguration();
+            OnPropertyChanged(nameof(CanOpenInEditor));
+        }
+    }
+
+    const string EDITOR_FILE_PLACEHOLDER = "{file}";
+
+    void LaunchEditorForFile(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(_editorCommand))
+            return;
+
+        var cmd = _editorCommand;
+        if (cmd.Contains(EDITOR_FILE_PLACEHOLDER))
+            cmd = cmd.Replace(EDITOR_FILE_PLACEHOLDER, filePath);
+        else
+            cmd = $"{cmd} \"{filePath}\"";
+
+        var psi = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "cmd.exe" : "/bin/sh",
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            psi.Arguments = $"/c {cmd}";
+        }
+        else
+        {
+            psi.Arguments = $"-c \"{cmd.Replace("\"", "\\\"")}\"";
+        }
+
+        System.Diagnostics.Process.Start(psi);
+    }
+
+    bool TryLaunchEditorForFile(string filePath)
+    {
+        try
+        {
+            LaunchEditorForFile(filePath);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _ = ShowError($"Failed to open editor: {ex.Message}");
+            return false;
+        }
+    }
+    #endregion
+
+    #region Directory path clicks
+    void RootDirectoryPath_Click(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+    {
+        if (Directory.Exists(_rootDirectory))
+            OpenDirectoryInExplorer(_rootDirectory);
+    }
+
+    void ExportDirectoryPath_Click(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+    {
+        if (Directory.Exists(_exportRootDirectory))
+            OpenDirectoryInExplorer(_exportRootDirectory);
+    }
+
+    static void OpenDirectoryInExplorer(string path)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = path,
+                UseShellExecute = true
+            });
+        }
+        catch { }
     }
     #endregion
 

@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -109,16 +108,10 @@ public partial class MainWindow
         var export_path = Path.Combine(_exportRootDirectory, relative_path_full);
         var export_dir = Path.GetDirectoryName(export_path);
         if (!string.IsNullOrEmpty(export_dir))
-            Directory.CreateDirectory(export_dir);
-
-        var process_info = new ProcessStartInfo
         {
-            UseShellExecute = true,
-            FileName = $"explorer.exe",
-            Arguments = $"\"{export_dir}\""
-        };
-
-        Process.Start(process_info);
+            Directory.CreateDirectory(export_dir);
+            OpenDirectoryInExplorer(export_dir);
+        }
     }
 
     CancellationTokenSource? bank_play_csc = null;
@@ -132,10 +125,24 @@ public partial class MainWindow
         _ = SelectedBankEntry.Play(bank_play_csc.Token);
     }
 
+    void MenuItem_OpenExportedInEditor(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var list = GetContextListBox(sender);
+        if (list == null) return;
+
+        var relPath = GetContextSelectedRelativePath(list);
+        if (relPath == null) return;
+
+        var exportPath = ResolveExportedFilePath(relPath);
+        if (exportPath != null)
+            TryLaunchEditorForFile(exportPath);
+    }
+
     void ContextMenu_Opened(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         var listbox = (ListBox)((ContextMenu)sender!).Parent!.Parent!;
         ContextSelectedItemsCount = listbox.SelectedItems!.Count;
+        OnPropertyChanged(nameof(CanOpenInEditor));
     }
     #endregion
 }

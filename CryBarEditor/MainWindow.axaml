@@ -74,6 +74,10 @@
 					IsVisible="{Binding CanExport}" Icon="{micons:MaterialIconExt Kind=OpenInNew}"
 					Click="MenuItem_ExportSelectedOpenDirectory" />
 
+			<MenuItem Header="Open exported in editor"
+					IsVisible="{Binding CanOpenInEditor}" Icon="{micons:MaterialIconExt Kind=FileEditOutline}"
+					Click="MenuItem_OpenExportedInEditor" />
+
 			<MenuItem Header="{Binding ContextSelectedItemsCount, StringFormat='Export {0} selected (copy)'}"
 					IsVisible="{Binding CanExport}" Icon="{micons:MaterialIconExt Kind=Export}"
 					Click="MenuItem_ExportSelectedRaw" />
@@ -132,6 +136,7 @@
 					<MenuItem Header="Make RM friendly" Click="MenuItem_XStoRM" />
 				</MenuItem>
 				<MenuItem Header="Search" Click="MenuItem_Search" />
+				<MenuItem Header="Settings" Click="MenuItem_Settings" />
 			</Menu>
 		</StackPanel>
 		<Border Padding="10">
@@ -150,7 +155,9 @@
 					<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
 						<Button Content="{micons:MaterialIconExt Kind=FolderArrowUpOutline}" Padding="4"
 								Click="LoadDir_Click" Margin="0,0,6,6" />
-						<Label DockPanel.Dock="Top" Content="{Binding RootDirectory}" Foreground="Gray" Margin="0,2,0,0"  />
+						<TextBlock DockPanel.Dock="Top" Text="{Binding RootDirectory}" Foreground="Gray" Margin="0,4,0,0"
+								   Cursor="Hand" PointerPressed="RootDirectoryPath_Click"
+								   TextTrimming="CharacterEllipsis" />
 					</DockPanel>
 
 					<TextBox DockPanel.Dock="Top" Text="{Binding FilesQuery, Mode=TwoWay}" Watermark="Filter files" />
@@ -290,7 +297,9 @@
 					<Label DockPanel.Dock="Top" Content="Export Root Directory" FontWeight="Bold" FontSize="16"/>
 					<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
 						<Button Content="{micons:MaterialIconExt Kind=FolderArrowDownOutline}" Padding="4" Click="SelectExportRootDir_Click" Margin="0,0,6,6"/>
-						<Label Content="{Binding ExportRootDirectory}" Foreground="Gray" Margin="0,2,0,0"  />
+						<TextBlock Text="{Binding ExportRootDirectory}" Foreground="Gray" Margin="0,4,0,0"
+								   Cursor="Hand" PointerPressed="ExportDirectoryPath_Click"
+								   TextTrimming="CharacterEllipsis" />
 					</DockPanel>
 					<TextBlock DockPanel.Dock="Top" Margin="0,10,0,0" FontSize="16">
 						<Run Text="Previewing: " FontWeight="Bold" />

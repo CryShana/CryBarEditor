@@ -17,6 +17,10 @@ public partial class AdvancedExportWindow : SimpleWindow
     bool _doDecompress;
     bool _doExportMaterials;
     bool _doTmmToGltf;
+    bool _openInEditor;
+    string _overrideName = "";
+    string _defaultOverrideName = "";
+    bool _overrideNameModified;
 
     readonly ExportOptions _result;
     readonly string _exportRootDirectory;
@@ -24,14 +28,37 @@ public partial class AdvancedExportWindow : SimpleWindow
     int _compressedNonConvertibleCount;
     int _compressedConvertibleCount;
     bool _hasTmmFiles;
+    bool _hasEditorCommand;
 
-    public bool DoCopy { get => _doCopy; set { _doCopy = value; OnSelfChanged(); OnPropertyChanged(nameof(CanExport)); } }
-    public bool DoConvert { get => _doConvert; set { _doConvert = value; OnSelfChanged(); OnPropertyChanged(nameof(CanExport)); OnPropertyChanged(nameof(ShowDecompressOption)); OnPropertyChanged(nameof(CompressedFileNote)); OnPropertyChanged(nameof(ShowExportMaterialsOption)); OnPropertyChanged(nameof(ShowTmmToGltfOption)); } }
+    // Single-file info for rename preview
+    string _singleFileSourceExt = "";
+    bool _singleFileIsConvertible;
+
+    public bool DoCopy { get => _doCopy; set { _doCopy = value; OnSelfChanged(); OnPropertyChanged(nameof(CanExport)); RefreshOverridePreview(); } }
+    public bool DoConvert { get => _doConvert; set { _doConvert = value; OnSelfChanged(); OnPropertyChanged(nameof(CanExport)); OnPropertyChanged(nameof(ShowDecompressOption)); OnPropertyChanged(nameof(CompressedFileNote)); OnPropertyChanged(nameof(ShowExportMaterialsOption)); OnPropertyChanged(nameof(ShowTmmToGltfOption)); RefreshOverridePreview(); } }
     public bool DoDecompress { get => _doDecompress; set { _doDecompress = value; OnSelfChanged(); } }
     public bool DoExportMaterials { get => _doExportMaterials; set { _doExportMaterials = value; OnSelfChanged(); } }
-    public bool DoTmmToGltf { get => _doTmmToGltf; set { _doTmmToGltf = value; OnSelfChanged(); } }
+    public bool DoTmmToGltf { get => _doTmmToGltf; set { _doTmmToGltf = value; OnSelfChanged(); RefreshOverridePreview(); } }
+    public bool OpenInEditor { get => _openInEditor; set { _openInEditor = value; OnSelfChanged(); } }
+    public string OverrideName
+    {
+        get => _overrideName;
+        set
+        {
+            if (_overrideName == value) return;
+            _overrideName = value;
+            _overrideNameModified = _overrideName != _defaultOverrideName;
+            OnSelfChanged();
+            OnPropertyChanged(nameof(OverrideNameOpacity));
+            RefreshOverridePreview();
+        }
+    }
 
     public bool CanExport => DoCopy || DoConvert;
+    public bool HasEditorCommand => _hasEditorCommand;
+    public bool ShowOverrideName => _files.Count == 1;
+    public double OverrideNameOpacity => _overrideNameModified ? 1.0 : 0.5;
+    public string OverridePreview { get; private set; } = "";
 
     public string FileSummary { get; }
     public string Recommendation { get; }
@@ -51,6 +78,8 @@ public partial class AdvancedExportWindow : SimpleWindow
 
     public bool IsDirectExport { get; }
     public string? DirectExportPath { get; }
+
+    public string TruncatedDirectExportPath => TruncatePath(DirectExportPath, 50);
 
     public bool HasOverwriteWarning { get; }
     public string OverwriteWarning { get; }
@@ -88,6 +117,26 @@ public partial class AdvancedExportWindow : SimpleWindow
             DirectExport = isDirectExport,
             DirectExportPath = directExportPath
         };
+
+        // Editor command
+        _hasEditorCommand = !string.IsNullOrWhiteSpace(savedConfig?.EditorCommand);
+        if (savedConfig?.ExportOpenInEditor is bool oie) OpenInEditor = oie && _hasEditorCommand;
+
+        // Override name for single file (base name without source extension)
+        if (files.Count == 1)
+        {
+            var fileName = Path.GetFileName(files[0].RelativePath);
+            _singleFileSourceExt = Path.GetExtension(fileName).ToLower();
+            _singleFileIsConvertible = ConversionHelper.IsConvertibleExtension(_singleFileSourceExt);
+
+            // For XMB: base name includes inner extension (proto.xml from proto.xml.XMB)
+            // For others: base name is filename without extension (texture from texture.ddt)
+            _defaultOverrideName = _singleFileSourceExt == ".xmb"
+                ? Path.GetFileNameWithoutExtension(fileName) // e.g. proto.xml
+                : Path.GetFileNameWithoutExtension(fileName); // e.g. texture
+            _overrideName = _defaultOverrideName;
+            _overrideNameModified = false;
+        }
 
         // Build file summary by extension
         var extGroups = files
@@ -170,11 +219,15 @@ public partial class AdvancedExportWindow : SimpleWindow
         OnPropertyChanged(nameof(CompressedFileNote));
         OnPropertyChanged(nameof(IsDirectExport));
         OnPropertyChanged(nameof(DirectExportPath));
+        OnPropertyChanged(nameof(TruncatedDirectExportPath));
         OnPropertyChanged(nameof(HasOverwriteWarning));
         OnPropertyChanged(nameof(OverwriteWarning));
         OnPropertyChanged(nameof(HasFilenameConflict));
         OnPropertyChanged(nameof(FilenameConflictWarning));
         OnPropertyChanged(nameof(CanExport));
+        OnPropertyChanged(nameof(HasEditorCommand));
+        OnPropertyChanged(nameof(ShowOverrideName));
+        OnPropertyChanged(nameof(OverrideNameOpacity));
 
         // Restore saved export settings
         if (savedConfig?.ExportDoCopy is bool c) DoCopy = c;
@@ -189,6 +242,39 @@ public partial class AdvancedExportWindow : SimpleWindow
     /// </summary>
     public ExportOptions? GetResult() => _result.Confirmed ? _result : null;
 
+    void RefreshOverridePreview()
+    {
+        if (!ShowOverrideName)
+        {
+            OverridePreview = "";
+            OnPropertyChanged(nameof(OverridePreview));
+            return;
+        }
+
+        var name = string.IsNullOrWhiteSpace(OverrideName) ? _defaultOverrideName : OverrideName.Trim();
+        var parts = new List<string>();
+
+        if (DoCopy)
+        {
+            // Copy keeps original extension
+            parts.Add(name + _singleFileSourceExt);
+        }
+
+        if (DoConvert && _singleFileIsConvertible)
+        {
+            if (_singleFileSourceExt == ".xmb")
+                parts.Add(name); // XMB stripped, base name IS the final name
+            else
+            {
+                var convertedExt = ConversionHelper.GetConvertedExtension(_singleFileSourceExt, DoTmmToGltf);
+                parts.Add(name + (convertedExt ?? _singleFileSourceExt));
+            }
+        }
+
+        OverridePreview = parts.Count > 0 ? "Output: " + string.Join(", ", parts) : "";
+        OnPropertyChanged(nameof(OverridePreview));
+    }
+
     void ExportClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         _result.Copy = DoCopy;
@@ -196,6 +282,9 @@ public partial class AdvancedExportWindow : SimpleWindow
         _result.Decompress = DoDecompress;
         _result.ExportMaterials = DoExportMaterials;
         _result.TmmToGltf = DoTmmToGltf;
+        _result.OpenInEditor = OpenInEditor;
+        _result.OverrideBaseName = ShowOverrideName && !string.IsNullOrWhiteSpace(OverrideName)
+            && _overrideNameModified ? OverrideName.Trim() : null;
         _result.Confirmed = true;
         Close();
     }
@@ -204,6 +293,16 @@ public partial class AdvancedExportWindow : SimpleWindow
     {
         _result.Confirmed = false;
         Close();
+    }
+
+    static string TruncatePath(string? path, int maxLength)
+    {
+        if (string.IsNullOrEmpty(path) || path.Length <= maxLength)
+            return path ?? "";
+
+        const string ellipsis = "...";
+        int side = (maxLength - ellipsis.Length) / 2;
+        return string.Concat(path.AsSpan(0, side), ellipsis, path.AsSpan(path.Length - side));
     }
 }
 

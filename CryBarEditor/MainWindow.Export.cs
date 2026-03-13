@@ -36,6 +36,7 @@ public partial class MainWindow
         var exportBaseDir = isDirectExport ? options!.DirectExportPath! : _exportRootDirectory;
 
         List<string> failed = new();
+        List<string> exportedPaths = new();
         foreach (var f in files)
         {
             var relative_path = getFullRelPath(f);
@@ -66,11 +67,20 @@ public partial class MainWindow
                     exported_path = Path.Combine(exportBaseDir, relative_path);
                 }
 
+                // Apply override base name (single-file export)
+                if (!string.IsNullOrEmpty(options?.OverrideBaseName))
+                {
+                    var dir = Path.GetDirectoryName(exported_path);
+                    var finalExt = Path.GetExtension(exported_path);
+                    exported_path = Path.Combine(dir ?? "", options.OverrideBaseName + finalExt);
+                }
+
                 // CREATE MISSING DIRECTORIES
                 var dirs = Path.GetDirectoryName(exported_path);
                 if (dirs != null) Directory.CreateDirectory(dirs);
 
                 // CREATE FILE
+                exportedPaths.Add(exported_path);
                 using var file = File.Create(exported_path);
 
                 // EXPORT DATA
@@ -150,6 +160,16 @@ public partial class MainWindow
         else
         {
             p.Report($"Finished in {sw.Elapsed.TotalSeconds:0.00} seconds");
+        }
+
+        // Open in editor if requested
+        if (options?.OpenInEditor == true && !string.IsNullOrWhiteSpace(_editorCommand))
+        {
+            foreach (var ep in exportedPaths)
+            {
+                if (!TryLaunchEditorForFile(ep))
+                    break;
+            }
         }
 
         p.Report(null);
