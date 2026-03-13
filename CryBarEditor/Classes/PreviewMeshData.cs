@@ -10,7 +10,7 @@ namespace CryBarEditor.Classes;
 public class PreviewMeshData
 {
     public required float[] Vertices { get; init; }
-    public required ushort[] Indices { get; init; }
+    public required uint[] Indices { get; init; }
     public required (int Offset, int Count)[] DrawGroups { get; init; }
     public float CenterX { get; init; }
     public float CenterY { get; init; }
@@ -73,12 +73,19 @@ public static class MeshDataBuilder
         }
 
         // Reverse triangle winding: [i0,i1,i2] → [i0,i2,i1] for LH→RH
-        var indices = new ushort[indexCount];
-        for (int i = 0; i + 2 < indexCount; i += 3)
+        // Add VertexStart offset per mesh group to make indices global
+        var indices = new uint[indexCount];
+        foreach (var mg in meshGroups)
         {
-            indices[i]     = srcIndices[i];
-            indices[i + 1] = srcIndices[i + 2];
-            indices[i + 2] = srcIndices[i + 1];
+            uint vStart = mg.VertexStart;
+            int iStart = (int)mg.IndexStart;
+            int iEnd = iStart + (int)mg.IndexCount;
+            for (int i = iStart; i + 2 < iEnd; i += 3)
+            {
+                indices[i]     = srcIndices[i] + vStart;
+                indices[i + 1] = srcIndices[i + 2] + vStart;
+                indices[i + 2] = srcIndices[i + 1] + vStart;
+            }
         }
 
         // Bounding sphere from AABB

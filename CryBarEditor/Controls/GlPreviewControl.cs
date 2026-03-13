@@ -13,7 +13,7 @@ namespace CryBarEditor.Controls;
 public class GlPreviewControl : OpenGlControlBase, ICustomHitTest
 {
     // OpenGlControlBase has no background, so implement ICustomHitTest for pointer events
-    bool ICustomHitTest.HitTest(Point point) => true;
+    bool ICustomHitTest.HitTest(Point point) => Bounds.Contains(point);
 
     readonly OrbitCamera _camera = new();
     PreviewMeshData? _meshData;
@@ -63,11 +63,12 @@ public class GlPreviewControl : OpenGlControlBase, ICustomHitTest
         RequestNextFrameRendering();
     }
 
-    public void LoadMesh(PreviewMeshData meshData)
+    public void LoadMesh(PreviewMeshData meshData, bool resetCamera = false)
     {
-        _meshData = meshData;
         _meshDirty = true;
-        _camera.FitToSphere(meshData.CenterX, meshData.CenterY, meshData.CenterZ, meshData.Radius);
+        if (_meshData == null || resetCamera)
+            _camera.FitToSphere(meshData.CenterX, meshData.CenterY, meshData.CenterZ, meshData.Radius);
+        _meshData = meshData;
         RequestNextFrameRendering();
     }
 
@@ -171,8 +172,8 @@ public class GlPreviewControl : OpenGlControlBase, ICustomHitTest
                 gl.BufferData(GL_ARRAY_BUFFER, (IntPtr)(mesh.Vertices.Length * sizeof(float)), (IntPtr)ptr, GL_STATIC_DRAW);
 
             gl.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, _ebo);
-            fixed (ushort* ptr = mesh.Indices)
-                gl.BufferData(GL_ELEMENT_ARRAY_BUFFER, (IntPtr)(mesh.Indices.Length * sizeof(ushort)), (IntPtr)ptr, GL_STATIC_DRAW);
+            fixed (uint* ptr = mesh.Indices)
+                gl.BufferData(GL_ELEMENT_ARRAY_BUFFER, (IntPtr)(mesh.Indices.Length * sizeof(uint)), (IntPtr)ptr, GL_STATIC_DRAW);
         }
 
         gl.UseProgram(_program);
@@ -201,7 +202,7 @@ public class GlPreviewControl : OpenGlControlBase, ICustomHitTest
         // Draw all mesh groups
         foreach (var (offset, count) in mesh.DrawGroups)
         {
-            gl.DrawElements(GL_TRIANGLES, count, GL_UNSIGNED_SHORT, (IntPtr)(offset * sizeof(ushort)));
+            gl.DrawElements(GL_TRIANGLES, count, 0x1405 /* GL_UNSIGNED_INT */, (IntPtr)(offset * sizeof(uint)));
         }
 
         gl.BindVertexArray(0);
@@ -238,7 +239,7 @@ public class GlPreviewControl : OpenGlControlBase, ICustomHitTest
 
         if (_leftDragging)
         {
-            _camera.Rotate(dx * 0.3f, dy * 0.3f);
+            _camera.Rotate(-dx * 0.3f, dy * 0.3f);
             RequestNextFrameRendering();
             e.Handled = true;
         }
