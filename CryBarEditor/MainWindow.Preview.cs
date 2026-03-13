@@ -70,6 +70,9 @@ public partial class MainWindow
         PreviewedFileData = $"Length: {e.LengthMs}ms";
 
         await SetImagePreview(null);
+
+        var soundInfo = BuildSoundsetPreviewText(e);
+
         SetEditorText(".txt",
         $"""
         Id:         {e.Id}
@@ -82,6 +85,7 @@ public partial class MainWindow
 
         Parameters:
         - {string.Join("\n- ", e.Parameters)}
+        {soundInfo}
         """);
     }
     #endregion

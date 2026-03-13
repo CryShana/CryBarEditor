@@ -334,6 +334,7 @@ public partial class MainWindow
         });
 
         _fileIndex = index;
+        ClearSoundCaches();
     }
 
     Memory<byte>? ReadFromIndexEntry(FileIndexEntry entry)

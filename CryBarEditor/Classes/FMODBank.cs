@@ -238,6 +238,118 @@ public class FMODEvent
         instance.release();
     }
 
+    /// <summary>
+    /// Trims leading and trailing silence from a WAV file and rewrites it in place.
+    /// Silence is defined as samples below a small threshold.
+    /// </summary>
+    public static void TrimSilence(string wavPath, short threshold = 16)
+    {
+        var data = File.ReadAllBytes(wavPath);
+        if (data.Length < 44) return; // too small for a valid WAV
+
+        // Parse WAV header to find data chunk
+        int dataOffset = -1;
+        int dataSize = -1;
+        int channels = 1;
+        int sampleRate = 44100;
+        int bitsPerSample = 16;
+
+        int pos = 12; // skip RIFF header
+        while (pos + 8 <= data.Length)
+        {
+            var chunkId = System.Text.Encoding.ASCII.GetString(data, pos, 4);
+            int chunkSize = BitConverter.ToInt32(data, pos + 4);
+
+            if (chunkId == "fmt ")
+            {
+                if (pos + 8 + 16 <= data.Length)
+                {
+                    channels = BitConverter.ToInt16(data, pos + 8 + 2);
+                    sampleRate = BitConverter.ToInt32(data, pos + 8 + 4);
+                    bitsPerSample = BitConverter.ToInt16(data, pos + 8 + 14);
+                }
+            }
+            else if (chunkId == "data")
+            {
+                dataOffset = pos + 8;
+                dataSize = chunkSize;
+                break;
+            }
+
+            pos += 8 + chunkSize;
+            if (pos % 2 != 0) pos++; // chunks are word-aligned
+        }
+
+        if (dataOffset < 0 || dataSize <= 0) return;
+        if (bitsPerSample != 16) return; // only handle 16-bit PCM for trimming
+
+        int bytesPerSample = channels * (bitsPerSample / 8);
+
+        bool IsSilent(int byteOffset)
+        {
+            for (int ch = 0; ch < channels; ch++)
+            {
+                int off = dataOffset + byteOffset + ch * 2;
+                if (off + 1 >= data.Length) continue;
+                if (Math.Abs(BitConverter.ToInt16(data, off)) > threshold)
+                    return false;
+            }
+            return true;
+        }
+
+        // Find first non-silent sample (leading trim)
+        int firstNonSilent = 0;
+        for (int i = 0; i < dataSize; i += bytesPerSample)
+        {
+            if (!IsSilent(i)) { firstNonSilent = i; break; }
+        }
+
+        // Find last non-silent sample (trailing trim)
+        int lastNonSilent = dataSize - bytesPerSample;
+        for (int i = dataSize - bytesPerSample; i >= firstNonSilent; i -= bytesPerSample)
+        {
+            if (!IsSilent(i)) { lastNonSilent = i; break; }
+        }
+
+        int trimmedSize = lastNonSilent - firstNonSilent + bytesPerSample;
+        if (trimmedSize <= 0 || (firstNonSilent == 0 && trimmedSize == dataSize))
+            return; // nothing to trim
+
+        var trimmedPcm = new byte[trimmedSize];
+        Array.Copy(data, dataOffset + firstNonSilent, trimmedPcm, 0, trimmedSize);
+
+        WriteWav(wavPath, trimmedPcm, channels, sampleRate, bitsPerSample);
+    }
+
+    static void WriteWav(string path, byte[] pcmData, int channels, int sampleRate, int bitsPerSample)
+    {
+        int byteRate = sampleRate * channels * (bitsPerSample / 8);
+        short blockAlign = (short)(channels * (bitsPerSample / 8));
+
+        using var fs = File.Create(path);
+        using var bw = new BinaryWriter(fs);
+
+        // RIFF header
+        bw.Write("RIFF"u8);
+        bw.Write(36 + pcmData.Length); // chunk size
+        bw.Write("WAVE"u8);
+
+        // fmt subchunk
+        bw.Write("fmt "u8);
+        bw.Write(16);                         // subchunk1 size (PCM)
+        bw.Write((short)1);                   // audio format (1 = PCM)
+        bw.Write((short)channels);
+        bw.Write(sampleRate);
+        bw.Write(byteRate);
+        bw.Write(blockAlign);
+        bw.Write((short)bitsPerSample);
+
+        // data subchunk
+        bw.Write("data"u8);
+        bw.Write(pcmData.Length);
+        bw.Write(pcmData);
+    }
+
     public void Export(string output_path_wav, CancellationToken token = default)
     {
         // Create a new Studio system for exporting

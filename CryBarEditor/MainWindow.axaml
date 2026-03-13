@@ -269,9 +269,13 @@
 									<MenuItem Header="Play" 
 											Icon="{micons:MaterialIconExt Kind=Play}"
 											Click="BankItem_Play" />
-									<MenuItem Header="Export" 
+									<MenuItem Header="Export"
 										Icon="{micons:MaterialIconExt Kind=Export}"
 										Click="BankItem_Export" />
+									<Separator/>
+									<MenuItem Header="Export All Sounds (via soundset)"
+										Icon="{micons:MaterialIconExt Kind=MusicBoxMultiple}"
+										Click="BankItem_ExportAllSounds" />
 								</ContextMenu>
 							</ListBox.ContextMenu>
 						</ListBox>

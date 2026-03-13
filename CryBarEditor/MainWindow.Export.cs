@@ -579,7 +579,9 @@ public partial class MainWindow
 
         try
         {
-            SelectedBankEntry.Export(file.Path.LocalPath, bank_play_csc.Token);
+            var outputPath = file.Path.LocalPath;
+            SelectedBankEntry.Export(outputPath, bank_play_csc.Token);
+            FMODEvent.TrimSilence(outputPath);
 
             _ = ShowSuccess("FMOD event export completed.\n");
         }
