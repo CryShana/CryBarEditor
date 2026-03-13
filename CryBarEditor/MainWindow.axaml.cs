@@ -1555,10 +1555,15 @@ public partial class MainWindow : SimpleWindow
             if (_pendingMeshData != null)
                 FlushPendingMesh();
 
-            // Dispatch render request after layout pass so GL context is ready
-            Dispatcher.UIThread.Post(() => _glPreview?.RequestNextFrameRendering(),
-                DispatcherPriority.Render);
+            // Delay render request to ensure GL control is fully visible after tab switch
+            _ = RequestGlRenderDelayed();
         }
+    }
+
+    async Task RequestGlRenderDelayed()
+    {
+        await Task.Delay(50);
+        _glPreview?.RequestNextFrameRendering();
     }
 
     void FlushPendingMesh()
