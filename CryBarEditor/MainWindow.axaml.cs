@@ -1123,7 +1123,7 @@ public partial class MainWindow : SimpleWindow
                     if (ext == ".xmb")
                         relative_path = relative_path[..^4];    // remove .XMB extension, revealing underlying (e.g. .xml)
                     else
-                        relative_path = relative_path[..^ext.Length] + ConversionHelper.GetConvertedExtension(ext);
+                        relative_path = relative_path[..^ext.Length] + ConversionHelper.GetConvertedExtension(ext, options?.TmmToGltf == true);
                 }
 
                 // DETERMINE EXPORT PATH
@@ -1166,133 +1166,32 @@ public partial class MainWindow : SimpleWindow
                             continue;
                         }
 
-                        // TMM→OBJ/FBX: find companion .tmm.data
+                        // TMM→OBJ/glTF: find companion .tmm.data
                         if (ext == ".tmm")
                         {
-                            var tmmFileName = Path.GetFileName(getFullRelPath(f)); // e.g. "petrobolos.tmm"
-                            var dataFileName = tmmFileName + ".data";
-                            Memory<byte>? companionData = null;
-
-                            // Check current BAR first
-                            if (_barFile?.Entries != null && _barStream != null)
-                            {
-                                var barDataEntry = _barFile.Entries.FirstOrDefault(e =>
-                                    e.Name.Equals(dataFileName, StringComparison.OrdinalIgnoreCase));
-                                if (barDataEntry != null)
-                                    companionData = BarCompression.EnsureDecompressed(
-                                        barDataEntry.ReadDataRaw(_barStream), out _);
-                            }
-
-                            // Search all .bar files in the same directory
-                            if (companionData == null && _barStream != null)
-                            {
-                                var found = FindCompanionInSiblingBars<Memory<byte>>(
-                                    _barStream.Name, dataFileName,
-                                    (entry, stream) => BarCompression.EnsureDecompressed(
-                                        entry.ReadDataRaw(stream), out _));
-                                if (found.Length > 0) companionData = found;
-                            }
-
-                            // Fallback: search via file index
-                            if (companionData == null && _fileIndex != null)
-                            {
-                                var indexEntries = _fileIndex.Find(dataFileName);
-                                foreach (var ie in indexEntries)
-                                {
-                                    var indexData = ReadFromIndexEntry(ie);
-                                    if (indexData != null)
-                                    {
-                                        companionData = indexData;
-                                        break;
-                                    }
-                                }
-                            }
+                            var tmmFileName = Path.GetFileName(getFullRelPath(f));
+                            var companionData = ResolveCompanionData(tmmFileName + ".data");
 
                             if (companionData != null)
                             {
-                                var mtlName = (options?.ExportMaterials == true) ? Path.GetFileNameWithoutExtension(tmmFileName) + ".mtl" : null;
-                                var convertedBytes = ConversionHelper.ConvertTmmToObjBytes(data, companionData.Value, mtlName);
+                                byte[]? convertedBytes;
+                                if (options?.TmmToGltf == true)
+                                {
+                                    var glbMaterials = (options.ExportMaterials && _fileIndex != null)
+                                        ? await BuildGlbMaterials(tmmFileName) : null;
+                                    convertedBytes = ConversionHelper.ConvertTmmToGlbBytes(data, companionData.Value, glbMaterials);
+                                }
+                                else
+                                {
+                                    var mtlName = (options?.ExportMaterials == true) ? Path.GetFileNameWithoutExtension(tmmFileName) + ".mtl" : null;
+                                    convertedBytes = ConversionHelper.ConvertTmmToObjBytes(data, companionData.Value, mtlName);
+                                    if (convertedBytes != null && options?.ExportMaterials == true && _fileIndex != null)
+                                        await ExportObjMaterials(tmmFileName, exported_path);
+                                }
+
                                 if (convertedBytes != null)
                                 {
                                     file.Write(convertedBytes);
-
-                                    // Material export
-                                    if (options?.ExportMaterials == true && _fileIndex != null)
-                                    {
-                                        try
-                                        {
-                                            var tmmName = Path.GetFileNameWithoutExtension(tmmFileName);
-                                            var materialName = tmmName + ".material";
-
-                                            // Try .material.XMB first, then .material
-                                            var materialEntries = _fileIndex.Find(materialName + ".XMB");
-                                            if (materialEntries.Count == 0)
-                                                materialEntries = _fileIndex.Find(materialName);
-
-                                            if (materialEntries.Count > 0)
-                                            {
-                                                var matEntry = materialEntries[0];
-                                                var matData = ReadFromIndexEntry(matEntry);
-                                                if (matData != null)
-                                                {
-                                                    // Convert XMB to XML if needed
-                                                    var matBytes = BarCompression.EnsureDecompressed(matData.Value, out _);
-                                                    string? xmlText;
-                                                    if (matEntry.FileName.EndsWith(".XMB", StringComparison.OrdinalIgnoreCase))
-                                                    {
-                                                        xmlText = ConversionHelper.ConvertXmbToXmlText(matBytes.Span);
-                                                    }
-                                                    else
-                                                    {
-                                                        xmlText = Encoding.UTF8.GetString(matBytes.Span);
-                                                    }
-
-                                                    if (xmlText != null)
-                                                    {
-                                                        var materials = MaterialExporter.ParseMaterialXml(xmlText);
-                                                        var texturePaths = MaterialExporter.GetAllTexturePaths(materials);
-                                                        var resolvedTextures = new Dictionary<string, string>();
-                                                        var exportDir = Path.GetDirectoryName(exported_path)!;
-
-                                                        // Find and convert each texture
-                                                        foreach (var texPath in texturePaths)
-                                                        {
-                                                            var texFileName = Path.GetFileName(texPath.Replace('\\', '/'));
-
-                                                            var texEntries = _fileIndex.Find(texFileName + ".ddt");
-                                                            if (texEntries.Count == 0)
-                                                                texEntries = _fileIndex.Find(texFileName);
-
-                                                            if (texEntries.Count > 0)
-                                                            {
-                                                                var texData = ReadFromIndexEntry(texEntries[0]);
-                                                                if (texData != null)
-                                                                {
-                                                                    var ddtData = BarCompression.EnsureDecompressed(texData.Value, out _);
-                                                                    var texTgaBytes = await ConversionHelper.ConvertDdtToTgaBytes(ddtData);
-                                                                    if (texTgaBytes != null)
-                                                                    {
-                                                                        var tgaFileName = texFileName + ".tga";
-                                                                        var tgaPath = Path.Combine(exportDir, tgaFileName);
-                                                                        File.WriteAllBytes(tgaPath, texTgaBytes);
-                                                                        resolvedTextures[texPath] = tgaFileName;
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-
-                                                        // Generate and write MTL file
-                                                        var mtlContent = MaterialExporter.GenerateMtl(materials, resolvedTextures);
-                                                        var mtlFileNameOut = Path.GetFileNameWithoutExtension(exported_path) + ".mtl";
-                                                        var mtlPath = Path.Combine(exportDir, mtlFileNameOut);
-                                                        File.WriteAllText(mtlPath, mtlContent);
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        catch { /* material export is best-effort */ }
-                                    }
-
                                     continue;
                                 }
                             }
@@ -1326,6 +1225,185 @@ public partial class MainWindow : SimpleWindow
         }
 
         p.Report(null);
+    }
+
+    /// <summary>
+    /// Finds and decompresses a companion file (e.g. .tmm.data) by searching
+    /// the current BAR, sibling BARs, and the file index.
+    /// </summary>
+    Memory<byte>? ResolveCompanionData(string dataFileName)
+    {
+        // Check current BAR first
+        if (_barFile?.Entries != null && _barStream != null)
+        {
+            var barDataEntry = _barFile.Entries.FirstOrDefault(e =>
+                e.Name.Equals(dataFileName, StringComparison.OrdinalIgnoreCase));
+            if (barDataEntry != null)
+                return BarCompression.EnsureDecompressed(
+                    barDataEntry.ReadDataRaw(_barStream), out _);
+        }
+
+        // Search sibling .bar files
+        if (_barStream != null)
+        {
+            var found = FindCompanionInSiblingBars<Memory<byte>>(
+                _barStream.Name, dataFileName,
+                (entry, stream) => BarCompression.EnsureDecompressed(
+                    entry.ReadDataRaw(stream), out _));
+            if (found.Length > 0) return found;
+        }
+
+        // Fallback: file index
+        if (_fileIndex != null)
+        {
+            foreach (var ie in _fileIndex.Find(dataFileName))
+            {
+                var indexData = ReadFromIndexEntry(ie);
+                if (indexData != null) return indexData;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Builds glTF material list with embedded PNG textures for a TMM model.
+    /// </summary>
+    async Task<IReadOnlyList<GlbExporter.GlbMaterial>?> BuildGlbMaterials(string tmmFileName)
+    {
+        var resolved = await ResolveTmmMaterials(tmmFileName);
+        if (resolved == null) return null;
+
+        var matList = new List<GlbExporter.GlbMaterial>();
+        foreach (var mat in resolved.Value.Materials)
+        {
+            byte[]? baseColorPng = null, normalPng = null;
+            foreach (var (texName, texPath) in mat.Textures)
+            {
+                if (resolved.Value.Textures.TryGetValue(texPath, out var texInfo))
+                {
+                    var pngBytes = await ConversionHelper.ConvertDdtToPngBytes(texInfo.DdtData);
+                    if (pngBytes != null)
+                    {
+                        switch (texName.ToLowerInvariant())
+                        {
+                            case "basecolor":
+                            case "diffuse":
+                                baseColorPng = pngBytes;
+                                break;
+                            case "normals":
+                            case "normal":
+                                normalPng = pngBytes;
+                                break;
+                        }
+                    }
+                }
+            }
+            matList.Add(new GlbExporter.GlbMaterial { Name = mat.Name, BaseColorPng = baseColorPng, NormalMapPng = normalPng });
+        }
+        return matList;
+    }
+
+    /// <summary>
+    /// Exports .mtl file and textures as TGA alongside an OBJ file (best-effort).
+    /// </summary>
+    async Task ExportObjMaterials(string tmmFileName, string exportedObjPath)
+    {
+        try
+        {
+            var resolved = await ResolveTmmMaterials(tmmFileName);
+            if (resolved == null) return;
+
+            var exportDir = Path.GetDirectoryName(exportedObjPath)!;
+            var resolvedTextures = new Dictionary<string, string>();
+
+            foreach (var (texPath, (texFileName, ddtData)) in resolved.Value.Textures)
+            {
+                var texTgaBytes = await ConversionHelper.ConvertDdtToTgaBytes(ddtData);
+                if (texTgaBytes != null)
+                {
+                    var tgaFileName = texFileName + ".tga";
+                    File.WriteAllBytes(Path.Combine(exportDir, tgaFileName), texTgaBytes);
+                    resolvedTextures[texPath] = tgaFileName;
+                }
+            }
+
+            var mtlContent = MaterialExporter.GenerateMtl(resolved.Value.Materials, resolvedTextures);
+            var mtlPath = Path.Combine(exportDir, Path.GetFileNameWithoutExtension(exportedObjPath) + ".mtl");
+            File.WriteAllText(mtlPath, mtlContent);
+        }
+        catch { /* material export is best-effort */ }
+    }
+
+    /// <summary>
+    /// Resolves materials and textures for a TMM model via FileIndex.
+    /// Returns parsed materials + raw decompressed DDT bytes per texture path.
+    /// </summary>
+    async Task<(List<MaterialInfo> Materials, Dictionary<string, (string FileName, Memory<byte> DdtData)> Textures)?>
+        ResolveTmmMaterials(string tmmFileName)
+    {
+        if (_fileIndex == null) return null;
+
+        try
+        {
+            var tmmName = Path.GetFileNameWithoutExtension(tmmFileName);
+            var materialName = tmmName + ".material";
+
+            // Try .material.XMB first, then .material
+            var materialEntries = _fileIndex.Find(materialName + ".XMB");
+            if (materialEntries.Count == 0)
+                materialEntries = _fileIndex.Find(materialName);
+
+            if (materialEntries.Count == 0) return null;
+
+            var matEntry = materialEntries[0];
+            var matData = ReadFromIndexEntry(matEntry);
+            if (matData == null) return null;
+
+            // Convert XMB to XML if needed
+            var matBytes = BarCompression.EnsureDecompressed(matData.Value, out _);
+            string? xmlText;
+            if (matEntry.FileName.EndsWith(".XMB", StringComparison.OrdinalIgnoreCase))
+            {
+                xmlText = ConversionHelper.ConvertXmbToXmlText(matBytes.Span);
+            }
+            else
+            {
+                xmlText = Encoding.UTF8.GetString(matBytes.Span);
+            }
+
+            if (xmlText == null) return null;
+
+            var materials = MaterialExporter.ParseMaterialXml(xmlText);
+            var texturePaths = MaterialExporter.GetAllTexturePaths(materials);
+            var textures = new Dictionary<string, (string FileName, Memory<byte> DdtData)>();
+
+            // Find each texture
+            foreach (var texPath in texturePaths)
+            {
+                var texFileName = Path.GetFileName(texPath.Replace('\\', '/'));
+
+                var texEntries = _fileIndex.Find(texFileName + ".ddt");
+                if (texEntries.Count == 0)
+                    texEntries = _fileIndex.Find(texFileName);
+
+                if (texEntries.Count > 0)
+                {
+                    var texData = ReadFromIndexEntry(texEntries[0]);
+                    if (texData != null)
+                    {
+                        var ddtData = BarCompression.EnsureDecompressed(texData.Value, out _);
+                        textures[texPath] = (texFileName, ddtData);
+                    }
+                }
+            }
+
+            return (materials, textures);
+        }
+        catch
+        {
+            return null;
+        }
     }
     #endregion
 
@@ -1620,12 +1698,13 @@ public partial class MainWindow : SimpleWindow
         var files = GetContextSelectedExportFiles(list);
         if (files.Count == 0) return;
 
-        var window = new AdvancedExportWindow(files, _exportRootDirectory, isDirectExport: false, directExportPath: null);
+        var window = new AdvancedExportWindow(files, _exportRootDirectory, isDirectExport: false, directExportPath: null, _lastConfiguration);
         await window.ShowDialog(this);
 
         var options = window.GetResult();
         if (options == null) return;
 
+        SaveExportConfiguration(options);
         await RunExportWithOptions(list, options);
     }
 
@@ -1647,12 +1726,13 @@ public partial class MainWindow : SimpleWindow
         if (folders.Count == 0) return;
         var directPath = folders[0].Path.LocalPath;
 
-        var window = new AdvancedExportWindow(files, _exportRootDirectory, isDirectExport: true, directExportPath: directPath);
+        var window = new AdvancedExportWindow(files, _exportRootDirectory, isDirectExport: true, directExportPath: directPath, _lastConfiguration);
         await window.ShowDialog(this);
 
         var options = window.GetResult();
         if (options == null) return;
 
+        SaveExportConfiguration(options);
         await RunExportWithOptions(list, options);
     }
 
@@ -2165,6 +2245,9 @@ public partial class MainWindow : SimpleWindow
     async void MenuItem_ConvertTMMtoOBJ(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
         => await ConvertTmmToFormat(sender, "OBJ", ".obj", (a, b) => ConversionHelper.ConvertTmmToObjBytes(a, b));
 
+    async void MenuItem_ConvertTMMtoGLTF(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        => await ConvertTmmToFormat(sender, "glTF", ".glb", (a, b) => ConversionHelper.ConvertTmmToGlbBytes(a, b));
+
     async Task ConvertTmmToFormat(object? sender, string formatName, string extension,
         Func<ReadOnlyMemory<byte>, ReadOnlyMemory<byte>, byte[]?> converter, string? errorNote = null)
     {
@@ -2352,22 +2435,31 @@ public partial class MainWindow : SimpleWindow
         }
     }
 
+    void SaveExportConfiguration(ExportOptions options)
+    {
+        _lastConfiguration ??= new Configuration();
+        _lastConfiguration.ExportDoCopy = options.Copy;
+        _lastConfiguration.ExportDoConvert = options.Convert;
+        _lastConfiguration.ExportDoDecompress = options.Decompress;
+        _lastConfiguration.ExportDoExportMaterials = options.ExportMaterials;
+        _lastConfiguration.ExportTmmToGltf = options.TmmToGltf;
+        SaveConfiguration();
+    }
+
     public void SaveConfiguration()
     {
         var config_path = Path.Combine(AppContext.BaseDirectory, CONFIG_FILE);
 
         try
         {
-            _lastConfiguration = new Configuration
-            {
-                RootDirectory = _rootDirectory,
-                ExportRootDirectory = _exportRootDirectory,
-                BarFile = _barStream?.Name,
-                LastVersionCheck = _latestVersion,
-                SearchExclusionFilter = _searchExclusionFilter,
-                SearchCaseSensitive = _searchCaseSensitive,
-                SearchUseRegex = _searchRegex
-            };
+            _lastConfiguration ??= new Configuration();
+            _lastConfiguration.RootDirectory = _rootDirectory;
+            _lastConfiguration.ExportRootDirectory = _exportRootDirectory;
+            _lastConfiguration.BarFile = _barStream?.Name;
+            _lastConfiguration.LastVersionCheck = _latestVersion;
+            _lastConfiguration.SearchExclusionFilter = _searchExclusionFilter;
+            _lastConfiguration.SearchCaseSensitive = _searchCaseSensitive;
+            _lastConfiguration.SearchUseRegex = _searchRegex;
 
             File.WriteAllText(config_path, JsonSerializer.Serialize(_lastConfiguration, CryBarJsonContext.Default.Configuration));
         }

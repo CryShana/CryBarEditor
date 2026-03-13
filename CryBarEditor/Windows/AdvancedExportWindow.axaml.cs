@@ -16,6 +16,7 @@ public partial class AdvancedExportWindow : SimpleWindow
     bool _doConvert;
     bool _doDecompress;
     bool _doExportMaterials;
+    bool _doTmmToGltf;
 
     readonly ExportOptions _result;
     readonly string _exportRootDirectory;
@@ -25,9 +26,10 @@ public partial class AdvancedExportWindow : SimpleWindow
     bool _hasTmmFiles;
 
     public bool DoCopy { get => _doCopy; set { _doCopy = value; OnSelfChanged(); OnPropertyChanged(nameof(CanExport)); } }
-    public bool DoConvert { get => _doConvert; set { _doConvert = value; OnSelfChanged(); OnPropertyChanged(nameof(CanExport)); OnPropertyChanged(nameof(ShowDecompressOption)); OnPropertyChanged(nameof(CompressedFileNote)); OnPropertyChanged(nameof(ShowExportMaterialsOption)); } }
+    public bool DoConvert { get => _doConvert; set { _doConvert = value; OnSelfChanged(); OnPropertyChanged(nameof(CanExport)); OnPropertyChanged(nameof(ShowDecompressOption)); OnPropertyChanged(nameof(CompressedFileNote)); OnPropertyChanged(nameof(ShowExportMaterialsOption)); OnPropertyChanged(nameof(ShowTmmToGltfOption)); } }
     public bool DoDecompress { get => _doDecompress; set { _doDecompress = value; OnSelfChanged(); } }
     public bool DoExportMaterials { get => _doExportMaterials; set { _doExportMaterials = value; OnSelfChanged(); } }
+    public bool DoTmmToGltf { get => _doTmmToGltf; set { _doTmmToGltf = value; OnSelfChanged(); } }
 
     public bool CanExport => DoCopy || DoConvert;
 
@@ -40,6 +42,7 @@ public partial class AdvancedExportWindow : SimpleWindow
         : _compressedNonConvertibleCount + _compressedConvertibleCount;
 
     public bool ShowExportMaterialsOption => DoConvert && _hasTmmFiles;
+    public bool ShowTmmToGltfOption => DoConvert && _hasTmmFiles;
     public bool ShowDecompressOption => UnhandledCompressedCount > 0;
     public string CompressedFileNote => UnhandledCompressedCount > 0
         ? $"{UnhandledCompressedCount} of {_files.Count} file(s) are compressed and won't be auto-decompressed by conversion. " +
@@ -69,7 +72,8 @@ public partial class AdvancedExportWindow : SimpleWindow
         IReadOnlyList<ExportFileInfo> files,
         string exportRootDirectory,
         bool isDirectExport,
-        string? directExportPath) : this()
+        string? directExportPath,
+        Configuration? savedConfig = null) : this()
     {
         _files = files;
         _exportRootDirectory = exportRootDirectory;
@@ -152,6 +156,13 @@ public partial class AdvancedExportWindow : SimpleWindow
         OnPropertyChanged(nameof(HasOverwriteWarning));
         OnPropertyChanged(nameof(OverwriteWarning));
         OnPropertyChanged(nameof(CanExport));
+
+        // Restore saved export settings
+        if (savedConfig?.ExportDoCopy is bool c) DoCopy = c;
+        if (savedConfig?.ExportDoConvert is bool cv) DoConvert = cv;
+        if (savedConfig?.ExportDoDecompress is bool d) DoDecompress = d;
+        if (savedConfig?.ExportDoExportMaterials is bool m) DoExportMaterials = m;
+        if (savedConfig?.ExportTmmToGltf is bool g) DoTmmToGltf = g;
     }
 
     /// <summary>
@@ -165,6 +176,7 @@ public partial class AdvancedExportWindow : SimpleWindow
         _result.Convert = DoConvert;
         _result.Decompress = DoDecompress;
         _result.ExportMaterials = DoExportMaterials;
+        _result.TmmToGltf = DoTmmToGltf;
         _result.Confirmed = true;
         Close();
     }

@@ -39,6 +39,20 @@ public static class ConversionHelper
     }
 
     /// <summary>
+    /// Converts DDT image data to PNG bytes.
+    /// Data should already be decompressed before calling this.
+    /// </summary>
+    public static async Task<byte[]?> ConvertDdtToPngBytes(ReadOnlyMemory<byte> data, CancellationToken token = default)
+    {
+        var ddt = new DDTImage(data);
+        using var image = await BarFormatConverter.ParseDDT(ddt, token: token);
+        if (image == null) return null;
+        using var memory = new MemoryStream();
+        await image.SaveAsPngAsync(memory, token);
+        return memory.ToArray();
+    }
+
+    /// <summary>
     /// Converts DDT image data to TGA bytes.
     /// Data should already be decompressed before calling this.
     /// </summary>
@@ -157,16 +171,35 @@ public static class ConversionHelper
     }
 
     /// <summary>
+    /// Converts TMM+TMM.DATA pair to GLB (glTF binary) format. Geometry only.
+    /// </summary>
+    public static byte[]? ConvertTmmToGlbBytes(ReadOnlyMemory<byte> tmmData, ReadOnlyMemory<byte> tmmDataData)
+    {
+        if (!TryParseTmmPair(tmmData, tmmDataData, out var tmm, out var dataFile)) return null;
+        return GlbExporter.ExportGlb(tmm, dataFile);
+    }
+
+    /// <summary>
+    /// Converts TMM+TMM.DATA pair to GLB (glTF binary) format with materials.
+    /// </summary>
+    public static byte[]? ConvertTmmToGlbBytes(ReadOnlyMemory<byte> tmmData, ReadOnlyMemory<byte> tmmDataData,
+        IReadOnlyList<GlbExporter.GlbMaterial>? materials)
+    {
+        if (!TryParseTmmPair(tmmData, tmmDataData, out var tmm, out var dataFile)) return null;
+        return GlbExporter.ExportGlb(tmm, dataFile, materials);
+    }
+
+    /// <summary>
     /// Determines the converted file extension for a given source extension.
     /// Returns null if no conversion is applicable.
     /// </summary>
-    public static string? GetConvertedExtension(string extension)
+    public static string? GetConvertedExtension(string extension, bool tmmToGltf = false)
     {
         return extension.ToLower() switch
         {
             ".xmb" => null, // XMB extension is removed, revealing the underlying extension (e.g. .xml.xmb → .xml)
             ".ddt" => ".tga",
-            ".tmm" => ".obj",
+            ".tmm" => tmmToGltf ? ".glb" : ".obj",
             _ => null
         };
     }
