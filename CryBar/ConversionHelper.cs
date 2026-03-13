@@ -92,6 +92,8 @@ public static class ConversionHelper
         if (!TryParseTmmPair(tmmData, tmmDataData, out var tmm, out var dataFile)) return null;
         var vertices = dataFile.Vertices!;
         var indices = dataFile.Indices!;
+        var meshGroups = tmm.MeshGroups!;
+        var materials = tmm.Materials!;
 
         var ic = CultureInfo.InvariantCulture;
         var sb = new StringBuilder(vertices.Length * 80); // rough pre-allocation
@@ -123,11 +125,11 @@ public static class ConversionHelper
 
         // Write faces grouped by mesh group
         int globalVertexOffset = 0;
-        for (int g = 0; g < tmm.MeshGroups.Length; g++)
+        for (int g = 0; g < meshGroups.Length; g++)
         {
-            var mg = tmm.MeshGroups[g];
-            var matName = mg.MaterialIndex < tmm.Materials.Length
-                ? tmm.Materials[mg.MaterialIndex] : $"material_{mg.MaterialIndex}";
+            var mg = meshGroups[g];
+            var matName = mg.MaterialIndex < materials.Length
+                ? materials[mg.MaterialIndex] : $"material_{mg.MaterialIndex}";
 
             sb.AppendLine($"g mesh_group_{g}");
             sb.AppendLine($"usemtl {matName}");
@@ -149,6 +151,7 @@ public static class ConversionHelper
 
             globalVertexOffset += (int)mg.VertexCount;
         }
+        
 
         return Encoding.UTF8.GetBytes(sb.ToString());
     }
@@ -168,22 +171,26 @@ public static class ConversionHelper
     /// <returns>FBX bytes, or null if parsing or export failed.</returns>
     public static byte[]? ConvertTmmToFbxBytes(ReadOnlyMemory<byte> tmmData, ReadOnlyMemory<byte> tmmDataData)
     {
-        if (!TryParseTmmPair(tmmData, tmmDataData, out var tmm, out var dataFile)) return null;
+        if (!TryParseTmmPair(tmmData, tmmDataData, out var tmm, out var dataFile))
+            return null;
+
         var vertices = dataFile.Vertices!;
         var indices = dataFile.Indices!;
+        var meshGroups = tmm.MeshGroups!;
+        var materials = tmm.Materials!;
 
         var scene = new Scene();
         scene.RootNode = new Node("Root");
 
         // Build material list
-        foreach (var matName in tmm.Materials)
+        foreach (var matName in materials)
             scene.Materials.Add(new Assimp.Material { Name = matName });
 
         // Build one Assimp mesh per TMM mesh group
         int globalVertOffset = 0;
-        for (int g = 0; g < tmm.MeshGroups.Length; g++)
+        for (int g = 0; g < meshGroups.Length; g++)
         {
-            var mg = tmm.MeshGroups[g];
+            var mg = meshGroups[g];
             var mesh = new Mesh($"mesh_group_{g}", PrimitiveType.Triangle);
             mesh.MaterialIndex = (int)mg.MaterialIndex;
 
