@@ -1,8 +1,4 @@
 using Avalonia.Controls;
-using Avalonia.Platform.Storage;
-using CryBar;
-using CryBarEditor.Classes;
-using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;

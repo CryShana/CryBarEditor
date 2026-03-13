@@ -1,7 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using CryBar;
-using CryBar.TMM;
 using CryBarEditor.Classes;
 using SixLabors.ImageSharp.PixelFormats;
 using System;
