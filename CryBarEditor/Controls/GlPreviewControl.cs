@@ -180,13 +180,14 @@ public class GlPreviewControl : OpenGlControlBase
         // Net result: upload Inverse(view) directly (the two transposes cancel).
         Matrix4x4.Invert(view, out var viewInv);
 
-        // Upload uniforms - System.Numerics.Matrix4x4 is row-major, OpenGL expects column-major
-        // We transpose before uploading so we can pass transpose=false
-        var mvpT = Matrix4x4.Transpose(mvp);
-        gl.UniformMatrix4fv(_uMvp, 1, false, &mvpT.M11);
+        // System.Numerics is row-major, row-vector: v' = v * MVP
+        // GLSL is column-major, column-vector: v' = MVP * v
+        // Passing row-major data to glUniformMatrix4fv(transpose=false) reinterprets rows as
+        // columns, which is the exact transpose needed for the convention switch.
+        gl.UniformMatrix4fv(_uMvp, 1, false, &mvp.M11);
 
-        // viewInv is already the correct value to upload: Inverse(view) in row-major
-        // = Transpose(Inverse-Transpose(view)) in row-major = Inverse-Transpose(view) in column-major
+        // Normal matrix = inverse-transpose(view). By the same row→column reinterpretation,
+        // passing inverse(view) raw gives GLSL the inverse-transpose.
         gl.UniformMatrix4fv(_uNormalMatrix, 1, false, &viewInv.M11);
 
         // Light direction (normalized, world space) - top-right-front
