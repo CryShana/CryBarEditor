@@ -27,6 +27,11 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
+using Ab4d.SharpEngine;
+using Ab4d.SharpEngine.AvaloniaUI;
+using Ab4d.SharpEngine.Cameras;
+using Ab4d.SharpEngine.Common;
+using Ab4d.SharpEngine.glTF;
 using TextMateSharp.Grammars;
 using Configuration = CryBarEditor.Classes.Configuration;
 
@@ -62,6 +67,14 @@ public partial class MainWindow : SimpleWindow
     double _imageZoomLevel = 1.0;
     readonly FileWatcherHelper _rootWatcher = new();
     readonly FileWatcherHelper _exportWatcher = new();
+
+    // 3D preview
+    SharpEngineSceneView? _sceneView;
+    PointerCameraController? _pointerCameraController;
+    SkiaSharpBitmapIO? _bitmapIO;
+    readonly GlbPreviewCache _glbCache = new(maxItems: 10);
+    int _tmmSelectedTabIndex = 0;
+    CancellationTokenSource? _glbConversionCts;
 
     /// <summary>
     /// This is used to find relative path for Root directory files
@@ -887,6 +900,8 @@ public partial class MainWindow : SimpleWindow
         const int MAX_DATA_SIZE = 1_500_000_000;    // 1.5 GB
         const int MAX_DATA_TEXT_SIZE = 100_000_000; // 100 MB
 
+        HideTmmPreview();
+
         var relative_path = get_rel_path(entry);
         var ext = Path.GetExtension(relative_path).ToLower();
         var text = "";
@@ -972,9 +987,12 @@ public partial class MainWindow : SimpleWindow
                     return;
                 }
 
-                ext = ".txt";
-                text = tmm.GetSummary(relative_path);
                 PreviewedFileNote = $"TMM v{tmm.Version} — {tmm.NumBones} bones, {tmm.NumMaterials} mats";
+                ShowTmmPreview(tmm.GetSummary(relative_path));
+
+                var tmmFileName = Path.GetFileName(relative_path);
+                _ = LoadTmm3DPreview(tmmFileName, data, token);
+                return;
             }
             else if (ext == ".tma")
             {
@@ -1500,6 +1518,139 @@ public partial class MainWindow : SimpleWindow
         // SCROLL TO TOP (must be with a delay, because the document gets moved a bit)
         Task.Delay(50).ContinueWith((t) => Dispatcher.UIThread.Post(() => _txtEditor.ScrollTo(0, 0)));
     }
+
+    #region TMM 3D Preview
+
+    void ShowTmmPreview(string metadataText)
+    {
+        _flatPreview.IsVisible = false;
+        _tmmTabControl.IsVisible = true;
+        _tmmTabControl.SelectedIndex = _tmmSelectedTabIndex;
+        _tmmMetadataEditor.Document = new TextDocument(metadataText);
+    }
+
+    void HideTmmPreview()
+    {
+        if (_tmmTabControl.IsVisible)
+            _tmmSelectedTabIndex = _tmmTabControl.SelectedIndex;
+        _tmmTabControl.IsVisible = false;
+        _flatPreview.IsVisible = true;
+        _glbConversionCts?.Cancel();
+    }
+
+    void Update3DStatus(string text)
+    {
+        Dispatcher.UIThread.Post(() => _3dStatusText.Text = text);
+    }
+
+    async Task LoadTmm3DPreview(string tmmFileName, Memory<byte> tmmData, CancellationToken token)
+    {
+        var oldCts = _glbConversionCts;
+        _glbConversionCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var ct = _glbConversionCts.Token;
+        oldCts?.Cancel();
+        oldCts?.Dispose();
+
+        Update3DStatus("Loading...");
+
+        if (!_glbCache.TryGet(tmmFileName, out var glbBytes))
+        {
+            var companionData = ResolveCompanionData(tmmFileName + ".data");
+            if (companionData == null) { Update3DStatus("No .tmm.data found"); return; }
+            if (ct.IsCancellationRequested) return;
+
+            var materials = await BuildGlbMaterials(tmmFileName);
+            if (ct.IsCancellationRequested) return;
+
+            glbBytes = await Task.Run(() =>
+                materials != null
+                    ? ConversionHelper.ConvertTmmToGlbBytes(tmmData, companionData.Value, materials)
+                    : ConversionHelper.ConvertTmmToGlbBytes(tmmData, companionData.Value),
+                ct);
+
+            if (glbBytes == null) { Update3DStatus("Conversion failed"); return; }
+            if (ct.IsCancellationRequested) return;
+
+            _glbCache.Add(tmmFileName, glbBytes);
+        }
+
+        if (ct.IsCancellationRequested) return;
+
+        LoadGlbIntoScene(glbBytes!);
+    }
+
+    void EnsureSceneViewInitialized()
+    {
+        if (_sceneView != null) return;
+
+        _sceneView = new SharpEngineSceneView();
+
+        var camera = new TargetPositionCamera("PreviewCamera")
+        {
+            Heading = -30,
+            Attitude = -20,
+            Distance = 5
+        };
+        _sceneView.SceneView.Camera = camera;
+        _sceneView.SceneView.BackgroundColor = new Color4(0.04f, 0.04f, 0.04f, 1f);
+
+        _3dViewContainer.Child = _sceneView;
+
+        _pointerCameraController = new PointerCameraController(_sceneView, _sceneView);
+    }
+
+    void LoadGlbIntoScene(byte[] glbBytes)
+    {
+        try
+        {
+            EnsureSceneViewInitialized();
+
+            if (_sceneView!.GpuDevice == null)
+            {
+                _sceneView.Initialize();
+                if (_sceneView.GpuDevice == null)
+                {
+                    Update3DStatus("Vulkan not available");
+                    return;
+                }
+            }
+
+            _sceneView.Scene.RootNode.DisposeAllChildren(true, true, true, true);
+
+            _bitmapIO ??= new SkiaSharpBitmapIO();
+            var importer = new glTFImporter(_bitmapIO, _sceneView.GpuDevice);
+            using var stream = new MemoryStream(glbBytes);
+            var model = importer.Import(stream, _ => null!);
+
+            if (model != null)
+            {
+                _sceneView.Scene.RootNode.Add(model);
+                FitCameraToScene();
+                Update3DStatus("");
+            }
+            else
+            {
+                Update3DStatus("Import failed");
+            }
+        }
+        catch (Exception ex)
+        {
+            Update3DStatus($"Error: {ex.Message}");
+        }
+    }
+
+    void FitCameraToScene()
+    {
+        if (_sceneView?.SceneView.Camera is TargetPositionCamera cam)
+            cam.FitIntoView(FitIntoViewType.CheckBounds, true, 1.1f, true);
+    }
+
+    void ResetCamera_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        FitCameraToScene();
+    }
+
+    #endregion
 
     public void RefreshFileEntries()
     {
@@ -2500,5 +2651,15 @@ public partial class MainWindow : SimpleWindow
     {
         var listbox = (ListBox)((ContextMenu)sender!).Parent!.Parent!;
         ContextSelectedItemsCount = listbox.SelectedItems!.Count;
+    }
+
+    protected override void OnClosing(WindowClosingEventArgs e)
+    {
+        _glbConversionCts?.Cancel();
+        _glbConversionCts?.Dispose();
+        _sceneView?.Dispose();
+        _sceneView = null;
+        _glbCache.Clear();
+        base.OnClosing(e);
     }
 }

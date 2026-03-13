@@ -34,6 +34,8 @@
     <!--Condition below is needed to remove Avalonia.Diagnostics package from build output in Release configuration.-->
     <PackageReference Condition="'$(Configuration)' == 'Debug'" Include="Avalonia.Diagnostics" Version="11.3.12" />
     <PackageReference Include="AvaloniaEdit.TextMate" Version="11.4.1" />
+    <PackageReference Include="Ab4d.SharpEngine.AvaloniaUI" Version="3.2.9509" />
+    <PackageReference Include="Ab4d.SharpEngine.glTF" Version="3.2.9509" />
     <PackageReference Include="Material.Icons.Avalonia" Version="3.0.0" />
     <PackageReference Include="TextMateSharp.Grammars" Version="2.0.3" />
   </ItemGroup>
