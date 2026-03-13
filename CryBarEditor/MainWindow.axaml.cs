@@ -53,6 +53,7 @@ public partial class MainWindow : SimpleWindow
     FMODBank? _fmodBank = null;
     BarFile? _barFile = null;
     FileStream? _barStream = null;
+    FileIndex? _fileIndex = null;
     BarFileEntry? _selectedBarEntry = null;
     FMODEvent? _selectedBankEntry = null;
     RootFileEntry? _selectedRootFileEntry = null;
@@ -489,6 +490,7 @@ public partial class MainWindow : SimpleWindow
 
         // reload files
         LoadFilesFromRoot();
+        RebuildFileIndex();
 
         // re-select prev file
         if (prev_file != null)
@@ -592,6 +594,7 @@ public partial class MainWindow : SimpleWindow
 
             RootDirectory = dir;
             LoadFilesFromRoot();
+            RebuildFileIndex();
 
             _rootWatcher.Watch(dir);
 
@@ -626,6 +629,100 @@ public partial class MainWindow : SimpleWindow
                     break;
                 }
             }
+        }
+    }
+
+    void RebuildFileIndex()
+    {
+        if (_loadedRootFiles == null || !Directory.Exists(_rootDirectory)) return;
+
+        var index = new FileIndex();
+        var rootRelevantPath = GetRootRelevantPath();
+
+        // Add root files (non-.bar)
+        foreach (var rootFile in _loadedRootFiles)
+        {
+            if (rootFile.Extension == ".BAR") continue;
+            var fullRelPath = Path.Combine(rootRelevantPath, rootFile.RelativePath);
+            index.Add(new FileIndexEntry
+            {
+                FullRelativePath = fullRelPath,
+                FileName = rootFile.Name,
+                Source = FileIndexSource.RootFile,
+            });
+        }
+
+        // Scan BAR files in parallel; FileIndex.Add is thread-safe
+        var barFiles = _loadedRootFiles
+            .Where(f => f.Extension == ".BAR")
+            .Select(f => Path.Combine(_rootDirectory, f.RelativePath))
+            .ToList();
+
+        Parallel.ForEach(barFiles, barFilePath =>
+        {
+            try
+            {
+                using var stream = File.OpenRead(barFilePath);
+                var bar = new BarFile(stream);
+                if (!bar.Load(out _)) return;
+
+                var barRootPath = bar.RootPath;
+                var entries = bar.Entries;
+                if (entries == null) return;
+
+                foreach (var entry in entries)
+                {
+                    var fullRelPath = string.IsNullOrEmpty(barRootPath)
+                        ? entry.RelativePath
+                        : Path.Combine(barRootPath, entry.RelativePath);
+
+                    index.Add(new FileIndexEntry
+                    {
+                        FullRelativePath = fullRelPath,
+                        FileName = entry.Name,
+                        Source = FileIndexSource.BarEntry,
+                        BarFilePath = barFilePath,
+                        BarRootPath = barRootPath,
+                        EntryRelativePath = entry.RelativePath,
+                    });
+                }
+            }
+            catch { /* skip unreadable BAR files */ }
+        });
+
+        _fileIndex = index;
+    }
+
+    Memory<byte>? ReadFromIndexEntry(FileIndexEntry entry)
+    {
+        if (entry.Source == FileIndexSource.RootFile)
+        {
+            var rootRelevantPath = GetRootRelevantPath();
+            var relPath = entry.FullRelativePath;
+            if (relPath.StartsWith(rootRelevantPath, StringComparison.OrdinalIgnoreCase))
+                relPath = relPath[rootRelevantPath.Length..];
+            var diskPath = Path.Combine(_rootDirectory, relPath);
+            if (!File.Exists(diskPath)) return null;
+            return File.ReadAllBytes(diskPath);
+        }
+
+        if (entry.BarFilePath == null || entry.EntryRelativePath == null) return null;
+
+        try
+        {
+            using var stream = File.OpenRead(entry.BarFilePath);
+            var bar = new BarFile(stream);
+            if (!bar.Load(out _)) return null;
+
+            var barEntry = bar.Entries?.FirstOrDefault(e =>
+                e.RelativePath.Equals(entry.EntryRelativePath, StringComparison.OrdinalIgnoreCase));
+            if (barEntry == null) return null;
+
+            return BarCompression.EnsureDecompressed(barEntry.ReadDataRaw(stream), out _);
+        }
+        catch
+        {
+            return null;
         }
     }
 
@@ -1021,13 +1118,12 @@ public partial class MainWindow : SimpleWindow
                 // FINALIZE RELATIVE PATH
                 var ext = Path.GetExtension(relative_path).ToLower();
                 bool isConvertible = should_convert && ConversionHelper.IsConvertibleExtension(ext);
-                var tmmToFbx = options?.TmmToFbx == true;
                 if (isConvertible)
                 {
                     if (ext == ".xmb")
                         relative_path = relative_path[..^4];    // remove .XMB extension, revealing underlying (e.g. .xml)
                     else
-                        relative_path = relative_path[..^ext.Length] + ConversionHelper.GetConvertedExtension(ext, tmmToFbx);
+                        relative_path = relative_path[..^ext.Length] + ConversionHelper.GetConvertedExtension(ext);
                 }
 
                 // DETERMINE EXPORT PATH
@@ -1097,14 +1193,106 @@ public partial class MainWindow : SimpleWindow
                                 if (found.Length > 0) companionData = found;
                             }
 
+                            // Fallback: search via file index
+                            if (companionData == null && _fileIndex != null)
+                            {
+                                var indexEntries = _fileIndex.Find(dataFileName);
+                                foreach (var ie in indexEntries)
+                                {
+                                    var indexData = ReadFromIndexEntry(ie);
+                                    if (indexData != null)
+                                    {
+                                        companionData = indexData;
+                                        break;
+                                    }
+                                }
+                            }
+
                             if (companionData != null)
                             {
-                                var convertedBytes = tmmToFbx
-                                    ? ConversionHelper.ConvertTmmToFbxBytes(data, companionData.Value)
-                                    : ConversionHelper.ConvertTmmToObjBytes(data, companionData.Value);
+                                var mtlName = (options?.ExportMaterials == true) ? Path.GetFileNameWithoutExtension(tmmFileName) + ".mtl" : null;
+                                var convertedBytes = ConversionHelper.ConvertTmmToObjBytes(data, companionData.Value, mtlName);
                                 if (convertedBytes != null)
                                 {
                                     file.Write(convertedBytes);
+
+                                    // Material export
+                                    if (options?.ExportMaterials == true && _fileIndex != null)
+                                    {
+                                        try
+                                        {
+                                            var tmmName = Path.GetFileNameWithoutExtension(tmmFileName);
+                                            var materialName = tmmName + ".material";
+
+                                            // Try .material.XMB first, then .material
+                                            var materialEntries = _fileIndex.Find(materialName + ".XMB");
+                                            if (materialEntries.Count == 0)
+                                                materialEntries = _fileIndex.Find(materialName);
+
+                                            if (materialEntries.Count > 0)
+                                            {
+                                                var matEntry = materialEntries[0];
+                                                var matData = ReadFromIndexEntry(matEntry);
+                                                if (matData != null)
+                                                {
+                                                    // Convert XMB to XML if needed
+                                                    var matBytes = BarCompression.EnsureDecompressed(matData.Value, out _);
+                                                    string? xmlText;
+                                                    if (matEntry.FileName.EndsWith(".XMB", StringComparison.OrdinalIgnoreCase))
+                                                    {
+                                                        xmlText = ConversionHelper.ConvertXmbToXmlText(matBytes.Span);
+                                                    }
+                                                    else
+                                                    {
+                                                        xmlText = Encoding.UTF8.GetString(matBytes.Span);
+                                                    }
+
+                                                    if (xmlText != null)
+                                                    {
+                                                        var materials = MaterialExporter.ParseMaterialXml(xmlText);
+                                                        var texturePaths = MaterialExporter.GetAllTexturePaths(materials);
+                                                        var resolvedTextures = new Dictionary<string, string>();
+                                                        var exportDir = Path.GetDirectoryName(exported_path)!;
+
+                                                        // Find and convert each texture
+                                                        foreach (var texPath in texturePaths)
+                                                        {
+                                                            var texFileName = Path.GetFileName(texPath.Replace('\\', '/'));
+
+                                                            var texEntries = _fileIndex.Find(texFileName + ".ddt");
+                                                            if (texEntries.Count == 0)
+                                                                texEntries = _fileIndex.Find(texFileName);
+
+                                                            if (texEntries.Count > 0)
+                                                            {
+                                                                var texData = ReadFromIndexEntry(texEntries[0]);
+                                                                if (texData != null)
+                                                                {
+                                                                    var ddtData = BarCompression.EnsureDecompressed(texData.Value, out _);
+                                                                    var texTgaBytes = await ConversionHelper.ConvertDdtToTgaBytes(ddtData);
+                                                                    if (texTgaBytes != null)
+                                                                    {
+                                                                        var tgaFileName = texFileName + ".tga";
+                                                                        var tgaPath = Path.Combine(exportDir, tgaFileName);
+                                                                        File.WriteAllBytes(tgaPath, texTgaBytes);
+                                                                        resolvedTextures[texPath] = tgaFileName;
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+
+                                                        // Generate and write MTL file
+                                                        var mtlContent = MaterialExporter.GenerateMtl(materials, resolvedTextures);
+                                                        var mtlFileNameOut = Path.GetFileNameWithoutExtension(exported_path) + ".mtl";
+                                                        var mtlPath = Path.Combine(exportDir, mtlFileNameOut);
+                                                        File.WriteAllText(mtlPath, mtlContent);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        catch { /* material export is best-effort */ }
+                                    }
+
                                     continue;
                                 }
                             }
@@ -1774,18 +1962,18 @@ public partial class MainWindow : SimpleWindow
         // then we cache this value for later use
 
         var relevant_path = "";
-        var dirs = _rootDirectory.Split('\\', StringSplitOptions.RemoveEmptyEntries);
+        var dirs = _rootDirectory.Split(new[] { '\\', '/' }, StringSplitOptions.RemoveEmptyEntries);
         foreach (var dir in dirs)
         {
             if (dir == ROOT_DIRECTORY_NAME)
             {
-                relevant_path += ROOT_DIRECTORY_NAME + "\\";
+                relevant_path += ROOT_DIRECTORY_NAME + Path.DirectorySeparatorChar;
                 continue;
             }
 
             if (relevant_path.Length > 0)
             {
-                relevant_path += dir + "\\";
+                relevant_path += dir + Path.DirectorySeparatorChar;
             }
         }
         _rootRelevantPathCached = relevant_path;
@@ -1975,11 +2163,7 @@ public partial class MainWindow : SimpleWindow
     }
 
     async void MenuItem_ConvertTMMtoOBJ(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
-        => await ConvertTmmToFormat(sender, "OBJ", ".obj", ConversionHelper.ConvertTmmToObjBytes);
-
-    async void MenuItem_ConvertTMMtoFBX(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
-        => await ConvertTmmToFormat(sender, "FBX", ".fbx", ConversionHelper.ConvertTmmToFbxBytes,
-            ". Ensure assimp.dll is alongside the executable.");
+        => await ConvertTmmToFormat(sender, "OBJ", ".obj", (a, b) => ConversionHelper.ConvertTmmToObjBytes(a, b));
 
     async Task ConvertTmmToFormat(object? sender, string formatName, string extension,
         Func<ReadOnlyMemory<byte>, ReadOnlyMemory<byte>, byte[]?> converter, string? errorNote = null)

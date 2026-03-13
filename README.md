@@ -31,8 +31,7 @@ The purpose of this tool is to enable fast and easy modding of Age of Mythology 
   - Convert XML -> XMB
   - Convert XMB -> XML
   - Convert DDT -> TGA
-  - Convert TMM -> OBJ
-  - Convert TMM -> FBX
+  - Convert TMM -> OBJ (optionally with materials)
   - Convert image -> DDT
   - Compress with Alz4/L33t
   - Decompress file with Alz4/L33t

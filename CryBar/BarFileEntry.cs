@@ -18,10 +18,18 @@ public class BarFileEntry
 
     public BarFileEntry(string relative_path)
     {
-        Name = Path.GetFileName(relative_path);
         RelativePath = relative_path;
-        DirectoryPath = Path.GetDirectoryName(relative_path) ?? "";
-        if (DirectoryPath.Length > 0) DirectoryPath += "\\";
+        var lastSlash = relative_path.LastIndexOf('\\');
+        if (lastSlash >= 0)
+        {
+            Name = relative_path[(lastSlash + 1)..];
+            DirectoryPath = relative_path[..(lastSlash + 1)]; // includes trailing backslash
+        }
+        else
+        {
+            Name = relative_path;
+            DirectoryPath = "";
+        }
     }
 
     /// <summary>

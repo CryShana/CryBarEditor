@@ -102,7 +102,6 @@
 					<MenuItem Header="DDT to TGA" Click="MenuItem_ConvertDDTtoTGA" />
 					<MenuItem Header="Image to DDT" Click="MenuItem_ConvertToDDT" />
 					<MenuItem Header="TMM to OBJ" Click="MenuItem_ConvertTMMtoOBJ" />
-					<MenuItem Header="TMM to FBX" Click="MenuItem_ConvertTMMtoFBX" />
 				</MenuItem>
 				<MenuItem Header="Compress">
 					<MenuItem Header="Alz4" Click="MenuItem_CompressAlz4" />

@@ -695,32 +695,6 @@ public class IntegrationTests
         Assert.Contains("usemtl ", objText); // material assignments
     }
 
-    [SkippableFact]
-    public void TmmFbxExport_Greek_Petrobolos()
-    {
-        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
-
-        // Load .tmm
-        var (bar, tmmEntry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "petrobolos.tmm");
-        var tmmRaw = BarCompression.EnsureDecompressed(tmmEntry.ReadDataRaw(stream), out _);
-        stream.Dispose();
-
-        // Load .tmm.data
-        var (bar2, dataEntry, stream2) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheModelDataGreek.bar", "petrobolos.tmm.data");
-        var dataRaw = BarCompression.EnsureDecompressed(dataEntry.ReadDataRaw(stream2), out _);
-        stream2.Dispose();
-
-        // Convert to FBX
-        var fbxBytes = ConversionHelper.ConvertTmmToFbxBytes(tmmRaw, dataRaw);
-
-        Assert.NotNull(fbxBytes);
-        Assert.True(fbxBytes.Length > 100, $"FBX should be non-trivial, got {fbxBytes.Length} bytes");
-
-        // Valid FBX binary starts with "Kaydara FBX Binary"
-        var header = System.Text.Encoding.ASCII.GetString(fbxBytes, 0, System.Math.Min(20, fbxBytes.Length));
-        Assert.StartsWith("Kaydara FBX Binary", header);
-    }
-
     #endregion
 
     #region TMA - Animation File Exploration

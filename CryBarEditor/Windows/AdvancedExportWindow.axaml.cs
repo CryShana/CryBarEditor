@@ -15,7 +15,7 @@ public partial class AdvancedExportWindow : SimpleWindow
     bool _doCopy = true;
     bool _doConvert;
     bool _doDecompress;
-    bool _doTmmToFbx;
+    bool _doExportMaterials;
 
     readonly ExportOptions _result;
     readonly string _exportRootDirectory;
@@ -25,9 +25,9 @@ public partial class AdvancedExportWindow : SimpleWindow
     bool _hasTmmFiles;
 
     public bool DoCopy { get => _doCopy; set { _doCopy = value; OnSelfChanged(); OnPropertyChanged(nameof(CanExport)); } }
-    public bool DoConvert { get => _doConvert; set { _doConvert = value; OnSelfChanged(); OnPropertyChanged(nameof(CanExport)); OnPropertyChanged(nameof(ShowDecompressOption)); OnPropertyChanged(nameof(CompressedFileNote)); OnPropertyChanged(nameof(ShowTmmToFbxOption)); } }
+    public bool DoConvert { get => _doConvert; set { _doConvert = value; OnSelfChanged(); OnPropertyChanged(nameof(CanExport)); OnPropertyChanged(nameof(ShowDecompressOption)); OnPropertyChanged(nameof(CompressedFileNote)); OnPropertyChanged(nameof(ShowExportMaterialsOption)); } }
     public bool DoDecompress { get => _doDecompress; set { _doDecompress = value; OnSelfChanged(); } }
-    public bool DoTmmToFbx { get => _doTmmToFbx; set { _doTmmToFbx = value; OnSelfChanged(); } }
+    public bool DoExportMaterials { get => _doExportMaterials; set { _doExportMaterials = value; OnSelfChanged(); } }
 
     public bool CanExport => DoCopy || DoConvert;
 
@@ -39,7 +39,7 @@ public partial class AdvancedExportWindow : SimpleWindow
         ? _compressedNonConvertibleCount
         : _compressedNonConvertibleCount + _compressedConvertibleCount;
 
-    public bool ShowTmmToFbxOption => DoConvert && _hasTmmFiles;
+    public bool ShowExportMaterialsOption => DoConvert && _hasTmmFiles;
     public bool ShowDecompressOption => UnhandledCompressedCount > 0;
     public string CompressedFileNote => UnhandledCompressedCount > 0
         ? $"{UnhandledCompressedCount} of {_files.Count} file(s) are compressed and won't be auto-decompressed by conversion. " +
@@ -164,7 +164,7 @@ public partial class AdvancedExportWindow : SimpleWindow
         _result.Copy = DoCopy;
         _result.Convert = DoConvert;
         _result.Decompress = DoDecompress;
-        _result.TmmToFbx = DoTmmToFbx;
+        _result.ExportMaterials = DoExportMaterials;
         _result.Confirmed = true;
         Close();
     }

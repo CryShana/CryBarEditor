@@ -67,12 +67,12 @@
 				</StackPanel>
 			</CheckBox>
 
-			<!-- TMM→FBX option (only when Convert is checked and TMM files are present) -->
-			<CheckBox DockPanel.Dock="Top" IsChecked="{Binding DoTmmToFbx}" Margin="24,0,0,2"
-					  IsVisible="{Binding ShowTmmToFbxOption}">
+			<!-- Export TMM materials option (only when Convert is checked and TMM files are present) -->
+			<CheckBox DockPanel.Dock="Top" IsChecked="{Binding DoExportMaterials}" Margin="24,0,0,2"
+					  IsVisible="{Binding ShowExportMaterialsOption}">
 				<StackPanel Orientation="Horizontal">
-					<TextBlock Text="TMM→FBX instead" VerticalAlignment="Center" />
-					<TextBlock Text=" — replaces default TMM→OBJ conversion" Foreground="Gray" VerticalAlignment="Center" />
+					<TextBlock Text="Export TMM materials" VerticalAlignment="Center" />
+					<TextBlock Text=" — extracts .mtl and textures alongside .obj" Foreground="Gray" VerticalAlignment="Center" />
 				</StackPanel>
 			</CheckBox>
 

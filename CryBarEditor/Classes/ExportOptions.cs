@@ -28,8 +28,8 @@ public class ExportOptions
     /// <summary>Whether any file in the selection is compressed</summary>
     public bool AnyCompressed { get; set; }
 
-    /// <summary>Use FBX instead of OBJ when converting TMM files</summary>
-    public bool TmmToFbx { get; set; }
+    /// <summary>Export .mtl and textures alongside TMM→OBJ conversion</summary>
+    public bool ExportMaterials { get; set; }
 
     /// <summary>Whether any file in the selection is convertible (XMB/DDT)</summary>
     public bool AnyConvertible { get; set; }
