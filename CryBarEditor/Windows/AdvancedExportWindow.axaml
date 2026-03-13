@@ -124,6 +124,17 @@
 				</StackPanel>
 			</Border>
 
+			<!-- Filename conflict warning (direct export only) -->
+			<Border DockPanel.Dock="Top" Background="#2a1e1e" Padding="6" CornerRadius="4" Margin="0,4,0,4"
+					IsVisible="{Binding HasFilenameConflict}">
+				<StackPanel Orientation="Horizontal">
+					<micons:MaterialIcon Kind="AlertCircleOutline" Width="16" Height="16"
+										 Margin="0,0,6,0" Foreground="#f55142" VerticalAlignment="Center" />
+					<TextBlock Text="{Binding FilenameConflictWarning}" Foreground="#d8a0a0"
+							   TextWrapping="Wrap" VerticalAlignment="Center" />
+				</StackPanel>
+			</Border>
+
 			<!-- Buttons -->
 			<DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0" LastChildFill="False">
 				<Button DockPanel.Dock="Right" Content="Cancel" Click="CancelClick" IsCancel="True" Margin="8,0,0,0" />

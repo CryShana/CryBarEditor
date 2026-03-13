@@ -55,6 +55,9 @@ public partial class AdvancedExportWindow : SimpleWindow
     public bool HasOverwriteWarning { get; }
     public string OverwriteWarning { get; }
 
+    public bool HasFilenameConflict { get; }
+    public string FilenameConflictWarning { get; }
+
     public AdvancedExportWindow()
     {
         _result = new ExportOptions();
@@ -63,6 +66,7 @@ public partial class AdvancedExportWindow : SimpleWindow
         FileSummary = "";
         Recommendation = "";
         OverwriteWarning = "";
+        FilenameConflictWarning = "";
 
         DataContext = this;
         InitializeComponent();
@@ -146,6 +150,19 @@ public partial class AdvancedExportWindow : SimpleWindow
             OverwriteWarning = "";
         }
 
+        // Check for filename conflicts in direct export (flattened, so same name = overwrite)
+        if (isDirectExport)
+        {
+            var conflictCount = files
+                .GroupBy(f => Path.GetFileName(f.RelativePath), StringComparer.OrdinalIgnoreCase)
+                .Count(g => g.Count() > 1);
+
+            HasFilenameConflict = conflictCount > 0;
+            FilenameConflictWarning = conflictCount > 0
+                ? $"{conflictCount} filename(s) appear more than once — only the last file will be kept."
+                : "";
+        }
+
         OnPropertyChanged(nameof(FileSummary));
         OnPropertyChanged(nameof(Recommendation));
         OnPropertyChanged(nameof(HasRecommendation));
@@ -155,6 +172,8 @@ public partial class AdvancedExportWindow : SimpleWindow
         OnPropertyChanged(nameof(DirectExportPath));
         OnPropertyChanged(nameof(HasOverwriteWarning));
         OnPropertyChanged(nameof(OverwriteWarning));
+        OnPropertyChanged(nameof(HasFilenameConflict));
+        OnPropertyChanged(nameof(FilenameConflictWarning));
         OnPropertyChanged(nameof(CanExport));
 
         // Restore saved export settings
