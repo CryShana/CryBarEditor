@@ -1554,8 +1554,10 @@ public partial class MainWindow : SimpleWindow
             // Flush pending mesh on first switch to 3D tab, or re-render if already loaded
             if (_pendingMeshData != null)
                 FlushPendingMesh();
-            else
-                _glPreview?.RequestNextFrameRendering();
+
+            // Dispatch render request after layout pass so GL context is ready
+            Dispatcher.UIThread.Post(() => _glPreview?.RequestNextFrameRendering(),
+                DispatcherPriority.Render);
         }
     }
 
