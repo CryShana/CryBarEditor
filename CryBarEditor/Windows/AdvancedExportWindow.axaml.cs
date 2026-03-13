@@ -15,16 +15,19 @@ public partial class AdvancedExportWindow : SimpleWindow
     bool _doCopy = true;
     bool _doConvert;
     bool _doDecompress;
+    bool _doTmmToFbx;
 
     readonly ExportOptions _result;
     readonly string _exportRootDirectory;
     readonly IReadOnlyList<ExportFileInfo> _files;
     int _compressedNonConvertibleCount;
     int _compressedConvertibleCount;
+    bool _hasTmmFiles;
 
     public bool DoCopy { get => _doCopy; set { _doCopy = value; OnSelfChanged(); OnPropertyChanged(nameof(CanExport)); } }
-    public bool DoConvert { get => _doConvert; set { _doConvert = value; OnSelfChanged(); OnPropertyChanged(nameof(CanExport)); OnPropertyChanged(nameof(ShowDecompressOption)); OnPropertyChanged(nameof(CompressedFileNote)); } }
+    public bool DoConvert { get => _doConvert; set { _doConvert = value; OnSelfChanged(); OnPropertyChanged(nameof(CanExport)); OnPropertyChanged(nameof(ShowDecompressOption)); OnPropertyChanged(nameof(CompressedFileNote)); OnPropertyChanged(nameof(ShowTmmToFbxOption)); } }
     public bool DoDecompress { get => _doDecompress; set { _doDecompress = value; OnSelfChanged(); } }
+    public bool DoTmmToFbx { get => _doTmmToFbx; set { _doTmmToFbx = value; OnSelfChanged(); } }
 
     public bool CanExport => DoCopy || DoConvert;
 
@@ -36,6 +39,7 @@ public partial class AdvancedExportWindow : SimpleWindow
         ? _compressedNonConvertibleCount
         : _compressedNonConvertibleCount + _compressedConvertibleCount;
 
+    public bool ShowTmmToFbxOption => DoConvert && _hasTmmFiles;
     public bool ShowDecompressOption => UnhandledCompressedCount > 0;
     public string CompressedFileNote => UnhandledCompressedCount > 0
         ? $"{UnhandledCompressedCount} of {_files.Count} file(s) are compressed and won't be auto-decompressed by conversion. " +
@@ -94,6 +98,8 @@ public partial class AdvancedExportWindow : SimpleWindow
             ConversionHelper.IsConvertibleExtension(Path.GetExtension(f.RelativePath)));
         _compressedNonConvertibleCount = files.Count(f => f.IsCompressed &&
             !ConversionHelper.IsConvertibleExtension(Path.GetExtension(f.RelativePath)));
+        _hasTmmFiles = files.Any(f => Path.GetExtension(f.RelativePath)
+            .Equals(".tmm", StringComparison.OrdinalIgnoreCase));
 
         int compressedCount = _compressedConvertibleCount + _compressedNonConvertibleCount;
         if (compressedCount > 0)
@@ -158,6 +164,7 @@ public partial class AdvancedExportWindow : SimpleWindow
         _result.Copy = DoCopy;
         _result.Convert = DoConvert;
         _result.Decompress = DoDecompress;
+        _result.TmmToFbx = DoTmmToFbx;
         _result.Confirmed = true;
         Close();
     }

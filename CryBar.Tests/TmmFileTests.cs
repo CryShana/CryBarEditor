@@ -99,7 +99,7 @@ public class TmmFileTests
         var data = CreateSyntheticTmm(
             numMeshGroups: 2,
             materials: ["stone", "wood"],
-            shaderTechniques: ["default"]);
+            submodels: ["default"]);
 
         var tmm = new TmmFile(data);
         Assert.True(tmm.Parse());
@@ -160,7 +160,7 @@ public class TmmFileTests
         // Write absurdly large mesh group count
         w.Write(uint.MaxValue); // numMeshGroups
         w.Write(0u); // numMaterials
-        w.Write(0u); // numShaderTechniques
+        w.Write(0u); // numSubmodels
         w.Write(0u); // numBones
         w.Write(0u); // reserved
         w.Write(0u); // numAttachments
@@ -177,7 +177,7 @@ public class TmmFileTests
         var data = CreateSyntheticTmm(
             numMeshGroups: 1,
             materials: ["wall_stone"],
-            shaderTechniques: ["default"],
+            submodels: ["default"],
             numBones: 2,
             numAttachments: 1);
 
@@ -209,7 +209,7 @@ public class TmmFileTests
         string[]? importNames = null,
         uint numMeshGroups = 0,
         string[]? materials = null,
-        string[]? shaderTechniques = null,
+        string[]? submodels = null,
         uint numBones = 0,
         uint numAttachments = 0,
         uint numVertices = 0,
@@ -217,7 +217,7 @@ public class TmmFileTests
     {
         importNames ??= [];
         materials ??= [];
-        shaderTechniques ??= [];
+        submodels ??= [];
 
         using var ms = new MemoryStream();
         using var w = new BinaryWriter(ms);
@@ -230,7 +230,7 @@ public class TmmFileTests
         // Section counts
         w.Write(numMeshGroups);
         w.Write((uint)materials.Length);
-        w.Write((uint)shaderTechniques.Length);
+        w.Write((uint)submodels.Length);
         w.Write(numBones);
         w.Write(0u); // reserved
         w.Write(numAttachments);
@@ -277,7 +277,7 @@ public class TmmFileTests
             WriteUTF16String(w, mat);
 
         // Shader techniques
-        foreach (var tech in shaderTechniques)
+        foreach (var tech in submodels)
             WriteUTF16String(w, tech);
 
         // Bones

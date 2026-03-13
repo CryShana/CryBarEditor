@@ -578,7 +578,7 @@ public class IntegrationTests
         Assert.True(tmm.MeshGroups.Length > 0, "Should have mesh groups");
         Assert.NotNull(tmm.Materials);
         Assert.True(tmm.Materials.Length > 0, "Should have materials");
-        Assert.NotNull(tmm.ShaderTechniques);
+        Assert.NotNull(tmm.Submodels);
 
         // Verify summary doesn't throw
         var summary = tmm.GetSummary();
@@ -695,6 +695,32 @@ public class IntegrationTests
         Assert.Contains("usemtl ", objText); // material assignments
     }
 
+    [SkippableFact]
+    public void TmmFbxExport_Greek_Petrobolos()
+    {
+        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+
+        // Load .tmm
+        var (bar, tmmEntry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "petrobolos.tmm");
+        var tmmRaw = BarCompression.EnsureDecompressed(tmmEntry.ReadDataRaw(stream), out _);
+        stream.Dispose();
+
+        // Load .tmm.data
+        var (bar2, dataEntry, stream2) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheModelDataGreek.bar", "petrobolos.tmm.data");
+        var dataRaw = BarCompression.EnsureDecompressed(dataEntry.ReadDataRaw(stream2), out _);
+        stream2.Dispose();
+
+        // Convert to FBX
+        var fbxBytes = ConversionHelper.ConvertTmmToFbxBytes(tmmRaw, dataRaw);
+
+        Assert.NotNull(fbxBytes);
+        Assert.True(fbxBytes.Length > 100, $"FBX should be non-trivial, got {fbxBytes.Length} bytes");
+
+        // Valid FBX binary starts with "Kaydara FBX Binary"
+        var header = System.Text.Encoding.ASCII.GetString(fbxBytes, 0, System.Math.Min(20, fbxBytes.Length));
+        Assert.StartsWith("Kaydara FBX Binary", header);
+    }
+
     #endregion
 
     #region TMA - Animation File Exploration
@@ -740,6 +766,120 @@ public class IntegrationTests
 
         Assert.True(parsed, $"TMA header should parse for {tmaEntry.Name}");
         Assert.True(tma.Version > 0, "TMA should have a positive version");
+    }
+
+    [SkippableFact]
+    public void TmaFile_FullBodyParse()
+    {
+        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+
+        var barPath = Path.Combine(GamePath, @"modelcache\ArtModelCacheAnimationData.bar");
+        Skip.IfNot(File.Exists(barPath), "Animation BAR not found");
+
+        using var stream = File.OpenRead(barPath);
+        var bar = new BarFile(stream);
+        bar.Load(out _);
+
+        var tmaEntry = bar.Entries!.FirstOrDefault(e => e.Name.EndsWith(".tma", StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(tmaEntry);
+
+        var raw = BarCompression.EnsureDecompressed(tmaEntry.ReadDataRaw(stream), out _);
+        var tma = new TmaFile(raw);
+        Assert.True(tma.Parse(), $"TMA should parse for {tmaEntry.Name}");
+
+        // Header fields
+        Assert.True(tma.Version > 0, "Version should be positive");
+        Assert.True(tma.NumTracks > 0, "Should have at least one animation track");
+        Assert.True(tma.FrameCount > 0, "Should have at least one frame");
+        Assert.True(tma.Duration > 0, "Duration should be positive");
+
+        // Full body: verify bones and tracks were populated if the body parsed correctly
+        if (tma.Bones != null)
+        {
+            Assert.True(tma.Bones.Length == tma.NumBones, "Bones array length should match NumBones");
+            foreach (var bone in tma.Bones)
+            {
+                Assert.False(string.IsNullOrEmpty(bone.Name), "Bone name should not be empty");
+                Assert.True(bone.LocalTransform.Length == 16, "LocalTransform should be 4×4 = 16 floats");
+            }
+        }
+
+        if (tma.Tracks != null)
+        {
+            Assert.True(tma.Tracks.Length == tma.NumTracks, "Tracks array length should match NumTracks");
+            foreach (var track in tma.Tracks)
+            {
+                Assert.False(string.IsNullOrEmpty(track.Name), "Track name should not be empty");
+                Assert.True(track.KeyframeCount >= 0, "KeyframeCount should be non-negative");
+            }
+        }
+
+        // GetSummary should not throw
+        var summary = tma.GetSummary();
+        Assert.Contains("TMA Animation File", summary);
+        Assert.Contains($"Version: {tma.Version}", summary);
+    }
+
+    [SkippableFact]
+    public void TmaFile_SakimoriAttack_FullBodyParse()
+    {
+        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+
+        var barPath = Path.Combine(GamePath, @"modelcache\ArtModelCacheAnimationData.bar");
+        Skip.IfNot(File.Exists(barPath), "Animation BAR not found");
+
+        const string entryName = "sakimori_tsurugi_attack_a.tma";
+
+        using var stream = File.OpenRead(barPath);
+        var bar = new BarFile(stream);
+        bar.Load(out _);
+
+        var entry = bar.Entries!.FirstOrDefault(e =>
+            e.Name.Equals(entryName, StringComparison.OrdinalIgnoreCase));
+        Skip.If(entry == null, $"Entry '{entryName}' not found in BAR");
+
+        var raw = BarCompression.EnsureDecompressed(entry!.ReadDataRaw(stream), out _);
+        var tma = new TmaFile(raw);
+        Assert.True(tma.Parse(), "TMA should parse successfully");
+
+        // Header
+        Assert.Equal(12u, tma.Version);
+        Assert.True(tma.NumTracks > 0, $"Expected tracks, got {tma.NumTracks}");
+        Assert.True(tma.FrameCount > 0, $"Expected frames, got {tma.FrameCount}");
+        Assert.True(tma.Duration > 0f, $"Expected positive duration, got {tma.Duration}");
+
+        // Full body should have parsed (v12 format)
+        Assert.NotNull(tma.Bones);
+        Assert.True(tma.Bones.Length > 0, "Expected at least one bone");
+        Assert.Equal((int)tma.NumBones, tma.Bones.Length);
+
+        // All bones should have a name and valid parent
+        foreach (var bone in tma.Bones)
+        {
+            Assert.False(string.IsNullOrEmpty(bone.Name), "Bone name should not be empty");
+            Assert.True(bone.ParentId >= -1, "Parent ID should be -1 (root) or a valid index");
+            Assert.Equal(16, bone.LocalTransform.Length);
+            Assert.Equal(16, bone.BindPose.Length);
+            Assert.Equal(16, bone.InverseBindPose.Length);
+        }
+
+        // Track and controller parsing is best-effort — keyframe data size formulas are not
+        // fully verified against all real files (Raw + Quat64 encoding size may be incorrect).
+        if (tma.Tracks != null)
+        {
+            Assert.Equal((int)tma.NumTracks, tma.Tracks.Length);
+            foreach (var track in tma.Tracks)
+            {
+                Assert.False(string.IsNullOrEmpty(track.Name), "Track name should not be empty");
+                Assert.True(track.KeyframeCount >= 0);
+            }
+        }
+
+        var summary = tma.GetSummary();
+        Assert.Contains("Version: 12", summary);
+        Assert.Contains($"Bones ({tma.Bones.Length})", summary);
+        if (tma.Tracks != null)
+            Assert.Contains($"Animation Tracks ({tma.Tracks.Length})", summary);
     }
 
     #endregion

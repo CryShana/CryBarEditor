@@ -33,7 +33,7 @@ public class TmmFile
     // Section counts
     public uint NumMeshGroups { get; private set; }
     public uint NumMaterials { get; private set; }
-    public uint NumShaderTechniques { get; private set; }
+    public uint NumSubmodels { get; private set; }
     public uint NumBones { get; private set; }
     public uint NumAttachments { get; private set; }
     public uint NumVertices { get; private set; }
@@ -56,7 +56,7 @@ public class TmmFile
     public TmmAttachment[]? Attachments { get; private set; }
     public TmmMeshGroup[]? MeshGroups { get; private set; }
     public string[]? Materials { get; private set; }
-    public string[]? ShaderTechniques { get; private set; }
+    public string[]? Submodels { get; private set; }
     public TmmBone[]? Bones { get; private set; }
 
     readonly ReadOnlyMemory<byte> _data;
@@ -68,7 +68,7 @@ public class TmmFile
 
     [MemberNotNullWhen(true, nameof(ImportNames), nameof(MainMatrix),
         nameof(Attachments), nameof(MeshGroups), nameof(Materials),
-        nameof(ShaderTechniques), nameof(Bones))]
+        nameof(Submodels), nameof(Bones))]
     public bool Parse()
     {
         var data = _data.Span;
@@ -124,8 +124,8 @@ public class TmmFile
         if (numMaterials > MaxMaterials) return false;
         NumMaterials = numMaterials;
 
-        if (!TryReadUInt32(data, ref offset, out var numShaderTechniques)) return false;
-        NumShaderTechniques = numShaderTechniques;
+        if (!TryReadUInt32(data, ref offset, out var numSubmodels)) return false;
+        NumSubmodels = numSubmodels;
 
         if (!TryReadUInt32(data, ref offset, out var numBones)) return false;
         if (numBones > MaxBones) return false;
@@ -233,7 +233,7 @@ public class TmmFile
                 VertexCount = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(offset + 8, 4)),
                 IndexCount = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(offset + 12, 4)),
                 MaterialIndex = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(offset + 16, 4)),
-                ShaderIndex = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(offset + 20, 4))
+                SubmodelMask = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(offset + 20, 4))
             };
             offset += 24;
         }
@@ -249,13 +249,13 @@ public class TmmFile
         Materials = materials;
 
         // Shader techniques
-        var shaderTechniques = new string[numShaderTechniques];
-        for (int i = 0; i < numShaderTechniques; i++)
+        var submodels = new string[numSubmodels];
+        for (int i = 0; i < numSubmodels; i++)
         {
-            if (!TryReadUTF16String(data, ref offset, out var techName)) return false;
-            shaderTechniques[i] = techName;
+            if (!TryReadUTF16String(data, ref offset, out var submodelName)) return false;
+            submodels[i] = submodelName;
         }
-        ShaderTechniques = shaderTechniques;
+        Submodels = submodels;
 
         // Bones
         var bones = new TmmBone[numBones];
@@ -299,16 +299,23 @@ public class TmmFile
     /// <summary>
     /// Generates a human-readable summary of the parsed TMM file.
     /// </summary>
-    public string GetSummary()
+    /// <param name="tmmFilePath">
+    /// Optional path of the .tmm file (relative or absolute). When provided, the inferred
+    /// .material file path is shown alongside each material name.
+    /// </param>
+    public string GetSummary(string? tmmFilePath = null)
     {
         if (!Parsed) return "(TMM not parsed)";
         // All arrays are guaranteed non-null after successful Parse() via [MemberNotNullWhen]
         var importNames = ImportNames!;
         var meshGroups = MeshGroups!;
         var materials = Materials!;
-        var shaderTechniques = ShaderTechniques!;
+        var submodels = Submodels!;
         var bones = Bones!;
         var attachments = Attachments!;
+
+        // Infer the .material file path from the TMM path (same path + ".material")
+        string? materialFilePath = tmmFilePath != null ? tmmFilePath + ".material" : null;
 
         var sb = new StringBuilder();
         sb.AppendLine($"TMM Model (Version {Version})");
@@ -327,14 +334,19 @@ public class TmmFile
         {
             var mg = meshGroups[i];
             var matName = mg.MaterialIndex < materials.Length ? materials[mg.MaterialIndex] : $"#{mg.MaterialIndex}";
-            var shaderName = mg.ShaderIndex < shaderTechniques.Length ? shaderTechniques[mg.ShaderIndex] : $"#{mg.ShaderIndex}";
-            sb.AppendLine($"  [{i}] {mg.VertexCount} verts, {mg.TriangleCount} tris, material: \"{matName}\", shader: \"{shaderName}\"");
+            var submodelName = mg.SubmodelMask < submodels.Length ? submodels[mg.SubmodelMask] : $"mask=0x{mg.SubmodelMask:X}";
+            sb.AppendLine($"  [{i}] {mg.VertexCount} verts, {mg.TriangleCount} tris, material: \"{matName}\", submodel: \"{submodelName}\"");
         }
         sb.AppendLine();
 
-        // Materials
-        sb.AppendLine($"Materials: {string.Join(", ", materials)}");
-        sb.AppendLine($"Shader Techniques: {string.Join(", ", shaderTechniques)}");
+        // Materials — each name is a relative path (without extension) to a .material XML file
+        sb.AppendLine($"Materials ({materials.Length}):");
+        foreach (var mat in materials)
+            sb.AppendLine($"  {mat}.material");
+        if (materialFilePath != null)
+            sb.AppendLine($"  (Material file: {materialFilePath})");
+        sb.AppendLine();
+        sb.AppendLine($"Submodels: {string.Join(", ", submodels)}");
         sb.AppendLine();
 
         // Bones
@@ -370,45 +382,19 @@ public class TmmFile
     #region Read Helpers
 
     static bool TryReadInt32(ReadOnlySpan<byte> data, ref int offset, out int value)
-    {
-        value = 0;
-        if (offset + 4 > data.Length) return false;
-        value = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
-        offset += 4;
-        return true;
-    }
+        => TmmReadHelpers.TryReadInt32(data, ref offset, out value);
 
     static bool TryReadUInt32(ReadOnlySpan<byte> data, ref int offset, out uint value)
-    {
-        value = 0;
-        if (offset + 4 > data.Length) return false;
-        value = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(offset, 4));
-        offset += 4;
-        return true;
-    }
+        => TmmReadHelpers.TryReadUInt32(data, ref offset, out value);
 
     static bool TryReadFloat(ReadOnlySpan<byte> data, ref int offset, out float value)
-    {
-        value = 0;
-        if (offset + 4 > data.Length) return false;
-        value = BinaryPrimitives.ReadSingleLittleEndian(data.Slice(offset, 4));
-        offset += 4;
-        return true;
-    }
+        => TmmReadHelpers.TryReadFloat(data, ref offset, out value);
 
     static bool TryReadUTF16String(ReadOnlySpan<byte> data, ref int offset, out string value)
-    {
-        value = "";
-        if (offset + 4 > data.Length) return false;
-        var charCount = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
-        offset += 4;
-        if (charCount < 0 || charCount > MaxNameLength) return false;
-        var byteLength = charCount * 2;
-        if (offset + byteLength > data.Length) return false;
-        value = Encoding.Unicode.GetString(data.Slice(offset, byteLength));
-        offset += byteLength;
-        return true;
-    }
+        => TmmReadHelpers.TryReadUTF16String(data, ref offset, out value, MaxNameLength);
+
+    static float[] ReadFloats(ReadOnlySpan<byte> data, ref int offset, int count)
+        => TmmReadHelpers.ReadFloats(data, ref offset, count);
 
     static TmmBoundingBox ReadBoundingBox(ReadOnlySpan<byte> data, ref int offset)
     {
@@ -423,17 +409,6 @@ public class TmmFile
         };
         offset += 24;
         return bb;
-    }
-
-    static float[] ReadFloats(ReadOnlySpan<byte> data, ref int offset, int count)
-    {
-        var result = new float[count];
-        for (int i = 0; i < count; i++)
-        {
-            result[i] = BinaryPrimitives.ReadSingleLittleEndian(data.Slice(offset, 4));
-            offset += 4;
-        }
-        return result;
     }
 
     #endregion

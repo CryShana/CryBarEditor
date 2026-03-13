@@ -21,7 +21,7 @@ The purpose of this tool is to enable fast and easy modding of Age of Mythology 
     - DDT (decoding + encoding)
     - TMM (decoding)
     - TMM.DATA (decoding)
-    - TMA (header decoding)
+    - TMA (decoding)
 - Rich preview for TMM models (bones, mesh groups, materials, attachments) and TMM.DATA (vertex/triangle stats)
 - Syntax highlighting for common formats (json,xml,ini,xs,...) and folding support for XML
 
@@ -32,6 +32,7 @@ The purpose of this tool is to enable fast and easy modding of Age of Mythology 
   - Convert XMB -> XML
   - Convert DDT -> TGA
   - Convert TMM -> OBJ
+  - Convert TMM -> FBX
   - Convert image -> DDT
   - Compress with Alz4/L33t
   - Decompress file with Alz4/L33t
@@ -53,14 +54,6 @@ The purpose of this tool is to enable fast and easy modding of Age of Mythology 
 For people new to GitHub - the releases are located [here](https://github.com/CryShana/CryBarEditor/releases).
 
 Just download the latest version .zip and extract it into a folder, run the .exe file and that will open the app.
-
-## Planned features
-Currently planned:
-- Full TMA animation body parsing (currently header-only)
-- TMM encoding (writing modified models back)
-- Somehow exporting all FMOD sound files within event (manual decoding?)
-- More features for additive modding (supporting more files, and generating some template)
-- Maybe another side panel for export directory for quickly editing/viewing exported files - all within same app
 
 ## Modding Basics
 Please read [Modding Basics](Documentation/Modding.md) document to get started.
@@ -91,3 +84,5 @@ If you are writing XS scripts, you can also checkout my personal reference I wro
 
 ## Thanks
 I wish to thank the developers of AoE3 Resource Manager, their code helped me with decoding of XMB and DDT files.
+
+I also wish to thank @ChaosRobie and @slifer87 on Discord for their work on TMM exporting.

@@ -876,8 +876,8 @@ public partial class MainWindow : SimpleWindow
                 }
 
                 ext = ".txt";
-                text = tmm.GetSummary();
-                PreviewedFileNote = $"TMM v{tmm.Version}";
+                text = tmm.GetSummary(relative_path);
+                PreviewedFileNote = $"TMM v{tmm.Version} — {tmm.NumBones} bones, {tmm.NumMaterials} mats";
             }
             else if (ext == ".tma")
             {
@@ -890,7 +890,7 @@ public partial class MainWindow : SimpleWindow
 
                 ext = ".txt";
                 text = tma.GetSummary();
-                PreviewedFileNote = $"TMA v{tma.Version}";
+                PreviewedFileNote = $"TMA v{tma.Version} — {tma.NumBones} bones, {tma.NumTracks} tracks";
             }
             else if (relative_path.EndsWith(".tmm.data", StringComparison.OrdinalIgnoreCase))
             {
@@ -1021,12 +1021,13 @@ public partial class MainWindow : SimpleWindow
                 // FINALIZE RELATIVE PATH
                 var ext = Path.GetExtension(relative_path).ToLower();
                 bool isConvertible = should_convert && ConversionHelper.IsConvertibleExtension(ext);
+                var tmmToFbx = options?.TmmToFbx == true;
                 if (isConvertible)
                 {
                     if (ext == ".xmb")
                         relative_path = relative_path[..^4];    // remove .XMB extension, revealing underlying (e.g. .xml)
                     else
-                        relative_path = relative_path[..^ext.Length] + ConversionHelper.GetConvertedExtension(ext);
+                        relative_path = relative_path[..^ext.Length] + ConversionHelper.GetConvertedExtension(ext, tmmToFbx);
                 }
 
                 // DETERMINE EXPORT PATH
@@ -1069,7 +1070,7 @@ public partial class MainWindow : SimpleWindow
                             continue;
                         }
 
-                        // TMM→OBJ: find companion .tmm.data
+                        // TMM→OBJ/FBX: find companion .tmm.data
                         if (ext == ".tmm")
                         {
                             var tmmFileName = Path.GetFileName(getFullRelPath(f)); // e.g. "petrobolos.tmm"
@@ -1098,10 +1099,12 @@ public partial class MainWindow : SimpleWindow
 
                             if (companionData != null)
                             {
-                                var objBytes = ConversionHelper.ConvertTmmToObjBytes(data, companionData.Value);
-                                if (objBytes != null)
+                                var convertedBytes = tmmToFbx
+                                    ? ConversionHelper.ConvertTmmToFbxBytes(data, companionData.Value)
+                                    : ConversionHelper.ConvertTmmToObjBytes(data, companionData.Value);
+                                if (convertedBytes != null)
                                 {
-                                    file.Write(objBytes);
+                                    file.Write(convertedBytes);
                                     continue;
                                 }
                             }
@@ -1958,36 +1961,51 @@ public partial class MainWindow : SimpleWindow
         }
     }
 
-    async void MenuItem_ConvertTMMtoOBJ(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    /// <summary>
+    /// Resolves the .tmm.data companion path for a given .tmm file.
+    /// If the default path (tmmFile + ".data") doesn't exist, prompts the user to pick it.
+    /// Returns null if the user cancels.
+    /// </summary>
+    async Task<string?> PickTmmDataFile(object? sender, string tmmFile)
     {
-        var file = await PickFile(sender, "Convert TMM to OBJ", [new("TMM Model") { Patterns = ["*.tmm"] }]);
+        var dataPath = tmmFile + ".data";
+        if (File.Exists(dataPath)) return dataPath;
+        return await PickFile(sender, "Select companion .tmm.data file",
+            [new("TMM Data") { Patterns = ["*.data"] }]);
+    }
+
+    async void MenuItem_ConvertTMMtoOBJ(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        => await ConvertTmmToFormat(sender, "OBJ", ".obj", ConversionHelper.ConvertTmmToObjBytes);
+
+    async void MenuItem_ConvertTMMtoFBX(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        => await ConvertTmmToFormat(sender, "FBX", ".fbx", ConversionHelper.ConvertTmmToFbxBytes,
+            ". Ensure assimp.dll is alongside the executable.");
+
+    async Task ConvertTmmToFormat(object? sender, string formatName, string extension,
+        Func<ReadOnlyMemory<byte>, ReadOnlyMemory<byte>, byte[]?> converter, string? errorNote = null)
+    {
+        var file = await PickFile(sender, $"Convert TMM to {formatName}", [new("TMM Model") { Patterns = ["*.tmm"] }]);
         if (file == null) return;
 
-        // Auto-discover companion .tmm.data file
-        var dataFilePath = file + ".data";
-        if (!File.Exists(dataFilePath))
-        {
-            var dataFile = await PickFile(sender, "Select companion .tmm.data file",
-                [new("TMM Data") { Patterns = ["*.data"] }]);
-            if (dataFile == null) return;
-            dataFilePath = dataFile;
-        }
+        var dataFilePath = await PickTmmDataFile(sender, file);
+        if (dataFilePath == null) return;
 
-        var out_file = PickOutFile(file, new_extension: ".obj", overwrite: true);
+        var out_file = PickOutFile(file, new_extension: extension, overwrite: true);
         try
         {
             var tmmBytes = BarCompression.EnsureDecompressed(File.ReadAllBytes(file), out _);
             var tmmDataBytes = BarCompression.EnsureDecompressed(File.ReadAllBytes(dataFilePath), out _);
-            var objBytes = ConversionHelper.ConvertTmmToObjBytes(tmmBytes, tmmDataBytes);
-            if (objBytes == null) throw new InvalidDataException("Failed to convert TMM file");
+            var convertedBytes = converter(tmmBytes, tmmDataBytes);
+            if (convertedBytes == null)
+                throw new InvalidDataException($"Failed to convert TMM file{errorNote}");
 
-            File.WriteAllBytes(out_file, objBytes);
+            File.WriteAllBytes(out_file, convertedBytes);
 
             _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file));
         }
         catch (Exception ex)
         {
-            _ = ShowError("Failed to convert to OBJ:\n" + ex.Message);
+            _ = ShowError($"Failed to convert to {formatName}:\n" + ex.Message);
         }
     }
 

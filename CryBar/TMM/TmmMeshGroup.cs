@@ -7,7 +7,7 @@ public readonly struct TmmMeshGroup
     public uint VertexCount { get; init; }
     public uint IndexCount { get; init; }
     public uint MaterialIndex { get; init; }
-    public uint ShaderIndex { get; init; }
+    public uint SubmodelMask { get; init; }
 
     public uint TriangleCount => IndexCount / 3;
 }
