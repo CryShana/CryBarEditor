@@ -176,11 +176,24 @@
 									<TextBlock Text="{Binding DirectoryPath}" Foreground="#808080" VerticalAlignment="Center"/>
 									<TextBlock Text="{Binding Name}" Classes.BAR="{Binding IsBAR}" VerticalAlignment="Center"/>
 									<micons:MaterialIcon Kind="FileExportOutline" VerticalAlignment="Center"
-														 Margin="5,0,0,0" Foreground="#e3bd54" 
-														 Width="19" Height="19"
+														 Margin="5,0,0,0" Foreground="#e3bd54"
+														 Width="19" Height="19" Background="Transparent"
 														 ToolTip.Tip="Overriden in export directory">
 										<micons:MaterialIcon.IsVisible>
 											<MultiBinding Converter="{StaticResource overridenConverter}">
+												<Binding Path="." />
+												<Binding Path="#mainWindow" />
+												<Binding Path="#mainWindow.((ce:MainWindow)DataContext).ShowOverridenIcons" />
+											</MultiBinding>
+										</micons:MaterialIcon.IsVisible>
+									</micons:MaterialIcon>
+									<micons:MaterialIcon Kind="FilePlusOutline" VerticalAlignment="Center"
+														 Margin="3,0,0,0" Foreground="#6ecf8e"
+														 Width="19" Height="19" Background="Transparent"
+														 ToolTip.Tip="Has additive mod in export directory">
+										<micons:MaterialIcon.IsVisible>
+											<MultiBinding Converter="{StaticResource overridenConverter}"
+														  ConverterParameter="additive">
 												<Binding Path="." />
 												<Binding Path="#mainWindow" />
 												<Binding Path="#mainWindow.((ce:MainWindow)DataContext).ShowOverridenIcons" />
@@ -226,12 +239,25 @@
 									<StackPanel Orientation="Horizontal" Height="19">
 										<TextBlock Text="{Binding DirectoryPath}" Foreground="#808080" VerticalAlignment="Center"/>
 										<TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
-										<micons:MaterialIcon Kind="FileExportOutline" VerticalAlignment="Center" 
-															Margin="5,0,0,0" Foreground="#e3bd54" 
-															Width="19" Height="19"
+										<micons:MaterialIcon Kind="FileExportOutline" VerticalAlignment="Center"
+															Margin="5,0,0,0" Foreground="#e3bd54"
+															Width="19" Height="19" Background="Transparent"
 															ToolTip.Tip="Overriden in export directory">
 											<micons:MaterialIcon.IsVisible>
 												<MultiBinding Converter="{StaticResource overridenConverter}">
+													<Binding Path="." />
+													<Binding Path="#mainWindow" />
+													<Binding Path="#mainWindow.((ce:MainWindow)DataContext).ShowOverridenIcons" />
+												</MultiBinding>
+											</micons:MaterialIcon.IsVisible>
+										</micons:MaterialIcon>
+										<micons:MaterialIcon Kind="FilePlusOutline" VerticalAlignment="Center"
+															 Margin="3,0,0,0" Foreground="#6ecf8e"
+															 Width="19" Height="19" Background="Transparent"
+															 ToolTip.Tip="Has additive mod in export directory">
+											<micons:MaterialIcon.IsVisible>
+												<MultiBinding Converter="{StaticResource overridenConverter}"
+															  ConverterParameter="additive">
 													<Binding Path="." />
 													<Binding Path="#mainWindow" />
 													<Binding Path="#mainWindow.((ce:MainWindow)DataContext).ShowOverridenIcons" />

@@ -1,4 +1,4 @@
-﻿using Avalonia.Data.Converters;
+using Avalonia.Data.Converters;
 
 using CryBar;
 
@@ -14,15 +14,15 @@ public class IsOverridenToBoolConverter : IMultiValueConverter
 {
     public object? Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)
     {
-        if (values.Count < 2) 
+        if (values.Count < 2)
             return false;
 
         var main_window = values[1] as MainWindow;
-        if (main_window == null) 
+        if (main_window == null)
             return false;
 
         var value = values[0];
-        if (value == null) 
+        if (value == null)
             return false;
 
         if (!main_window.CanExport)
@@ -38,6 +38,10 @@ public class IsOverridenToBoolConverter : IMultiValueConverter
             relative_path = main_window.GetBARFullRelativePath(bar_value);
         }
 
-        return main_window.IsFileOverriden(relative_path);
+        return parameter as string switch
+        {
+            "additive" => main_window.IsFileAdditiveModded(relative_path),
+            _ => main_window.IsFileOverriden(relative_path)
+        };
     }
 }

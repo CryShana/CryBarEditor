@@ -136,7 +136,22 @@ public partial class MainWindow : SimpleWindow
         Path.GetExtension(SelectedRootFileEntry?.RelativePath ?? "").ToLower() == ".ddt" ||
         Path.GetExtension(SelectedBarEntry?.RelativePath ?? "").ToLower() == ".ddt";
     public bool SelectedCanHaveAdditiveMod
-        => AdditiveModding.IsSupportedFor(SelectedBarEntry?.RelativePath ?? SelectedRootFileEntry?.RelativePath, out _) && CanExport;
+    {
+        get
+        {
+            if (!CanExport)
+                return false;
+
+            var relPath = SelectedBarEntry?.RelativePath ?? SelectedRootFileEntry?.RelativePath;
+            if (!AdditiveModding.IsSupportedFor(relPath, out _))
+                return false;
+
+            // Hide if additive mod already exists
+            var fullRelPath = SelectedBarEntry != null ? GetBARFullRelativePath(SelectedBarEntry)
+                : SelectedRootFileEntry != null ? GetRootFullRelativePath(SelectedRootFileEntry) : null;
+            return fullRelPath != null && !IsFileAdditiveModded(fullRelPath);
+        }
+    }
 
     public bool CanOpenInEditor
     {
@@ -409,6 +424,43 @@ public partial class MainWindow : SimpleWindow
 
     public bool IsFileOverriden(string relative_path_full)
         => ResolveExportedFilePath(relative_path_full) != null;
+
+    public bool IsFileAdditiveModded(string relative_path_full)
+    {
+        if (string.IsNullOrEmpty(relative_path_full) || !CanExport)
+            return false;
+
+        var dir = Path.GetDirectoryName(relative_path_full) ?? "";
+
+        // Check known mappings first (handles special cases like string_table.txt → stringmods.txt)
+        if (AdditiveModding.IsSupportedFor(relative_path_full, out var format))
+        {
+            var knownPath = Path.Combine(_exportRootDirectory, dir, format.FileName);
+            if (File.Exists(knownPath))
+                return true;
+        }
+
+        // Generic heuristic: any file in same directory named {basename}_mods.* or {basename}mods.*
+        var fileName = Path.GetFileName(relative_path_full);
+        if (fileName.EndsWith(".XMB", StringComparison.OrdinalIgnoreCase))
+            fileName = fileName[..^4];
+
+        var baseName = Path.GetFileNameWithoutExtension(fileName);
+        var exportDir = Path.Combine(_exportRootDirectory, dir);
+
+        if (!Directory.Exists(exportDir))
+            return false;
+
+        foreach (var file in Directory.EnumerateFiles(exportDir))
+        {
+            var name = Path.GetFileNameWithoutExtension(file);
+            if (name.Equals(baseName + "_mods", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals(baseName + "mods", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
 
     async Task<string?> PickFile(object? sender, string title, IReadOnlyList<FilePickerFileType>? filter = null, string? suggested_folder = null)
     {
