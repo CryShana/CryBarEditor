@@ -133,6 +133,7 @@ public class GlPreviewControl : OpenGlControlBase, ICustomHitTest
         gl.DeleteProgram(_program);
 
         _glInitialized = false;
+        _meshDirty = true; // force re-upload when reattached
     }
 
     protected override unsafe void OnOpenGlRender(GlInterface gl, int fb)

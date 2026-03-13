@@ -1551,19 +1551,17 @@ public partial class MainWindow : SimpleWindow
     {
         if (_tmmTabControl.SelectedIndex == 1)
         {
-            // Flush pending mesh on first switch to 3D tab, or re-render if already loaded
+            // Flush pending mesh on first switch to 3D tab
             if (_pendingMeshData != null)
                 FlushPendingMesh();
 
-            // Delay render request to ensure GL control is fully visible after tab switch
-            _ = RequestGlRenderDelayed();
+            // Force GL control to re-render by detaching and reattaching
+            if (_glPreview != null)
+            {
+                _3dViewContainer.Child = null;
+                _3dViewContainer.Child = _glPreview;
+            }
         }
-    }
-
-    async Task RequestGlRenderDelayed()
-    {
-        await Task.Delay(50);
-        _glPreview?.RequestNextFrameRendering();
     }
 
     void FlushPendingMesh()
