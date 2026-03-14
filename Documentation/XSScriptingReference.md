@@ -22,7 +22,8 @@ If there is a function `doSomething(id, param1, param2)` you can simply do `doSo
 
 ### Other references
 - [https://jehathor.github.io/AoM-Retold/RetoldFunctions.html](https://jehathor.github.io/AoM-Retold/RetoldFunctions.html) - contains functions extracted from AoMRetold executable
-- [Extracted Editor Triggers](triggers_reference.xml) (XML file with all triggers that the editor uses and which functions they map to in XS script)
+- [Extracted Editor Triggers](triggers_reference.xml) (XML file with all triggers that the editor uses and which functions they map to in XS script) 
+    - **This is outdated, check game folder for up-to-date official reference**
 
 ---
 

@@ -84,9 +84,6 @@ For example we want to modify the Atlantean temple texture:
 - Search for `temple`, you will notice many DDT images for it, per age and per type of texture (BaseColor, Details, Masks, Normals, ...)
 - We are interested in `_BaseColor`, we can right click on the relevant entry and press `Replace and export DDT` - this will ask for a new image, you can select it and the exported DDT will have your selected image
 
-### Note when creating new anim files
-`anim` files are used to specify what models units use in `proto.xml`. But if you were to create your own anim file, you will notice it's not loaded by the game. I haven't yet figured out why, I think it has to do with `simdata.simjson` file that links these anim files with tactics, but I haven't delved into this yet.
-
 ---
 ## Additive modding method
 The additive method is meant to solve 2 main problems of the standard method:
