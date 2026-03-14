@@ -102,8 +102,7 @@ public partial class MainWindow
     {
         const int MAX_DATA_SIZE = 1_500_000_000;    // 1.5 GB
         const int MAX_DATA_TEXT_SIZE = 100_000_000; // 100 MB
-
-        HideTmmPreview();
+        const int LOADING_INDICATOR_THRESHOLD = 500_000; // 500 KB — skip "Loading..." for small files to avoid flicker
 
         var relative_path = get_rel_path(entry);
         var ext = Path.GetExtension(relative_path).ToLower();
@@ -125,8 +124,16 @@ public partial class MainWindow
             _foldingManager = null;
         }
 
-        _txtEditor.Document = new TextDocument("Loading...");
-        _textMateInstallation.SetGrammar(null);
+        var data_size = get_read_size(entry);
+
+        // Only show loading indicator for larger files — small files load fast
+        // enough that the "Loading..." flash causes more flicker than it helps
+        if (data_size > LOADING_INDICATOR_THRESHOLD)
+        {
+            HideTmmPreview();
+            _txtEditor.Document = new TextDocument("Loading...");
+            _textMateInstallation.SetGrammar(null);
+        }
 
         // Mark document as not ready — SearchWindow awaits this before highlighting
         var previewTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -136,9 +143,9 @@ public partial class MainWindow
         {
             try
             {
-                var data_size = get_read_size(entry);
                 if (data_size > MAX_DATA_SIZE)
                 {
+                    HideTmmPreview();
                     await SetImagePreview(null);
                     _ = SetEditorText(".txt", "Data too big to be loaded for preview");
                     return;
@@ -161,6 +168,7 @@ public partial class MainWindow
 
                 if (IsImage(ext))
                 {
+                    HideTmmPreview();
                     using (var image = SixLabors.ImageSharp.Image.Load(data.Span))
                     {
                         await SetImagePreview(image, token);
@@ -196,6 +204,7 @@ public partial class MainWindow
                 }
                 else if (ext == ".ddt")
                 {
+                    HideTmmPreview();
                     var ddt = new DDTImage(data.Memory);
                     if (!ddt.ParseHeader())
                     {
@@ -348,6 +357,7 @@ public partial class MainWindow
 
             if (token.IsCancellationRequested) return;
 
+            HideTmmPreview();
             await SetImagePreview(null);
             await SetEditorText(ext, text, cacheKey: relative_path);
         }
