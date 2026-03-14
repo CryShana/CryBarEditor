@@ -1,0 +1,145 @@
+<Window
+	x:Class="CryBarEditor.QuickAccessWindow"
+	xmlns="https://github.com/avaloniaui"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	xmlns:ce="using:CryBarEditor"
+	xmlns:cc="using:CryBarEditor.Classes"
+	xmlns:micons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+	Title="Quick Access"
+	Width="420"
+	MinWidth="250"
+	MinHeight="200"
+	d:DesignHeight="500"
+	d:DesignWidth="420"
+	Background="#141414"
+	DataContext="{Binding RelativeSource={RelativeSource Self}}"
+	Foreground="#d9d9d9"
+	WindowStartupLocation="CenterOwner"
+	mc:Ignorable="d"
+	x:DataType="ce:QuickAccessWindow">
+	<Window.Styles>
+		<Style Selector="ListBox">
+			<Setter Property="Background" Value="#171717" />
+		</Style>
+
+		<Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+			<Setter Property="Background" Value="#2b3c57" />
+		</Style>
+
+		<Style Selector="ListBoxItem:focus /template/ ContentPresenter">
+			<Setter Property="Background" Value="#2b3c57" />
+		</Style>
+
+		<Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+			<Setter Property="Background" Value="#1a2436" />
+		</Style>
+
+		<Style Selector="ListBoxItem">
+			<Setter Property="Padding" Value="4" />
+		</Style>
+
+		<!-- TextBox clear button -->
+		<Style Selector="TextBox.clearable">
+			<Setter Property="Padding" Value="8,5,26,5" />
+		</Style>
+	</Window.Styles>
+	<DockPanel Margin="10">
+		<!-- Filter -->
+		<Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+			<TextBox Classes="clearable" Text="{Binding Filter, Mode=TwoWay}"
+					 Watermark="Filter quick access items"
+					 TextChanged="FilterTextBox_TextChanged" />
+			<Button Classes="filterClear" HorizontalAlignment="Right" VerticalAlignment="Center"
+					Focusable="False" IsTabStop="False" Click="FilterClear_Click"
+					IsVisible="False" Background="Transparent" BorderThickness="0"
+					Padding="2" Margin="0,0,4,0" Cursor="Hand">
+				<micons:MaterialIcon Kind="Close" Width="14" Height="14" Foreground="#808080" />
+			</Button>
+		</Grid>
+
+		<!-- Status -->
+		<TextBlock DockPanel.Dock="Bottom" Margin="0,6,0,0" Foreground="Gray"
+				   Text="{Binding StatusText}" />
+
+		<!-- List -->
+		<ListBox ItemsSource="{Binding FilteredEntries}"
+				 SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
+				 ContainerPrepared="ListBox_ContainerPrepared">
+			<ListBox.ItemTemplate>
+				<DataTemplate x:DataType="cc:QuickAccessEntry">
+					<DockPanel>
+						<!-- Buttons on right -->
+						<StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
+									VerticalAlignment="Center" Margin="6,0,0,0">
+							<Button Padding="2" Background="#01000000" BorderThickness="0"
+									Click="MoveUp_Click" ToolTip.Tip="Move up"
+									Focusable="False" IsTabStop="False" Cursor="Hand">
+								<micons:MaterialIcon Kind="ArrowUp" Width="14" Height="14" Foreground="#808080" />
+							</Button>
+							<Button Padding="2" Background="#01000000" BorderThickness="0"
+									Click="MoveDown_Click" ToolTip.Tip="Move down"
+									Focusable="False" IsTabStop="False" Cursor="Hand">
+								<micons:MaterialIcon Kind="ArrowDown" Width="14" Height="14" Foreground="#808080" />
+							</Button>
+							<Button Padding="4,2" Background="#01000000" BorderThickness="0"
+									Click="OpenEntry_Click" ToolTip.Tip="Navigate to this item"
+									Focusable="False" IsTabStop="False" Cursor="Hand">
+								<micons:MaterialIcon Kind="SelectionEllipseArrowInside" Width="16" Height="16" Foreground="#6f96bf" />
+							</Button>
+						</StackPanel>
+
+						<!-- Icon + path on left (text truncated before buttons) -->
+						<DockPanel VerticalAlignment="Center">
+							<!-- Warning icon for invalid entries -->
+							<micons:MaterialIcon DockPanel.Dock="Left"
+												  Kind="AlertCircleOutline" Width="16" Height="16"
+												  Foreground="#e05555" Margin="0,0,4,0"
+												  VerticalAlignment="Center"
+												  IsVisible="{Binding !IsValid}"
+												  ToolTip.Tip="Item no longer found" />
+
+							<!-- Type icon (Kind set in ContainerPrepared) -->
+							<micons:MaterialIcon DockPanel.Dock="Left" x:Name="iconType" Kind="FileOutline"
+												  Width="16" Height="16" Margin="0,0,5,0"
+												  VerticalAlignment="Center" />
+
+							<TextBlock VerticalAlignment="Center"
+									   TextTrimming="CharacterEllipsis">
+								<Run Text="{Binding DirectoryPath}" Foreground="#808080" />
+								<Run Text="{Binding DisplayName}" />
+								<ToolTip.Tip>
+									<MultiBinding StringFormat="{}{0}{1}">
+										<Binding Path="DirectoryPath" />
+										<Binding Path="DisplayName" />
+									</MultiBinding>
+								</ToolTip.Tip>
+							</TextBlock>
+						</DockPanel>
+					</DockPanel>
+				</DataTemplate>
+			</ListBox.ItemTemplate>
+			<ListBox.ContextMenu>
+				<ContextMenu>
+					<MenuItem Header="Move to top"
+							  Icon="{micons:MaterialIconExt Kind=ArrowCollapseUp}"
+							  Click="MoveToTop_Click" />
+					<MenuItem Header="Move up"
+							  Icon="{micons:MaterialIconExt Kind=ArrowUp}"
+							  Click="MoveUp_Click" />
+					<MenuItem Header="Move down"
+							  Icon="{micons:MaterialIconExt Kind=ArrowDown}"
+							  Click="MoveDown_Click" />
+					<MenuItem Header="Move to bottom"
+							  Icon="{micons:MaterialIconExt Kind=ArrowCollapseDown}"
+							  Click="MoveToBottom_Click" />
+					<Separator />
+					<MenuItem Header="Remove"
+							  Icon="{micons:MaterialIconExt Kind=Delete}"
+							  Click="Remove_Click" />
+				</ContextMenu>
+			</ListBox.ContextMenu>
+		</ListBox>
+	</DockPanel>
+</Window>

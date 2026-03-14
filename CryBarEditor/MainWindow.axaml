@@ -116,6 +116,12 @@
 			<MenuItem Header="Create additive mod" Icon="{micons:MaterialIconExt Kind=FileEditOutline}"
 					IsVisible="{Binding SelectedCanHaveAdditiveMod}"
 					Click="MenuItem_CreateNewAdditiveMod"/>
+
+			<Separator />
+
+			<MenuItem Header="{Binding QuickAccessToggleText}"
+					  Icon="{micons:MaterialIconExt Kind=Star}"
+					  Click="MenuItem_ToggleQuickAccess" />
 		</ContextMenu>
 	</Window.Resources>
 
@@ -339,6 +345,10 @@
 										Icon="{micons:MaterialIconExt Kind=MusicBoxMultiple}"
 										Click="BankItem_ExportAllSounds"
 										IsVisible="{Binding #mainWindow.((ce:MainWindow)DataContext).CanExportAllSounds}" />
+									<Separator />
+									<MenuItem Header="{Binding #mainWindow.((ce:MainWindow)DataContext).FmodQuickAccessToggleText}"
+										Icon="{micons:MaterialIconExt Kind=Star}"
+										Click="MenuItem_ToggleQuickAccessFmod" />
 								</ContextMenu>
 							</ListBox.ContextMenu>
 						</ListBox>
@@ -349,7 +359,15 @@
 
 				<!-- EXPORT SETTINGS + PREVIEWER -->
 				<DockPanel Grid.Row="1" Grid.Column="4">
-					<Label DockPanel.Dock="Top" Content="Export Root Directory" FontWeight="Bold" FontSize="16"/>
+					<DockPanel DockPanel.Dock="Top">
+						<Button DockPanel.Dock="Right" Click="QuickAccess_Click"
+								Padding="4" Margin="6,0,6,0"
+								ToolTip.Tip="Quick Access"
+								Background="Transparent" BorderThickness="0" Cursor="Hand">
+							<micons:MaterialIcon Kind="Star" Width="18" Height="18" Foreground="#e3bd54" />
+						</Button>
+						<Label Content="Export Root Directory" FontWeight="Bold" FontSize="16"/>
+					</DockPanel>
 					<DockPanel DockPanel.Dock="Top" Margin="0,5,0,0">
 						<Button Content="{micons:MaterialIconExt Kind=FolderArrowDownOutline}" Padding="4" Click="SelectExportRootDir_Click" Margin="0,0,6,6"/>
 						<TextBlock Text="{Binding ExportRootDirectory}" Foreground="Gray" Margin="0,4,0,0"

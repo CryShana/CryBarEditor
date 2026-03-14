@@ -529,16 +529,9 @@ public partial class SearchWindow : SimpleWindow
         {
             var file = Path.GetRelativePath(_owner.RootDirectory, result.RelevantFile);
             var bar_entry = result.EntryWithinBAR;
-            RootFileEntry? toSelect = null;
-            foreach (var entry in _owner.RootFileEntries)
-            {
-                if (entry.RelativePath != file)
-                    continue;
 
-                toSelect = entry;
-                break;
-            }
-
+            // Use FindAndRevealRootFile to handle filtered-out entries
+            var toSelect = _owner.FindAndRevealRootFile(file);
             if (toSelect == null)
                 return;
 

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace CryBarEditor.Classes;
@@ -18,7 +19,9 @@ public class Configuration
     public bool? ExportTmmToGltf { get; set; }
     public string? EditorCommand { get; set; }
     public bool? ExportOpenInEditor { get; set; }
+    public List<QuickAccessEntry>? QuickAccessEntries { get; set; }
 }
 
 [JsonSerializable(typeof(Configuration))]
+[JsonSerializable(typeof(List<QuickAccessEntry>))]
 public partial class CryBarJsonContext : JsonSerializerContext { }

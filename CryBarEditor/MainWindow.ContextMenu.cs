@@ -143,6 +143,8 @@ public partial class MainWindow
         var listbox = (ListBox)((ContextMenu)sender!).Parent!.Parent!;
         ContextSelectedItemsCount = listbox.SelectedItems!.Count;
         OnPropertyChanged(nameof(CanOpenInEditor));
+        OnPropertyChanged(nameof(IsInQuickAccess));
+        OnPropertyChanged(nameof(QuickAccessToggleText));
     }
     #endregion
 }

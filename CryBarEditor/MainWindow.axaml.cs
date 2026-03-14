@@ -51,6 +51,26 @@ public partial class MainWindow : SimpleWindow
     List<RootFileEntry>? _loadedRootFiles = null;
     public int TotalRootFileCount => _loadedRootFiles?.Count ?? 0;
 
+    /// <summary>
+    /// Finds a root file entry by relative path from the full (unfiltered) list.
+    /// If found but not visible due to filter, clears the filter first.
+    /// </summary>
+    public RootFileEntry? FindAndRevealRootFile(string relativePath)
+    {
+        if (_loadedRootFiles == null) return null;
+
+        var entry = _loadedRootFiles.Find(f => f.RelativePath == relativePath);
+        if (entry == null) return null;
+
+        // If entry isn't in the filtered list, clear the filter to make it visible
+        if (!RootFileEntries.Contains(entry))
+        {
+            FilesQuery = "";
+        }
+
+        return entry;
+    }
+
     double _imageZoomLevel = 1.0;
     readonly FileWatcherHelper _rootWatcher = new();
     readonly FileWatcherHelper _exportWatcher = new();
@@ -394,35 +414,6 @@ public partial class MainWindow : SimpleWindow
         // scale image
         RefreshImageScale();
     }
-    void FilterClear_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
-    {
-        if (sender is Button btn && btn.Parent is Grid grid)
-        {
-            foreach (var child in grid.Children)
-            {
-                if (child is TextBox textBox)
-                {
-                    textBox.Text = "";
-                    break;
-                }
-            }
-        }
-    }
-
-    static void FilterTextBox_TextChanged(object? sender, TextChangedEventArgs e)
-    {
-        if (sender is TextBox textBox && textBox.Parent is Grid grid)
-        {
-            foreach (var child in grid.Children)
-            {
-                if (child is Button btn && btn.Classes.Contains("filterClear"))
-                {
-                    btn.IsVisible = !string.IsNullOrEmpty(textBox.Text);
-                    break;
-                }
-            }
-        }
-    }
     #endregion
 
     #region Helpers
@@ -601,6 +592,7 @@ public partial class MainWindow : SimpleWindow
             _searchCaseSensitive = config.SearchCaseSensitive ?? true;
             _searchRegex = config.SearchUseRegex ?? false;
             _editorCommand = config.EditorCommand ?? "";
+            _quickAccessEntries = config.QuickAccessEntries ?? new();
         }
         catch
         {
@@ -635,6 +627,7 @@ public partial class MainWindow : SimpleWindow
             _lastConfiguration.SearchCaseSensitive = _searchCaseSensitive;
             _lastConfiguration.SearchUseRegex = _searchRegex;
             _lastConfiguration.EditorCommand = _editorCommand;
+            _lastConfiguration.QuickAccessEntries = _quickAccessEntries;
 
             File.WriteAllText(config_path, JsonSerializer.Serialize(_lastConfiguration, CryBarJsonContext.Default.Configuration));
         }
