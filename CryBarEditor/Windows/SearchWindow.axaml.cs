@@ -445,11 +445,10 @@ public partial class SearchWindow : SimpleWindow
 
             if (ext == ".xmb")
             {
-                // let's also parse XMB
-                var xml = BarFormatConverter.XMBtoXML(span);
-                if (xml == null) return;
+                var xmlText = ConversionHelper.ConvertXmbToXmlText(span);
+                if (xmlText == null) return;
 
-                text = BarFormatConverter.FormatXML(xml);
+                text = xmlText;
             }
             else
             {

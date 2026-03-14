@@ -11,63 +11,48 @@ namespace CryBar;
 
 public static class BarFormatConverter
 {
-    public static XmlDocument? XMBtoXML(ReadOnlySpan<byte> xmb_data)
+    static bool TryParseXmbHeader(
+        ReadOnlySpan<byte> xmb_data,
+        out List<string> elements,
+        out List<string> attributes,
+        out ReadOnlySpan<byte> nodeData)
     {
+        elements = default!;
+        attributes = default!;
+        nodeData = default;
+
         if (xmb_data is not [88, 49, ..])
-        {
-            // X1 not found
-            return null;
-        }
+            return false;
 
         var offset = 2;
         var data_length = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4)); offset += 4;
 
         if (data_length < 0 || data_length > xmb_data.Length - 6)
-        {
-            // invalid data length
-            return null;
-        }
+            return false;
 
-        // let's limit ourselves to just this data
         xmb_data = xmb_data.Slice(0, 6 + data_length);
         if (xmb_data.Length < offset + 2 || xmb_data.Slice(offset, 2) is not [88, 82])
-        {
-            // XR not found (marks the root node)
-            return null;
-        }
+            return false;
         offset += 2;
 
         var id1 = BinaryPrimitives.ReadUInt32LittleEndian(xmb_data.Slice(offset, 4)); offset += 4;
         if (id1 != 4)
-        {
-            // invalid id
-            return null;
-        }
+            return false;
 
         var version = BinaryPrimitives.ReadUInt32LittleEndian(xmb_data.Slice(offset, 4)); offset += 4;
         if (version != 8)
-        {
-            // unsupported version
-            return null;
-        }
+            return false;
 
         var element_count = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4)); offset += 4;
         if (element_count <= 0 || element_count > BarFile.MAX_ENTRY_COUNT)
-        {
-            // too many items, value probably invalid
-            return null;
-        }
+            return false;
 
-        // READ ELEMENTS
-        List<string> elements = new(element_count);
+        elements = new(element_count);
         for (int i = 0; i < element_count; i++)
         {
             var name_length = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4)) * 2; offset += 4;
             if (name_length <= 0 || name_length > BarFile.MAX_TEXT_LENGTH)
-            {
-                // invalid item name length
-                return null;
-            }
+                return false;
 
             var name = Encoding.Unicode.GetString(xmb_data.Slice(offset, name_length)); offset += name_length;
             elements.Add(name);
@@ -75,35 +60,34 @@ public static class BarFormatConverter
 
         var attrib_count = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4)); offset += 4;
         if (attrib_count < 0 || attrib_count > BarFile.MAX_ENTRY_COUNT)
-        {
-            // too many attributes, value probably invalid
-            return null;
-        }
+            return false;
 
-        List<string> attributes = new(element_count);
+        attributes = new(attrib_count);
         for (int i = 0; i < attrib_count; i++)
         {
             var name_length = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4)) * 2; offset += 4;
             if (name_length <= 0 || name_length > BarFile.MAX_TEXT_LENGTH)
-            {
-                // invalid attribute name length
-                return null;
-            }
+                return false;
 
             var name = Encoding.Unicode.GetString(xmb_data.Slice(offset, name_length)); offset += name_length;
             attributes.Add(name);
         }
 
-        // PROCESS NODES
+        nodeData = xmb_data.Slice(offset);
+        return true;
+    }
+
+    public static XmlDocument? XMBtoXML(ReadOnlySpan<byte> xmb_data)
+    {
+        if (!TryParseXmbHeader(xmb_data, out var elements, out var attributes, out var nodeData))
+            return null;
+
         var document = new XmlDocument();
 
         var node_offset = 0;
-        var root = GetNextNode(document, xmb_data.Slice(offset), ref node_offset, elements, attributes);
+        var root = GetNextNode(document, nodeData, ref node_offset, elements, attributes);
         if (root == null)
-        {
-            // no root node found
             return null;
-        }
 
         document.AppendChild(root);
 
@@ -111,10 +95,7 @@ public static class BarFormatConverter
         {
             // node is marked by XN header
             if (data is not [88, 78, ..])
-            {
-                // XN not found, invalid XMB format
                 return null;
-            }
 
             offset += 2;
             //var node_length = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
@@ -122,16 +103,12 @@ public static class BarFormatConverter
 
             var text_length = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)) * 2; offset += 4;
             if (text_length < 0 || text_length > BarFile.MAX_TEXT_LENGTH)
-            {
                 return null;
-            }
 
             var text = text_length == 0 ? "" : Encoding.Unicode.GetString(data.Slice(offset, text_length)); offset += text_length;
             var element_idx = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
             if (element_idx < 0 || element_idx >= elements.Count)
-            {
                 return null;
-            }
 
             var node = doc.CreateElement(elements[element_idx]);
             node.InnerText = text;
@@ -145,16 +122,12 @@ public static class BarFormatConverter
             {
                 int attrib_idx = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
                 if (attrib_idx < 0 || attrib_idx >= attributes.Count)
-                {
                     return null;
-                }
 
                 var attrib = doc.CreateAttribute(attributes[attrib_idx]);
                 var attrib_text_length = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)) * 2; offset += 4;
                 if (attrib_text_length < 0 || attrib_text_length > BarFile.MAX_TEXT_LENGTH)
-                {
                     return null;
-                }
 
                 var attrib_text = attrib_text_length == 0 ? "" : Encoding.Unicode.GetString(data.Slice(offset, attrib_text_length)); offset += attrib_text_length;
                 attrib.InnerText = attrib_text;
@@ -167,9 +140,7 @@ public static class BarFormatConverter
             {
                 var child = GetNextNode(doc, data, ref offset, elements, attributes);
                 if (child == null)
-                {
                     return null;
-                }
 
                 node.AppendChild(child);
             }
@@ -178,6 +149,88 @@ public static class BarFormatConverter
         }
 
         return document;
+    }
+
+    /// <summary>
+    /// Reads binary XMB and writes directly to XmlWriter, producing formatted XML.
+    /// Single pass: binary → formatted XML string. No intermediate XmlDocument.
+    /// </summary>
+    public static string? XMBtoFormattedXmlString(ReadOnlySpan<byte> xmb_data)
+    {
+        if (!TryParseXmbHeader(xmb_data, out var elements, out var attributes, out var nodeData))
+            return null;
+
+        var sb = new StringBuilder(nodeData.Length * 3);
+        var settings = new XmlWriterSettings
+        {
+            Indent = true,
+            IndentChars = "\t",
+            OmitXmlDeclaration = true
+        };
+
+        using (var writer = XmlWriter.Create(sb, settings))
+        {
+            var node_offset = 0;
+            if (!WriteNextNode(writer, nodeData, ref node_offset, elements, attributes))
+                return null;
+        }
+
+        return sb.ToString();
+
+        static bool WriteNextNode(XmlWriter writer, ReadOnlySpan<byte> data, ref int offset, List<string> elements, List<string> attributes)
+        {
+            if (offset + 2 > data.Length || data[offset] != 88 || data[offset + 1] != 78)
+                return false;
+
+            offset += 2;
+            // node_length (skip)
+            offset += 4;
+
+            var text_length = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)) * 2; offset += 4;
+            if (text_length < 0 || text_length > BarFile.MAX_TEXT_LENGTH)
+                return false;
+
+            var text = text_length == 0 ? "" : Encoding.Unicode.GetString(data.Slice(offset, text_length)); offset += text_length;
+            var element_idx = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
+            if (element_idx < 0 || element_idx >= elements.Count)
+                return false;
+
+            writer.WriteStartElement(elements[element_idx]);
+
+            // line number (skip)
+            offset += 4;
+
+            // ATTRIBUTES
+            int attrib_count = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
+            for (int i = 0; i < attrib_count; i++)
+            {
+                int attrib_idx = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
+                if (attrib_idx < 0 || attrib_idx >= attributes.Count)
+                    return false;
+
+                var attrib_text_length = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)) * 2; offset += 4;
+                if (attrib_text_length < 0 || attrib_text_length > BarFile.MAX_TEXT_LENGTH)
+                    return false;
+
+                var attrib_text = attrib_text_length == 0 ? "" : Encoding.Unicode.GetString(data.Slice(offset, attrib_text_length)); offset += attrib_text_length;
+                writer.WriteAttributeString(attributes[attrib_idx], attrib_text);
+            }
+
+            // INNER TEXT (after attributes, before children)
+            if (text.Length > 0)
+                writer.WriteString(text);
+
+            // CHILD NODES
+            int child_count = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
+            for (int i = 0; i < child_count; i++)
+            {
+                if (!WriteNextNode(writer, data, ref offset, elements, attributes))
+                    return false;
+            }
+
+            writer.WriteFullEndElement();
+            return true;
+        }
     }
 
     public static string FormatXML(XmlDocument xml)

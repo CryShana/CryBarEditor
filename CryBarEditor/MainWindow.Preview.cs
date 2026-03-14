@@ -144,17 +144,26 @@ public partial class MainWindow
 
             if (ext == ".xmb")
             {
-                var xmlText = ConversionHelper.ConvertXmbToXmlText(data.Span);
-                if (xmlText != null)
+                if (_docCache.TryGet(relative_path, out _))
                 {
-                    PreviewedFileNote = "(Converted to XML)";
-                    text = xmlText;
                     ext = ".xml";
+                    PreviewedFileNote = "(Converted to XML)";
                 }
                 else
                 {
-                    text = "Failed to parse XMB document";
-                    ext = ".txt";
+                    var mem = data.Memory;
+                    var xmlText = await Task.Run(() => ConversionHelper.ConvertXmbToXmlText(mem.Span));
+                    if (xmlText != null)
+                    {
+                        PreviewedFileNote = "(Converted to XML)";
+                        text = xmlText;
+                        ext = ".xml";
+                    }
+                    else
+                    {
+                        text = "Failed to parse XMB document";
+                        ext = ".txt";
+                    }
                 }
             }
             else if (ext == ".ddt")
@@ -403,10 +412,12 @@ public partial class MainWindow
         // Cache hit: assign immediately (document already built, no async needed)
         if (cacheKey != null && _docCache.TryGet(cacheKey, out var cachedDoc))
         {
+            if (text.Length == 0)
+                _previewText = cachedDoc!.Text;
             _docReadyTask = Task.CompletedTask;
             _txtEditor.Document = cachedDoc!;
             _textMateInstallation.SetGrammar(scope);
-            InstallFolding(ext, text.Length);
+            InstallFolding(ext, cachedDoc!.TextLength);
             ScrollEditorToTop();
             return;
         }

@@ -100,12 +100,12 @@ public partial class MainWindow : SimpleWindow
 
     // 3D preview
     GlPreviewControl? _glPreview;
-    readonly LruCache<PreviewMeshData> _meshCache = new(maxItems: 10);
+    readonly LruCache<PreviewMeshData> _meshCache = new(maxItems: 6);
     int _tmmSelectedTabIndex = 0;
     CancellationTokenSource? _meshConversionCts;
 
     // Text document cache + async load cancellation
-    readonly LruCache<TextDocument> _docCache = new(maxItems: 10);
+    readonly LruCache<TextDocument> _docCache = new(maxItems: 6);
     CancellationTokenSource? _docLoadCts;
     internal Task _docReadyTask = Task.CompletedTask;
 
@@ -326,6 +326,7 @@ public partial class MainWindow : SimpleWindow
         // file watcher events
         _rootWatcher.Created += RootDir_Created;
         _rootWatcher.Deleted += RootDir_Deleted;
+        _rootWatcher.Changed += RootDir_Changed;
         _rootWatcher.Renamed += RootDir_Renamed;
         _exportWatcher.Created += ExportDir_Created;
         _exportWatcher.Deleted += ExportDir_Deleted;

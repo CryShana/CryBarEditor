@@ -187,6 +187,19 @@ public partial class MainWindow
         RefreshFileEntries();
     }
 
+    void RootDir_Changed(object sender, FileSystemEventArgs e)
+    {
+        if (_loadedRootFiles == null || !Directory.Exists(_rootDirectory))
+            return;
+
+        var changed_path = e.FullPath;
+        if (!changed_path.StartsWith(_rootDirectory))
+            return;
+
+        var relative_path = Path.GetRelativePath(_rootDirectory, changed_path);
+        _docCache.Remove(relative_path);
+    }
+
     void ExportDir_Deleted(object sender, FileSystemEventArgs e)
     {
         if (_loadedRootFiles == null || !Directory.Exists(_rootDirectory))

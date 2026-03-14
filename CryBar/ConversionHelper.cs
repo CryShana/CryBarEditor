@@ -23,9 +23,7 @@ public static class ConversionHelper
     /// <returns>Formatted XML string, or null if parsing failed.</returns>
     public static string? ConvertXmbToXmlText(ReadOnlySpan<byte> data)
     {
-        var xml = BarFormatConverter.XMBtoXML(data);
-        if (xml == null) return null;
-        return BarFormatConverter.FormatXML(xml);
+        return BarFormatConverter.XMBtoFormattedXmlString(data);
     }
 
     /// <summary>

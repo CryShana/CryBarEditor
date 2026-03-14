@@ -59,6 +59,20 @@ public class LruCache<TValue>
         }
     }
 
+    public bool Remove(string key)
+    {
+        lock (_lock)
+        {
+            if (_map.TryGetValue(key, out var node))
+            {
+                _list.Remove(node);
+                _map.Remove(key);
+                return true;
+            }
+            return false;
+        }
+    }
+
     public void Clear()
     {
         lock (_lock)

@@ -12,6 +12,7 @@ public class FileWatcherHelper : IDisposable
 
     public event FileSystemEventHandler? Created;
     public event FileSystemEventHandler? Deleted;
+    public event FileSystemEventHandler? Changed;
     public event RenamedEventHandler? Renamed;
 
     public void Watch(string directory)
@@ -29,6 +30,7 @@ public class FileWatcherHelper : IDisposable
 
         _watcher.Created += (s, e) => Created?.Invoke(s, e);
         _watcher.Deleted += (s, e) => Deleted?.Invoke(s, e);
+        _watcher.Changed += (s, e) => Changed?.Invoke(s, e);
         _watcher.Renamed += (s, e) => Renamed?.Invoke(s, e);
     }
 

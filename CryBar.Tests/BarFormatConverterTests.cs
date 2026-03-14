@@ -239,6 +239,37 @@ public class BarFormatConverterTests
 
     #endregion
 
+    #region XMBtoFormattedXmlString Tests
+
+    [Theory]
+    [InlineData("<root><child>text</child></root>")]
+    [InlineData("<config version=\"2\" name=\"test\"><item id=\"1\">value</item></config>")]
+    [InlineData("<root><level1><level2><level3>deep</level3></level2></level1></root>")]
+    [InlineData("<root><a>1</a><b>2</b><c>3</c></root>")]
+    [InlineData("<root><empty /></root>")]
+    public void XMBtoFormattedXmlString_MatchesXMBtoXML_FormatXML(string xmlInput)
+    {
+        var xml = new XmlDocument();
+        xml.LoadXml(xmlInput);
+        var xmb = BarFormatConverter.XMLtoXMB(xml, CompressionType.None);
+
+        var oldResult = BarFormatConverter.FormatXML(BarFormatConverter.XMBtoXML(xmb.Span)!);
+        var newResult = BarFormatConverter.XMBtoFormattedXmlString(xmb.Span);
+
+        Assert.NotNull(newResult);
+        Assert.Equal(oldResult, newResult);
+    }
+
+    [Fact]
+    public void XMBtoFormattedXmlString_InvalidData_ReturnsNull()
+    {
+        byte[] invalidData = [0, 1, 2, 3, 4, 5];
+        var result = BarFormatConverter.XMBtoFormattedXmlString(invalidData);
+        Assert.Null(result);
+    }
+
+    #endregion
+
     #region FormatXML Tests
 
     [Fact]
