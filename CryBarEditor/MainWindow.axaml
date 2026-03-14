@@ -38,6 +38,11 @@
 			<Setter Property="Foreground" Value="#ebebeb" />
 		</Style>
 
+		<!-- TextBox clear button -->
+		<Style Selector="TextBox.clearable">
+			<Setter Property="Padding" Value="8,5,26,5" />
+		</Style>
+
 		<!-- TMM TabControl dark theme -->
 		<Style Selector="TabControl#_tmmTabControl">
 			<Setter Property="Background" Value="#1c1c1c" />
@@ -160,7 +165,15 @@
 								   TextTrimming="CharacterEllipsis" />
 					</DockPanel>
 
-					<TextBox DockPanel.Dock="Top" Text="{Binding FilesQuery, Mode=TwoWay}" Watermark="Filter files" />
+					<Grid DockPanel.Dock="Top">
+						<TextBox Classes="clearable" Text="{Binding FilesQuery, Mode=TwoWay}" Watermark="Filter files" TextChanged="FilterTextBox_TextChanged" />
+						<Button Classes="filterClear" HorizontalAlignment="Right" VerticalAlignment="Center"
+								Focusable="False" IsTabStop="False" Click="FilterClear_Click"
+								IsVisible="False" Background="Transparent" BorderThickness="0"
+								Padding="2" Margin="0,0,4,0" Cursor="Hand">
+							<micons:MaterialIcon Kind="Close" Width="14" Height="14" Foreground="#808080" />
+						</Button>
+					</Grid>
 					<TextBlock DockPanel.Dock="Top" Margin="0,6,0,0">
 						<Run Text="Guessed Root: " FontWeight="Bold"/>
 						<Run Text="{Binding RootFileRootPath}"/>
@@ -217,7 +230,15 @@
 							<Button Content="{micons:MaterialIconExt Kind=ArchiveArrowUpOutline}" Padding="4" Click="LoadBAR_Click" Margin="0,0,6,6"/>
 							<Label DockPanel.Dock="Top" Content="{Binding LoadedBARFilePathOrRelative}" Foreground="Gray" Margin="0,2,0,0" />
 						</DockPanel>
-						<TextBox DockPanel.Dock="Top" Text="{Binding EntryQuery, Mode=TwoWay}" Watermark="Filter BAR entries" />
+						<Grid DockPanel.Dock="Top">
+							<TextBox Classes="clearable" Text="{Binding EntryQuery, Mode=TwoWay}" Watermark="Filter BAR entries" TextChanged="FilterTextBox_TextChanged" />
+							<Button Classes="filterClear" HorizontalAlignment="Right" VerticalAlignment="Center"
+									Focusable="False" IsTabStop="False" Click="FilterClear_Click"
+									IsVisible="False" Background="Transparent" BorderThickness="0"
+									Padding="2" Margin="0,0,4,0" Cursor="Hand">
+								<micons:MaterialIcon Kind="Close" Width="14" Height="14" Foreground="#808080" />
+							</Button>
+						</Grid>
 						<DockPanel DockPanel.Dock="Top" Margin="0,6,0,0">
 							<TextBlock DockPanel.Dock="Left" HorizontalAlignment="Left">
 								<Run Text="Root: " FontWeight="Bold"/>
@@ -277,7 +298,15 @@
 							<Button Content="{micons:MaterialIconExt Kind=FileMusic}" Padding="4" Click="LoadBank_Click" Margin="0,0,6,6"/>
 							<Label DockPanel.Dock="Top" Content="{Binding LoadedBankFilePathOrRelative}" Foreground="Gray" Margin="0,2,0,0" />
 						</DockPanel>
-						<TextBox DockPanel.Dock="Top" Text="{Binding BankQuery, Mode=TwoWay}" Watermark="Filter events" />
+						<Grid DockPanel.Dock="Top">
+							<TextBox Classes="clearable" Text="{Binding BankQuery, Mode=TwoWay}" Watermark="Filter events" TextChanged="FilterTextBox_TextChanged" />
+							<Button Classes="filterClear" HorizontalAlignment="Right" VerticalAlignment="Center"
+									Focusable="False" IsTabStop="False" Click="FilterClear_Click"
+									IsVisible="False" Background="Transparent" BorderThickness="0"
+									Padding="2" Margin="0,0,4,0" Cursor="Hand">
+								<micons:MaterialIcon Kind="Close" Width="14" Height="14" Foreground="#808080" />
+							</Button>
+						</Grid>
 						<TextBlock DockPanel.Dock="Top" Margin="0,6,0,0">
 							<Run Text="Events: " FontWeight="Bold"/>
 							<Run Text="{Binding FmodBank.Events.Length}"/>

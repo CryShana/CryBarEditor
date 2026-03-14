@@ -49,6 +49,7 @@ public partial class MainWindow : SimpleWindow
     FMODEvent? _selectedBankEntry = null;
     RootFileEntry? _selectedRootFileEntry = null;
     List<RootFileEntry>? _loadedRootFiles = null;
+    public int TotalRootFileCount => _loadedRootFiles?.Count ?? 0;
 
     double _imageZoomLevel = 1.0;
     readonly FileWatcherHelper _rootWatcher = new();
@@ -392,6 +393,35 @@ public partial class MainWindow : SimpleWindow
 
         // scale image
         RefreshImageScale();
+    }
+    void FilterClear_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Parent is Grid grid)
+        {
+            foreach (var child in grid.Children)
+            {
+                if (child is TextBox textBox)
+                {
+                    textBox.Text = "";
+                    break;
+                }
+            }
+        }
+    }
+
+    static void FilterTextBox_TextChanged(object? sender, TextChangedEventArgs e)
+    {
+        if (sender is TextBox textBox && textBox.Parent is Grid grid)
+        {
+            foreach (var child in grid.Children)
+            {
+                if (child is Button btn && btn.Classes.Contains("filterClear"))
+                {
+                    btn.IsVisible = !string.IsNullOrEmpty(textBox.Text);
+                    break;
+                }
+            }
+        }
     }
     #endregion
 

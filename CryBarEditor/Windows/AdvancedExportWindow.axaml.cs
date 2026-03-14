@@ -260,14 +260,22 @@ public partial class AdvancedExportWindow : SimpleWindow
             parts.Add(name + _singleFileSourceExt);
         }
 
-        if (DoConvert && _singleFileIsConvertible)
+        if (DoConvert)
         {
-            if (_singleFileSourceExt == ".xmb")
-                parts.Add(name); // XMB stripped, base name IS the final name
-            else
+            if (_singleFileIsConvertible)
             {
-                var convertedExt = ConversionHelper.GetConvertedExtension(_singleFileSourceExt, DoTmmToGltf);
-                parts.Add(name + (convertedExt ?? _singleFileSourceExt));
+                if (_singleFileSourceExt == ".xmb")
+                    parts.Add(name); // XMB stripped, base name IS the final name
+                else
+                {
+                    var convertedExt = ConversionHelper.GetConvertedExtension(_singleFileSourceExt, DoTmmToGltf);
+                    parts.Add(name + (convertedExt ?? _singleFileSourceExt));
+                }
+            }
+            else if (!DoCopy)
+            {
+                // Not convertible, but Convert is the only mode — still show output (same as copy)
+                parts.Add(name + _singleFileSourceExt);
             }
         }
 

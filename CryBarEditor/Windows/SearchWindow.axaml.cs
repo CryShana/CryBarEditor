@@ -24,7 +24,8 @@ namespace CryBarEditor;
 
 public partial class SearchWindow : SimpleWindow
 {
-    string _status = "This searches through all FILTERED files and opened BAR archives";
+    string _status = "";
+    string _filterWarning = "";
     string _query = "";
     string _exclusionFilter = "";
     bool _isRegex = false;
@@ -37,6 +38,8 @@ public partial class SearchWindow : SimpleWindow
 
     public string Query { get => _query; set { _query = value; OnSelfChanged(); OnPropertyChanged(nameof(CanSearch)); } }
     public string Status { get => _status; set { _status = value; OnSelfChanged(); } }
+    public string FilterWarning { get => _filterWarning; set { _filterWarning = value; OnSelfChanged(); } }
+    public bool HasFilterWarning => !string.IsNullOrEmpty(_filterWarning);
     public string ExclusionFilter { get => _exclusionFilter; set { _exclusionFilter = value; _ = RebuildExclusionRegex(); OnSelfChanged(); } }
     public bool IsRegex { get => _isRegex; set { _isRegex = value; OnSelfChanged(); } }
     public bool IsCaseSensitive { get => _isCaseSensitive; set { _isCaseSensitive = value; OnSelfChanged(); } }
@@ -66,6 +69,15 @@ public partial class SearchWindow : SimpleWindow
         _rootDirectory = owner.RootDirectory;
         if (Directory.Exists(_rootDirectory))
             _rootEntries = owner.RootFileEntries.ToList();
+
+        // Warn if root files are filtered
+        var filteredCount = _rootEntries?.Count ?? 0;
+        var totalCount = owner.TotalRootFileCount;
+        if (filteredCount < totalCount)
+        {
+            FilterWarning = $"Searching {filteredCount} of {totalCount} files (filter active). Reopen search to refresh.";
+            OnPropertyChanged(nameof(HasFilterWarning));
+        }
 
         OnBarFileChanged(owner.BarFile, owner.BarFileStream);
         owner.OnBarFileLoaded += OnBarFileChanged;

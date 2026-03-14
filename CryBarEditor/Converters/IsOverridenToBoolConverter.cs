@@ -38,7 +38,7 @@ public class IsOverridenToBoolConverter : IMultiValueConverter
             relative_path = main_window.GetBARFullRelativePath(bar_value);
         }
 
-        return parameter as string switch
+        return (parameter as string) switch
         {
             "additive" => main_window.IsFileAdditiveModded(relative_path),
             _ => main_window.IsFileOverriden(relative_path)
