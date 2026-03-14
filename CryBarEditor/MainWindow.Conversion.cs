@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using CryBar;
+using CryBar.Classes;
 using CryBarEditor.Classes;
 using System;
 using System.IO;
@@ -49,8 +50,8 @@ public partial class MainWindow
         var out_file = PickOutFile(file, suffix: (ext == ".xmb" ? "" : ext), new_extension: (ext == ".xmb" ? "" : ".xml"), overwrite: true);
         try
         {
-            var xmb_data = File.ReadAllBytes(file);
-            var decompressed = BarCompression.EnsureDecompressed(xmb_data, out _);
+            using var xmb_data = await PooledBuffer.FromFile(file);
+            using var decompressed = BarCompression.EnsureDecompressedPooled(xmb_data, out _);
             var xmlText = ConversionHelper.ConvertXmbToXmlText(decompressed.Span);
             if (xmlText == null) throw new Exception("Failed to parse XMB file");
 
@@ -79,8 +80,9 @@ public partial class MainWindow
         var out_file = PickOutFile(file, new_extension: extension, overwrite: true);
         try
         {
-            var ddt_data = BarCompression.EnsureDecompressed(File.ReadAllBytes(file), out _);
-            var convertedBytes = await converter(ddt_data);
+            using var data = await PooledBuffer.FromFile(file);
+            using var ddt_data = BarCompression.EnsureDecompressedPooled(data, out _);
+            var convertedBytes = await converter(ddt_data.Memory);
             if (convertedBytes == null) throw new InvalidDataException("Failed to convert DDT file");
 
             File.WriteAllBytes(out_file, convertedBytes);
@@ -124,9 +126,13 @@ public partial class MainWindow
         var out_file = PickOutFile(file, new_extension: extension, overwrite: true);
         try
         {
-            var tmmBytes = BarCompression.EnsureDecompressed(File.ReadAllBytes(file), out _);
-            var tmmDataBytes = BarCompression.EnsureDecompressed(File.ReadAllBytes(dataFilePath), out _);
-            var convertedBytes = converter(tmmBytes, tmmDataBytes);
+            using var tmmData = await PooledBuffer.FromFile(file);
+            using var tmmBytes = BarCompression.EnsureDecompressedPooled(tmmData, out _);
+            
+            using var tmmDatadata = await PooledBuffer.FromFile(dataFilePath);
+            using var tmmDataBytes = BarCompression.EnsureDecompressedPooled(tmmDatadata, out _);
+
+            var convertedBytes = converter(tmmBytes.Memory, tmmDataBytes.Memory);
             if (convertedBytes == null)
                 throw new InvalidDataException($"Failed to convert TMM file{errorNote}");
 
@@ -207,8 +213,8 @@ public partial class MainWindow
         var out_file = PickOutFile(file, suffix: "_decompressed");
         try
         {
-            var data = File.ReadAllBytes(file);
-            var decompressed = BarCompression.EnsureDecompressed(data, out var type);
+            using var data = await PooledBuffer.FromFile(file);
+            using var decompressed = BarCompression.EnsureDecompressedPooled(data, out var type);
             using (var f = File.Create(out_file)) f.Write(decompressed.Span);
 
             _ = ShowSuccess("Decompression completed, new file:\n" + Path.GetFileName(out_file));

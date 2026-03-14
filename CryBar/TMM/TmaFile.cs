@@ -26,7 +26,7 @@ public class TmaFile
     const int MaxErrors = 1000;
     const int MaxKeyframes = 100_000;
 
-    public bool Parsed { get; private set; }
+    public bool Parsed { get; }
 
     // ── Header ──────────────────────────────────────────────────────────────
     public uint Signature { get; private set; }
@@ -65,17 +65,14 @@ public class TmaFile
     /// <summary>Error strings reported by the exporter, if any.</summary>
     public string[]? ErrorStrings { get; private set; }
 
-    readonly ReadOnlyMemory<byte> _data;
-
     public TmaFile(ReadOnlyMemory<byte> data)
     {
-        _data = data;
         FileSize = data.Length;
+        Parsed = Parse(data.Span);
     }
 
-    public bool Parse()
+    bool Parse(ReadOnlySpan<byte> data)
     {
-        var data = _data.Span;
         if (data.Length < 10) return false;
 
         // Require "BTMA" signature
@@ -108,14 +105,9 @@ public class TmaFile
         if (!TryReadFloat(data, ref offset, out var duration)) return false;
         Duration = duration;
 
-        // Basic header is valid - mark parsed so callers get version/track/frame/duration info
-        // even if the body layout differs from the documented v12 format.
-        Parsed = true;
-
         // Attempt full body parse (v12 layout per official docs).
         // Failure stops parsing but does not invalidate the header fields above.
         TryParseBody(data, ref offset);
-
         return true;
     }
 

@@ -27,7 +27,7 @@ public partial class MainWindow
         CancellationToken token = default)
     {
         // TOKEN:  token is not used to cancel export in progress, may want to check this out in future if needed
-        
+
         var progress = new Progress<string?>();
         IProgress<string?> p = progress;
 
@@ -92,7 +92,7 @@ public partial class MainWindow
                 if (isConvertible || shouldDecompress)
                 {
                     using var rawData = await read(f, token);
-                    var data = BarCompression.EnsureDecompressed(rawData.Memory, out _);
+                    using var data = BarCompression.EnsureDecompressedPooled(rawData, out _);
 
                     if (isConvertible)
                     {
@@ -103,7 +103,7 @@ public partial class MainWindow
                             continue;
                         }
 
-                        var tgaBytes = ext == ".ddt" ? await ConversionHelper.ConvertDdtToTgaBytes(data) : null;
+                        var tgaBytes = ext == ".ddt" ? await ConversionHelper.ConvertDdtToTgaBytes(data.Memory) : null;
                         if (tgaBytes != null)
                         {
                             file.Write(tgaBytes);
@@ -114,8 +114,7 @@ public partial class MainWindow
                         if (ext == ".tmm")
                         {
                             var tmmFileName = Path.GetFileName(getFullRelPath(f));
-                            var companionData = ResolveCompanionData(tmmFileName + ".data");
-
+                            using var companionData = await ResolveCompanionDataAsync(tmmFileName + ".data");
                             if (companionData != null)
                             {
                                 byte[]? convertedBytes;
@@ -123,12 +122,12 @@ public partial class MainWindow
                                 {
                                     var glbMaterials = (options.ExportMaterials && _fileIndex != null)
                                         ? await BuildGlbMaterials(tmmFileName) : null;
-                                    convertedBytes = ConversionHelper.ConvertTmmToGlbBytes(data, companionData.Value, glbMaterials);
+                                    convertedBytes = ConversionHelper.ConvertTmmToGlbBytes(data.Memory, companionData.Memory, glbMaterials);
                                 }
                                 else
                                 {
                                     var mtlName = (options?.ExportMaterials == true) ? Path.GetFileNameWithoutExtension(tmmFileName) + ".mtl" : null;
-                                    convertedBytes = ConversionHelper.ConvertTmmToObjBytes(data, companionData.Value, mtlName);
+                                    convertedBytes = ConversionHelper.ConvertTmmToObjBytes(data.Memory, companionData.Memory, mtlName);
                                     if (convertedBytes != null && options?.ExportMaterials == true && _fileIndex != null)
                                         await ExportObjMaterials(tmmFileName, exported_path);
                                 }
@@ -187,26 +186,35 @@ public partial class MainWindow
     /// Finds and decompresses a companion file (e.g. .tmm.data) by searching
     /// the current BAR, sibling BARs, and the file index.
     /// </summary>
-    Memory<byte>? ResolveCompanionData(string dataFileName)
+    async ValueTask<PooledBuffer?> ResolveCompanionDataAsync(string dataFileName)
     {
         // Check current BAR first
         if (_barFile?.Entries != null && _barStream != null)
         {
             var barDataEntry = _barFile.Entries.FirstOrDefault(e =>
                 e.Name.Equals(dataFileName, StringComparison.OrdinalIgnoreCase));
+
             if (barDataEntry != null)
-                return BarCompression.EnsureDecompressed(
-                    barDataEntry.ReadDataRaw(_barStream), out _);
+            {
+                using var dataRaw = await barDataEntry.ReadDataRawPooledAsync(_barStream);
+                return BarCompression.EnsureDecompressedPooled(dataRaw, out _);
+            }
         }
 
         // Search sibling .bar files
         if (_barStream != null)
         {
-            var found = FindCompanionInSiblingBars<Memory<byte>>(
+            var found = await FindCompanionInSiblingBars(
                 _barStream.Name, dataFileName,
-                (entry, stream) => BarCompression.EnsureDecompressed(
-                    entry.ReadDataRaw(stream), out _));
-            if (found.Length > 0) return found;
+                async (entry, stream) =>
+                {
+                    using var data = await entry.ReadDataRawPooledAsync(stream);
+                    return BarCompression.EnsureDecompressedPooled(data, out _);
+                }
+            );
+
+            if (found?.Length > 0) 
+                return found;
         }
 
         // Fallback: file index
@@ -214,7 +222,7 @@ public partial class MainWindow
         {
             foreach (var ie in _fileIndex.Find(dataFileName))
             {
-                var indexData = ReadFromIndexEntry(ie);
+                var indexData = await ReadFromIndexEntryPooledAsync(ie);
                 if (indexData != null) return indexData;
             }
         }
@@ -225,9 +233,9 @@ public partial class MainWindow
     /// <summary>
     /// Builds glTF material list with embedded PNG textures for a TMM model.
     /// </summary>
-    async Task<IReadOnlyList<GlbExporter.GlbMaterial>?> BuildGlbMaterials(string tmmFileName)
+    async ValueTask<IReadOnlyList<GlbExporter.GlbMaterial>?> BuildGlbMaterials(string tmmFileName)
     {
-        var resolved = await ResolveTmmMaterials(tmmFileName);
+        var resolved = await ResolveTmmMaterialsAsync(tmmFileName);
         if (resolved == null) return null;
 
         // Launch all texture conversions in parallel
@@ -279,11 +287,11 @@ public partial class MainWindow
     /// <summary>
     /// Exports .mtl file and textures as TGA alongside an OBJ file (best-effort).
     /// </summary>
-    async Task ExportObjMaterials(string tmmFileName, string exportedObjPath)
+    async ValueTask ExportObjMaterials(string tmmFileName, string exportedObjPath)
     {
         try
         {
-            var resolved = await ResolveTmmMaterials(tmmFileName);
+            var resolved = await ResolveTmmMaterialsAsync(tmmFileName);
             if (resolved == null) return;
 
             var exportDir = Path.GetDirectoryName(exportedObjPath)!;
@@ -317,10 +325,11 @@ public partial class MainWindow
     /// Resolves materials and textures for a TMM model via FileIndex.
     /// Returns parsed materials + raw decompressed DDT bytes per texture path.
     /// </summary>
-    async Task<(List<MaterialInfo> Materials, Dictionary<string, (string FileName, Memory<byte> DdtData)> Textures)?>
-        ResolveTmmMaterials(string tmmFileName)
+    async ValueTask<(List<MaterialInfo> Materials, Dictionary<string, (string FileName, Memory<byte> DdtData)> Textures)?> 
+        ResolveTmmMaterialsAsync(string tmmFileName)
     {
-        if (_fileIndex == null) return null;
+        if (_fileIndex == null) 
+            return null;
 
         try
         {
@@ -335,11 +344,12 @@ public partial class MainWindow
             if (materialEntries.Count == 0) return null;
 
             var matEntry = materialEntries[0];
-            var matData = ReadFromIndexEntry(matEntry);
+            using var matData = await ReadFromIndexEntryPooledAsync(matEntry);
             if (matData == null) return null;
 
             // Convert XMB to XML if needed
-            var matBytes = BarCompression.EnsureDecompressed(matData.Value, out _);
+            using var matBytes = BarCompression.EnsureDecompressedPooled(matData, out _);
+
             string? xmlText;
             if (matEntry.FileName.EndsWith(".XMB", StringComparison.OrdinalIgnoreCase))
             {
@@ -367,10 +377,10 @@ public partial class MainWindow
 
                 if (texEntries.Count > 0)
                 {
-                    var texData = ReadFromIndexEntry(texEntries[0]);
+                    using var texData = await ReadFromIndexEntryPooledAsync(texEntries[0]);
                     if (texData != null)
                     {
-                        var ddtData = BarCompression.EnsureDecompressed(texData.Value, out _);
+                        var ddtData = BarCompression.EnsureDecompressed(texData.Memory, out _);
                         textures[texPath] = (texFileName, ddtData);
                     }
                 }

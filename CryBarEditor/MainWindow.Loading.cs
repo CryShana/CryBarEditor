@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using CryBar;
+using CryBar.Classes;
 using CryBarEditor.Classes;
 using System;
 using System.IO;
@@ -338,20 +339,25 @@ public partial class MainWindow
         ClearSoundCaches();
     }
 
-    Memory<byte>? ReadFromIndexEntry(FileIndexEntry entry)
+    async ValueTask<PooledBuffer?> ReadFromIndexEntryPooledAsync(FileIndexEntry entry)
     {
         if (entry.Source == FileIndexSource.RootFile)
         {
             var rootRelevantPath = GetRootRelevantPath();
             var relPath = entry.FullRelativePath;
+
             if (relPath.StartsWith(rootRelevantPath, StringComparison.OrdinalIgnoreCase))
                 relPath = relPath[rootRelevantPath.Length..];
+
             var diskPath = Path.Combine(_rootDirectory, relPath);
-            if (!File.Exists(diskPath)) return null;
-            return File.ReadAllBytes(diskPath);
+            if (!File.Exists(diskPath)) 
+                return null;
+
+            return await PooledBuffer.FromFile(diskPath);
         }
 
-        if (entry.BarFilePath == null || entry.EntryRelativePath == null) return null;
+        if (entry.BarFilePath == null || entry.EntryRelativePath == null) 
+            return null;
 
         try
         {
@@ -363,7 +369,8 @@ public partial class MainWindow
                 e.RelativePath.Equals(entry.EntryRelativePath, StringComparison.OrdinalIgnoreCase));
             if (barEntry == null) return null;
 
-            return BarCompression.EnsureDecompressed(barEntry.ReadDataRaw(stream), out _);
+            using var dataRaw = await barEntry.ReadDataRawPooledAsync(stream);
+            return BarCompression.EnsureDecompressedPooled(dataRaw, out _);
         }
         catch
         {
@@ -478,8 +485,8 @@ public partial class MainWindow
     /// Searches all .bar files in the same directory as the given BAR file for an entry matching the given name.
     /// Skips the current BAR file. Returns the result of the factory function, or default if not found.
     /// </summary>
-    static T? FindCompanionInSiblingBars<T>(string currentBarPath, string entryName,
-        Func<BarFileEntry, FileStream, T?> factory)
+    static async ValueTask<T?> FindCompanionInSiblingBars<T>(string currentBarPath, string entryName,
+        Func<BarFileEntry, FileStream, ValueTask<T?>> factory)
     {
         var barDir = Path.GetDirectoryName(currentBarPath);
         if (barDir == null) return default;
@@ -501,7 +508,7 @@ public partial class MainWindow
                         e.Name.Equals(entryName, StringComparison.OrdinalIgnoreCase));
                     if (entry != null)
                     {
-                        var result = factory(entry, sibStream);
+                        var result = await factory(entry, sibStream);
                         if (result != null) return result;
                     }
                 }

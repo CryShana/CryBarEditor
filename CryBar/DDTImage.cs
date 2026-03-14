@@ -12,6 +12,7 @@ using System.Text;
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using System.Diagnostics.CodeAnalysis;
+using CryBar.Classes;
 
 namespace CryBar;
 
@@ -66,17 +67,19 @@ public class DDTImage
 
     public (int, int, ushort, ushort)[]? MipmapOffsets { get; private set; }
 
-    readonly ReadOnlyMemory<byte> _data;
+    readonly byte[] _data;
 
     public DDTImage(ReadOnlyMemory<byte> data)
     {
-        _data = data;
+        // we must have this copy
+        _data = new byte[data.Length];
+        data.CopyTo(_data);
     }
 
     [MemberNotNullWhen(true, nameof(MipmapOffsets))]
     public bool ParseHeader()
     {
-        var data = _data.Span;
+        var data = _data.AsSpan();
         if (data.Length < 16) return false;
 
         var rts4 = data is [0x52, 0x54, 0x53, 0x34, ..];
@@ -108,7 +111,7 @@ public class DDTImage
         if (rts4)
         {
             int color_table_size = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
-            var color_table = _data.Slice(offset, color_table_size); offset += color_table_size;
+            var color_table = _data.AsMemory(offset, color_table_size); offset += color_table_size;
             ColorTable = color_table;
         }
 
@@ -136,7 +139,7 @@ public class DDTImage
         if (index >= MipmapOffsets!.Length) throw new IndexOutOfRangeException("Mipmap index out of range");
 
         var (offset, length, m_width, m_height) = MipmapOffsets[index];
-        var image_data = _data.Slice(offset, length);
+        var image_data = _data.AsMemory(offset, length);
 
         width = m_width;
         height = m_height;

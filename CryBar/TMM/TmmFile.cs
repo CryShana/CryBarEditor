@@ -19,7 +19,10 @@ public class TmmFile
     const int MaxTriangleVerts = 30_000_000;
     const int MaxNameLength = 5000;
 
-    public bool Parsed { get; private set; }
+    [MemberNotNullWhen(true, nameof(ImportNames), nameof(MainMatrix),
+        nameof(Attachments), nameof(MeshGroups), nameof(Materials),
+        nameof(Submodels), nameof(Bones))]
+    public bool Parsed { get; }
     public uint Version { get; private set; }
 
     // Import metadata
@@ -59,19 +62,13 @@ public class TmmFile
     public string[]? Submodels { get; private set; }
     public TmmBone[]? Bones { get; private set; }
 
-    readonly ReadOnlyMemory<byte> _data;
-
     public TmmFile(ReadOnlyMemory<byte> data)
     {
-        _data = data;
+        Parsed = Parse(data.Span);
     }
 
-    [MemberNotNullWhen(true, nameof(ImportNames), nameof(MainMatrix),
-        nameof(Attachments), nameof(MeshGroups), nameof(Materials),
-        nameof(Submodels), nameof(Bones))]
-    public bool Parse()
+    bool Parse(ReadOnlySpan<byte> data)
     {
-        var data = _data.Span;
         if (data.Length < 16) return false;
 
         // Signature: "BTMM"
@@ -291,8 +288,6 @@ public class TmmFile
             };
         }
         Bones = bones;
-
-        Parsed = true;
         return true;
     }
 

@@ -8,14 +8,13 @@ namespace CryBar.TMM;
 /// </summary>
 public class TmmDataFile
 {
-    public bool Parsed { get; private set; }
+    public bool Parsed { get; }
 
     public TmmVertex[]? Vertices { get; private set; }
     public ushort[]? Indices { get; private set; }
     public TmmSkinWeight[]? SkinWeights { get; private set; }
     public Half[]? Heights { get; private set; }
 
-    readonly ReadOnlyMemory<byte> _data;
     readonly uint _numVertices;
     readonly uint _numTriangleVerts;
     readonly bool _hasSkinning;
@@ -26,15 +25,14 @@ public class TmmDataFile
     /// <param name="hasSkinning">True if the model has bones (skinning buffer present).</param>
     public TmmDataFile(ReadOnlyMemory<byte> data, uint numVertices, uint numTriangleVerts, bool hasSkinning)
     {
-        _data = data;
         _numVertices = numVertices;
         _numTriangleVerts = numTriangleVerts;
         _hasSkinning = hasSkinning;
+        Parsed = Parse(data.Span);
     }
 
-    public bool Parse()
+    bool Parse(ReadOnlySpan<byte> data)
     {
-        var data = _data.Span;
         var offset = 0;
 
         // Vertex buffer: 16 bytes per vertex
@@ -109,7 +107,6 @@ public class TmmDataFile
             Heights = heights;
         }
 
-        Parsed = true;
         return true;
     }
 

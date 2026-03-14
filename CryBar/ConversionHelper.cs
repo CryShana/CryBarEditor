@@ -97,10 +97,11 @@ public static class ConversionHelper
     {
         tmm = new TmmFile(tmmData);
         dataFile = default!;
-        if (!tmm.Parse()) return false;
+        if (!tmm.Parsed) 
+            return false;
 
         dataFile = new TmmDataFile(tmmDataData, tmm.NumVertices, tmm.NumTriangleVerts, tmm.NumBones > 0);
-        return dataFile.Parse() && dataFile.Vertices != null && dataFile.Indices != null;
+        return dataFile.Parsed && dataFile.Vertices != null && dataFile.Indices != null;
     }
 
     public static byte[]? ConvertTmmToObjBytes(ReadOnlyMemory<byte> tmmData, ReadOnlyMemory<byte> tmmDataData, string? mtlFileName = null)

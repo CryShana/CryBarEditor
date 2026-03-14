@@ -10,7 +10,7 @@ public class TmmDataFileTests
     public void Parse_EmptyData_ReturnsFalse()
     {
         var dataFile = new TmmDataFile(ReadOnlyMemory<byte>.Empty, 1, 3, false);
-        Assert.False(dataFile.Parse());
+        Assert.False(dataFile.Parsed);
     }
 
     [Fact]
@@ -18,7 +18,7 @@ public class TmmDataFileTests
     {
         var data = CreateSyntheticData(numVertices: 1, numTriangleVerts: 3, hasSkinning: false);
         var dataFile = new TmmDataFile(data, 1, 3, false);
-        Assert.True(dataFile.Parse());
+        Assert.True(dataFile.Parsed);
         Assert.NotNull(dataFile.Vertices);
         Assert.Single(dataFile.Vertices);
         Assert.NotNull(dataFile.Indices);
@@ -31,7 +31,7 @@ public class TmmDataFileTests
     {
         var data = CreateSyntheticData(numVertices: 2, numTriangleVerts: 3, hasSkinning: true);
         var dataFile = new TmmDataFile(data, 2, 3, true);
-        Assert.True(dataFile.Parse());
+        Assert.True(dataFile.Parsed);
         Assert.NotNull(dataFile.SkinWeights);
         Assert.Equal(2, dataFile.SkinWeights.Length);
         Assert.Equal(200, dataFile.SkinWeights[0].Weight0);
@@ -43,7 +43,7 @@ public class TmmDataFileTests
     {
         var data = CreateSyntheticData(numVertices: 1, numTriangleVerts: 0, hasSkinning: false);
         var dataFile = new TmmDataFile(data, 1, 0, false);
-        Assert.True(dataFile.Parse());
+        Assert.True(dataFile.Parsed);
 
         var v = dataFile.Vertices![0];
         // We wrote Half(1.5f) for PosX
@@ -57,7 +57,7 @@ public class TmmDataFileTests
     {
         var data = CreateSyntheticData(numVertices: 1, numTriangleVerts: 0, hasSkinning: false, includeHeights: true);
         var dataFile = new TmmDataFile(data, 1, 0, false);
-        Assert.True(dataFile.Parse());
+        Assert.True(dataFile.Parsed);
         Assert.NotNull(dataFile.Heights);
         Assert.Single(dataFile.Heights);
     }
@@ -68,7 +68,7 @@ public class TmmDataFileTests
         // Claim 10 vertices but provide data for only 1
         var data = CreateSyntheticData(numVertices: 1, numTriangleVerts: 0, hasSkinning: false);
         var dataFile = new TmmDataFile(data, 10, 0, false);
-        Assert.False(dataFile.Parse());
+        Assert.False(dataFile.Parsed);
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public class TmmDataFileTests
     {
         var data = CreateSyntheticData(numVertices: 2, numTriangleVerts: 3, hasSkinning: true);
         var dataFile = new TmmDataFile(data, 2, 3, true);
-        Assert.True(dataFile.Parse());
+        Assert.True(dataFile.Parsed);
 
         var summary = dataFile.GetSummary();
         Assert.Contains("Vertices: 2", summary);

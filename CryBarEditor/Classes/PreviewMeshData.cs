@@ -23,10 +23,10 @@ public static class MeshDataBuilder
     public static PreviewMeshData? BuildFromTmm(ReadOnlyMemory<byte> tmmBytes, ReadOnlyMemory<byte> tmmDataBytes)
     {
         var tmm = new TmmFile(tmmBytes);
-        if (!tmm.Parse()) return null;
+        if (!tmm.Parsed) return null;
 
         var dataFile = new TmmDataFile(tmmDataBytes, tmm.NumVertices, tmm.NumTriangleVerts, tmm.NumBones > 0);
-        if (!dataFile.Parse()) return null;
+        if (!dataFile.Parsed) return null;
 
         var srcVerts = dataFile.Vertices!;
         var srcIndices = dataFile.Indices!;

@@ -74,7 +74,7 @@ public partial class MainWindow
 
         await SetImagePreview(null);
 
-        var soundInfo = BuildSoundsetPreviewText(e);
+        var soundInfo = await BuildSoundsetPreviewTextAsync(e);
 
         _ = SetEditorText(".txt",
         $"""
@@ -122,7 +122,8 @@ public partial class MainWindow
             }
 
             using var rawData = await read(entry, token);
-            var data = BarCompression.EnsureDecompressed(rawData.Memory, out var type);
+            using var data = BarCompression.EnsureDecompressedPooled(rawData, out var type);
+                    
             PreviewedFileNote = type switch
             {
                 CompressionType.L33t => "(Decompressed L33t)",
@@ -158,7 +159,7 @@ public partial class MainWindow
             }
             else if (ext == ".ddt")
             {
-                var ddt = new DDTImage(data);
+                var ddt = new DDTImage(data.Memory);
                 if (!ddt.ParseHeader())
                 {
                     PreviewedFileNote = "(Failed to parse DDT)";
@@ -184,8 +185,8 @@ public partial class MainWindow
             }
             else if (ext == ".tmm")
             {
-                var tmm = new TmmFile(data);
-                if (!tmm.Parse())
+                var tmm = new TmmFile(data.Memory);
+                if (!tmm.Parsed)
                 {
                     PreviewedFileNote = "(Failed to parse TMM)";
                     return;
@@ -195,13 +196,13 @@ public partial class MainWindow
                 ShowTmmPreview(tmm.GetSummary(relative_path));
 
                 var tmmFileName = Path.GetFileName(relative_path);
-                _ = LoadTmm3DPreview(tmmFileName, data, token);
+                _ = LoadTmm3DPreview(tmmFileName, data.Memory, token);
                 return;
             }
             else if (ext == ".tma")
             {
-                var tma = new TmaFile(data);
-                if (!tma.Parse())
+                var tma = new TmaFile(data.Memory);
+                if (!tma.Parsed)
                 {
                     PreviewedFileNote = "(Failed to parse TMA)";
                     return;
@@ -225,33 +226,34 @@ public partial class MainWindow
                         e => e.Name.Equals(tmmBaseName, StringComparison.OrdinalIgnoreCase));
                     if (tmmEntry != null)
                     {
-                        var tmmRawData = BarCompression.EnsureDecompressed(
-                            tmmEntry.ReadDataRaw(_barStream), out _);
-                        companionTmm = new TmmFile(tmmRawData);
-                        if (!companionTmm.Parse()) companionTmm = null;
+                        using var tmmData = await tmmEntry.ReadDataRawPooledAsync(_barStream);
+                        using var tmmRawData = BarCompression.EnsureDecompressedPooled(tmmData, out _);
+                        companionTmm = new TmmFile(tmmRawData.Memory);
+                        if (!companionTmm.Parsed) companionTmm = null;
                     }
                 }
 
                 // Second: search all .bar files in the same directory
                 if (companionTmm == null && _barStream != null)
                 {
-                    companionTmm = FindCompanionInSiblingBars<TmmFile>(
+                    companionTmm = await FindCompanionInSiblingBars<TmmFile>(
                         _barStream.Name, tmmBaseName,
-                        (entry, stream) =>
+                        async (entry, stream) =>
                         {
-                            var raw = BarCompression.EnsureDecompressed(entry.ReadDataRaw(stream), out _);
-                            var tmm = new TmmFile(raw);
-                            return tmm.Parse() ? tmm : null;
+                            using var rawData = await entry.ReadDataRawPooledAsync(stream);
+                            using var data = BarCompression.EnsureDecompressedPooled(rawData, out _);       
+                            var tmm = new TmmFile(data.Memory);
+                            return tmm.Parsed ? tmm : null;
                         });
                 }
 
                 if (companionTmm != null)
                 {
-                    var dataFile = new TmmDataFile(data,
+                    var dataFile = new TmmDataFile(data.Memory,
                         companionTmm.NumVertices, companionTmm.NumTriangleVerts,
                         companionTmm.NumBones > 0);
 
-                    if (dataFile.Parse())
+                    if (dataFile.Parsed)
                     {
                         ext = ".txt";
                         text = dataFile.GetSummary();
@@ -536,12 +538,12 @@ public partial class MainWindow
 
         if (!_meshCache.TryGet(tmmFileName, out var meshData))
         {
-            var companionData = ResolveCompanionData(tmmFileName + ".data");
+            using var companionData = await ResolveCompanionDataAsync(tmmFileName + ".data");
             if (companionData == null) { Update3DStatus("No .tmm.data found"); return; }
             if (ct.IsCancellationRequested) return;
 
             meshData = await Task.Run(() =>
-                MeshDataBuilder.BuildFromTmm(tmmData, companionData.Value), ct);
+                MeshDataBuilder.BuildFromTmm(tmmData, companionData.Memory), ct);
 
             if (meshData == null) { Update3DStatus("Conversion failed"); return; }
             if (ct.IsCancellationRequested) return;

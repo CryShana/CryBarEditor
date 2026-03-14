@@ -10,6 +10,7 @@ public class PooledBuffer : IDisposable
 {
 	private readonly int _size;
 	private byte[]? _buffer;
+	private bool _moved;
 
 	public Span<byte> Span
 	{
@@ -37,6 +38,16 @@ public class PooledBuffer : IDisposable
 		_buffer = ArrayPool<byte>.Shared.Rent(size);
 	}
 
+	PooledBuffer(PooledBuffer existing)
+	{
+		if (existing._moved)
+			throw new InvalidOperationException("Buffer already moved");
+
+		_size = existing._size;
+		_buffer = existing._buffer;
+		Interlocked.Exchange(ref existing._moved, true);
+	}
+
 	public static async ValueTask<PooledBuffer> FromFile(string path, CancellationToken token = default)
 	{
 		using var stream = File.OpenRead(path);
@@ -56,6 +67,14 @@ public class PooledBuffer : IDisposable
 		}
 	}
 
+	/// <summary>
+	/// Moves existing PooledBuffer to new wrapper. Existing one no longer owns the buffer, will not return to ArrayPool on dispose.
+	/// The new PooledBuffer is now the owner of buffer. Skips renting step, just takes it from existing buffer.
+	/// </summary>
+	/// <param name="existing">Existing PooledBuffer to take buffer ownership from</param>
+	/// <returns>New PooledBuffer with same buffer as existing one</returns>
+	public static PooledBuffer MoveFrom(PooledBuffer existing) => new PooledBuffer(existing);
+
 	public void Dispose()
 	{
 		var buffer = _buffer;
@@ -63,6 +82,11 @@ public class PooledBuffer : IDisposable
 			return;
 
 		_buffer = null;
-		ArrayPool<byte>.Shared.Return(buffer);
+
+		// return if not moved
+		if (_moved == false)
+		{
+			ArrayPool<byte>.Shared.Return(buffer);
+		}
 	}
 }

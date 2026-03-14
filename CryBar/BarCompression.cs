@@ -26,6 +26,19 @@ public static class BarCompression
         return buffer;
     }
 
+    public static PooledBuffer DecompressAlz4Pooled(Span<byte> data)
+    {
+        int size_uncompressed = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(4, 4));
+        if (size_uncompressed > BarFile.MAX_BUFFER_SIZE || size_uncompressed <= 0)
+        {
+            throw new InvalidDataException("Length is invalid: " + size_uncompressed);
+        }
+
+        var buffer = new PooledBuffer(size_uncompressed);
+        DecompressAlz4(data, buffer.Span);
+        return buffer;
+    }
+
     public static int DecompressAlz4(Span<byte> data, Span<byte> output_data)
     {
         int size_uncompressed = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(4, 4));
@@ -93,6 +106,21 @@ public static class BarCompression
         DecompressL33t(data, buffer);
         return buffer;
     }
+
+    public static PooledBuffer DecompressL33tPooled(Span<byte> data)
+    {
+        int offset = 4;
+        int size_uncompressed = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
+        if (size_uncompressed > BarFile.MAX_BUFFER_SIZE || size_uncompressed <= 0)
+        {
+            throw new InvalidDataException("Size is invalid: " + size_uncompressed);
+        }
+
+        var buffer = new PooledBuffer(size_uncompressed);
+        DecompressL33t(data, buffer.Span);
+        return buffer;
+    }
+
     public unsafe static int DecompressL33t(Span<byte> data, Span<byte> output_data)
     {
         int offset = 4;
@@ -172,6 +200,40 @@ public static class BarCompression
 
         type = CompressionType.None;
         return buffer;
+    }
+
+    public static PooledBuffer EnsureDecompressedPooled(PooledBuffer buffer, out CompressionType type)
+    {
+        var data = EnsureDecompressedPooled(buffer.Memory, out type);
+        if (data == null) return PooledBuffer.MoveFrom(buffer);
+        return data;
+    }
+    
+    public static PooledBuffer? EnsureDecompressedPooled(Memory<byte> buffer, out CompressionType type)
+    {
+        var data = buffer.Span;
+        var l33 = data.IsL33t();
+        if (l33)
+        {
+            var ddata = DecompressL33tPooled(data);
+            if (ddata != null)
+            {
+                type = CompressionType.L33t;
+                return ddata;
+            }
+        }
+        else if (data.IsAlz4())
+        {
+            var ddata = DecompressAlz4Pooled(data);
+            if (ddata != null)
+            {
+                type = CompressionType.Alz4;
+                return ddata;
+            }
+        }
+
+        type = CompressionType.None;
+        return null;
     }
 }
 

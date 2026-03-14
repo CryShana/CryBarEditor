@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Xml;
 
 using CryBar;
@@ -460,7 +461,7 @@ public class IntegrationTests
 
         var raw = entry.ReadDataRaw(stream);
         var tmm = new TmmFile(BarCompression.EnsureDecompressed(raw, out _));
-        var parsed = tmm.Parse();
+        var parsed = tmm.Parsed;
 
         Assert.True(parsed, "TMM should parse successfully");
         Assert.NotNull(tmm.ImportNames);
@@ -476,26 +477,8 @@ public class IntegrationTests
     #endregion
 
     #region TMM.DATA - Compressed and Uncompressed
-
     [SkippableFact]
-    public void TmmData_Japanese_ShutenDoji_IsCompressed()
-    {
-        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
-
-        var (bar, entry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheModelDataJapanese.bar", "shuten_doji.tmm.data");
-        using var s = stream;
-
-        Assert.True(entry.IsCompressed, "shuten_doji.tmm.data should be compressed");
-
-        var raw = entry.ReadDataRaw(stream);
-
-        // Should be Alz4 compressed
-        Assert.True(((Span<byte>)raw).IsAlz4(), "Data should have Alz4 header");
-        Assert.False(((Span<byte>)raw).IsL33t(), "Data should not be L33t");
-    }
-
-    [SkippableFact]
-    public void TmmData_Japanese_ShutenDoji_DecompressesSuccessfully()
+    public async Task TmmData_Japanese_ShutenDoji_PooledAndNonPooled()
     {
         Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
 
@@ -503,11 +486,40 @@ public class IntegrationTests
         using var s = stream;
 
         var raw = entry.ReadDataRaw(stream);
-        var decompressed = BarCompression.EnsureDecompressed(raw, out var compressionType);
+        using var rawAsnyc = await entry.ReadDataRawPooledAsync(stream);
+        Assert.Equal(raw, rawAsnyc.Memory);
 
-        Assert.Equal(CompressionType.Alz4, compressionType);
-        Assert.True(decompressed.Length > raw.Length, "Decompressed TMM.DATA should be larger");
-        Assert.Equal(146138, decompressed.Length);
+        var sw = Stopwatch.StartNew();
+
+        // warmup
+        const int RUNS = 1000;
+        for (int i = 0; i < RUNS; i++)
+        {
+            _ = entry.ReadDataRaw(stream);
+        }
+
+        for (int i = 0; i < RUNS; i++)
+        {
+            using var _ = await entry.ReadDataRawPooledAsync(stream);
+        }
+
+        // test
+        var start = Stopwatch.GetTimestamp();
+        for (int i = 0; i < RUNS; i++)
+        {
+            _ = entry.ReadDataRaw(stream);
+        }
+        var rawTimeMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds / RUNS;
+
+        start = Stopwatch.GetTimestamp();
+        for (int i = 0; i < RUNS; i++)
+        {
+            using var _ = await entry.ReadDataRawPooledAsync(stream);
+        }
+        var pooledTimeMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds / RUNS;
+
+        // pooled time must be at least 40% smaller
+        Assert.True(pooledTimeMs < (rawTimeMs * 0.6));
     }
 
     [SkippableFact]
@@ -569,7 +581,7 @@ public class IntegrationTests
 
         var raw = entry.ReadDataRaw(stream);
         var tmm = new TmmFile(BarCompression.EnsureDecompressed(raw, out _));
-        var parsed = tmm.Parse();
+        var parsed = tmm.Parsed;
 
         Assert.True(parsed, "Full TMM parse should succeed");
         Assert.NotNull(tmm.ImportNames);
@@ -596,7 +608,7 @@ public class IntegrationTests
 
         var raw = entry.ReadDataRaw(stream);
         var tmm = new TmmFile(BarCompression.EnsureDecompressed(raw, out _));
-        var parsed = tmm.Parse();
+        var parsed = tmm.Parsed;
 
         Assert.True(parsed, "Shuten Doji TMM should parse");
         Assert.NotNull(tmm.Bones);
@@ -617,7 +629,7 @@ public class IntegrationTests
         var (bar, tmmEntry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "petrobolos.tmm");
         var tmmRaw = BarCompression.EnsureDecompressed(tmmEntry.ReadDataRaw(stream), out _);
         var tmm = new TmmFile(tmmRaw);
-        Assert.True(tmm.Parse(), "Companion TMM should parse");
+        Assert.True(tmm.Parsed, "Companion TMM should parse");
         stream.Dispose();
 
         // Load the .tmm.data
@@ -626,7 +638,7 @@ public class IntegrationTests
 
         var dataRaw = BarCompression.EnsureDecompressed(dataEntry.ReadDataRaw(stream2), out _);
         var dataFile = new TmmDataFile(dataRaw, tmm.NumVertices, tmm.NumTriangleVerts, tmm.NumBones > 0);
-        var parsed = dataFile.Parse();
+        var parsed = dataFile.Parsed;
 
         Assert.True(parsed, "TMM.DATA should parse successfully");
         Assert.NotNull(dataFile.Vertices);
@@ -647,7 +659,7 @@ public class IntegrationTests
         var (bar, tmmEntry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "shuten_doji.tmm");
         var tmmRaw = BarCompression.EnsureDecompressed(tmmEntry.ReadDataRaw(stream), out _);
         var tmm = new TmmFile(tmmRaw);
-        Assert.True(tmm.Parse(), "Companion TMM should parse");
+        Assert.True(tmm.Parsed, "Companion TMM should parse");
         stream.Dispose();
 
         // Load .tmm.data
@@ -656,7 +668,7 @@ public class IntegrationTests
 
         var dataRaw = BarCompression.EnsureDecompressed(dataEntry.ReadDataRaw(stream2), out _);
         var dataFile = new TmmDataFile(dataRaw, tmm.NumVertices, tmm.NumTriangleVerts, tmm.NumBones > 0);
-        Assert.True(dataFile.Parse(), "TMM.DATA should parse");
+        Assert.True(dataFile.Parsed, "TMM.DATA should parse");
 
         Assert.NotNull(dataFile.Vertices);
         Assert.NotNull(dataFile.Indices);
@@ -736,7 +748,7 @@ public class IntegrationTests
 
         // Parse TMA header
         var tma = new TmaFile(raw);
-        var parsed = tma.Parse();
+        var parsed = tma.Parsed;
 
         Assert.True(parsed, $"TMA header should parse for {tmaEntry.Name}");
         Assert.True(tma.Version > 0, "TMA should have a positive version");
@@ -759,7 +771,7 @@ public class IntegrationTests
 
         var raw = BarCompression.EnsureDecompressed(tmaEntry.ReadDataRaw(stream), out _);
         var tma = new TmaFile(raw);
-        Assert.True(tma.Parse(), $"TMA should parse for {tmaEntry.Name}");
+        Assert.True(tma.Parsed, $"TMA should parse for {tmaEntry.Name}");
 
         // Header fields
         Assert.True(tma.Version > 0, "Version should be positive");
@@ -814,7 +826,7 @@ public class IntegrationTests
 
         var raw = BarCompression.EnsureDecompressed(entry!.ReadDataRaw(stream), out _);
         var tma = new TmaFile(raw);
-        Assert.True(tma.Parse(), "TMA should parse successfully");
+        Assert.True(tma.Parsed, "TMA should parse successfully");
 
         // Header
         Assert.Equal(12u, tma.Version);

@@ -88,18 +88,6 @@ public class BarFileEntry
     /// <br />
     /// This data is raw and may be compressed
     /// </summary>
-    public PooledBuffer ReadDataRawPooled(Stream stream)
-    {
-        var pooled = new PooledBuffer(SizeInArchive);
-        ReadDataRaw(stream, pooled.Span);
-        return pooled;
-    }
-
-    /// <summary>
-    /// Reads file content from BAR stream by renting byte array from ArrayPool
-    /// <br />
-    /// This data is raw and may be compressed
-    /// </summary>
     public async ValueTask<PooledBuffer> ReadDataRawPooledAsync(Stream stream, CancellationToken token = default)
     {
         var pooled = new PooledBuffer(SizeInArchive);

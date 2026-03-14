@@ -36,7 +36,7 @@ public partial class MainWindow
     /// Resolves an FMOD event to its underlying soundset and individual sound files.
     /// Returns null if resolution fails at any step.
     /// </summary>
-    SoundsetResolution? ResolveFmodEventSounds(FMODEvent fmodEvent)
+    async ValueTask<SoundsetResolution?> ResolveFmodEventSoundsAsync(FMODEvent fmodEvent)
     {
         if (_fileIndex == null) return null;
 
@@ -46,7 +46,7 @@ public partial class MainWindow
         var bankName = SoundsetParser.ExtractBankName(fmodEvent.Path);
 
         // Try bank-specific soundset file first, then all soundset files
-        var (soundset, sourceFile) = FindSoundsetForEvent(eventName, bankName);
+        var (soundset, sourceFile) = await FindSoundsetForEventAsync(eventName, bankName);
         if (soundset == null || sourceFile == null) return null;
 
         var resolution = new SoundsetResolution
@@ -57,7 +57,7 @@ public partial class MainWindow
         };
 
         // Try to enrich with soundmanifest data
-        var manifest = GetOrLoadSoundManifest();
+        var manifest = await GetOrLoadSoundManifestAsync();
         if (manifest != null)
         {
             resolution.HasManifestData = SoundsetParser.EnrichWithManifest(soundset, manifest);
@@ -71,7 +71,7 @@ public partial class MainWindow
     /// Tries bank-specific file first (soundsets_[bankname].soundset.XMB),
     /// then iterates all soundsets_* files in the index.
     /// </summary>
-    (SoundsetDefinition? soundset, string? sourceFile) FindSoundsetForEvent(string eventName, string? bankName)
+    async ValueTask<(SoundsetDefinition? soundset, string? sourceFile)> FindSoundsetForEventAsync(string eventName, string? bankName)
     {
         if (_fileIndex == null) return (null, null);
 
@@ -79,7 +79,7 @@ public partial class MainWindow
         if (bankName != null)
         {
             var bankSpecificName = $"soundsets_{bankName.ToLowerInvariant()}.soundset.XMB";
-            var result = TryFindInSoundsetFile(bankSpecificName, eventName);
+            var result = await TryFindInSoundsetFileAsync(bankSpecificName, eventName);
             if (result.soundset != null) return result;
         }
 
@@ -92,7 +92,7 @@ public partial class MainWindow
             if (bankName != null && fileName.Contains(bankName, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            var result = TryFindInSoundsetFile(fileName, eventName);
+            var result = await TryFindInSoundsetFileAsync(fileName, eventName);
             if (result.soundset != null) return result;
         }
 
@@ -103,7 +103,7 @@ public partial class MainWindow
     /// Tries to find a soundset by name in a specific soundset file.
     /// Uses caching to avoid re-parsing the same file.
     /// </summary>
-    (SoundsetDefinition? soundset, string? sourceFile) TryFindInSoundsetFile(string fileName, string eventName)
+    async ValueTask<(SoundsetDefinition? soundset, string? sourceFile)> TryFindInSoundsetFileAsync(string fileName, string eventName)
     {
         if (_fileIndex == null) return (null, null);
 
@@ -119,10 +119,10 @@ public partial class MainWindow
         var entries = _fileIndex.Find(fileName);
         if (entries.Count == 0) return (null, null);
 
-        var data = ReadFromIndexEntry(entries[0]);
+        using var data = await ReadFromIndexEntryPooledAsync(entries[0]);
         if (data == null) return (null, null);
 
-        var decompressed = BarCompression.EnsureDecompressed(data.Value, out _);
+        using var decompressed = BarCompression.EnsureDecompressedPooled(data, out _);
         string? xmlText;
 
         if (fileName.EndsWith(".XMB", StringComparison.OrdinalIgnoreCase))
@@ -194,7 +194,7 @@ public partial class MainWindow
     /// <summary>
     /// Gets or lazily loads the sound manifest from Sound.bar.
     /// </summary>
-    Dictionary<string, SoundManifestEntry>? GetOrLoadSoundManifest()
+    async ValueTask<Dictionary<string, SoundManifestEntry>?> GetOrLoadSoundManifestAsync()
     {
         if (_cachedSoundManifest != null) return _cachedSoundManifest;
         if (_fileIndex == null) return null;
@@ -202,10 +202,10 @@ public partial class MainWindow
         var entries = _fileIndex.Find("soundmanifest.xml.XMB");
         if (entries.Count == 0) return null;
 
-        var data = ReadFromIndexEntry(entries[0]);
+        using var data = await ReadFromIndexEntryPooledAsync(entries[0]);
         if (data == null) return null;
 
-        var decompressed = BarCompression.EnsureDecompressed(data.Value, out _);
+        using var decompressed = BarCompression.EnsureDecompressedPooled(data, out _);
         var xmlText = ConversionHelper.ConvertXmbToXmlText(decompressed.Span);
         if (xmlText == null) return null;
 
@@ -236,7 +236,7 @@ public partial class MainWindow
     /// <summary>
     /// Builds the "Contained Sounds" section for FMOD event preview.
     /// </summary>
-    string BuildSoundsetPreviewText(FMODEvent fmodEvent)
+    async ValueTask<string> BuildSoundsetPreviewTextAsync(FMODEvent fmodEvent)
     {
         if (_fileIndex == null)
         {
@@ -247,7 +247,7 @@ public partial class MainWindow
 
         try
         {
-            var resolution = ResolveFmodEventSounds(fmodEvent);
+            var resolution = await ResolveFmodEventSoundsAsync(fmodEvent);
             _lastSoundsetResolution = resolution;
             OnPropertyChanged(nameof(CanExportAllSounds));
             if (resolution == null)
@@ -301,7 +301,7 @@ public partial class MainWindow
         if (SelectedBankEntry == null || _fmodBank == null)
             return;
 
-        var resolution = ResolveFmodEventSounds(SelectedBankEntry);
+        var resolution = await ResolveFmodEventSoundsAsync(SelectedBankEntry);
         if (resolution == null)
         {
             _ = ShowError("Could not resolve soundset for this event.\nMake sure a root directory with Sound.bar is loaded.");

@@ -25,11 +25,11 @@ public class GlbExporterTests
     {
         var tmmBytes = CreateSyntheticTmm(numVertices: 0, numTriangleVerts: 0);
         var tmm = new TmmFile(tmmBytes);
-        Assert.True(tmm.Parse());
+        Assert.True(tmm.Parsed);
 
         var dataBytes = CreateSyntheticData(numVertices: 0, numTriangleVerts: 0, hasSkinning: false);
         var dataFile = new TmmDataFile(dataBytes, 0, 0, false);
-        Assert.True(dataFile.Parse());
+        Assert.True(dataFile.Parsed);
 
         var result = GlbExporter.ExportGlb(tmm, dataFile);
         Assert.Null(result);
@@ -65,7 +65,8 @@ public class GlbExporterTests
     public void ExportGlb_ValidGeometry_HasJsonChunk()
     {
         var (tmm, dataFile) = CreateMinimalModel();
-        var glb = GlbExporter.ExportGlb(tmm, dataFile)!;
+        var glb = GlbExporter.ExportGlb(tmm, dataFile);
+        Assert.NotNull(glb);
 
         // JSON chunk starts at offset 12
         uint jsonChunkLength = BinaryPrimitives.ReadUInt32LittleEndian(glb.AsSpan(12, 4));
@@ -340,11 +341,11 @@ public class GlbExporterTests
             numTriangleVerts: numTris);
 
         var tmm = new TmmFile(tmmBytes);
-        Assert.True(tmm.Parse());
+        Assert.True(tmm.Parsed);
 
         var dataBytes = CreateSyntheticData(numVertices: numVerts, numTriangleVerts: numTris, hasSkinning: false);
         var dataFile = new TmmDataFile(dataBytes, numVerts, numTris, false);
-        Assert.True(dataFile.Parse());
+        Assert.True(dataFile.Parsed);
 
         return (tmm, dataFile);
     }
@@ -363,11 +364,11 @@ public class GlbExporterTests
             numTriangleVerts: numTris);
 
         var tmm = new TmmFile(tmmBytes);
-        Assert.True(tmm.Parse());
+        Assert.True(tmm.Parsed);
 
         var dataBytes = CreateSyntheticData(numVertices: numVerts, numTriangleVerts: numTris, hasSkinning: true);
         var dataFile = new TmmDataFile(dataBytes, numVerts, numTris, true);
-        Assert.True(dataFile.Parse());
+        Assert.True(dataFile.Parsed);
 
         return (tmm, dataFile);
     }

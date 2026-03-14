@@ -13,7 +13,7 @@ public class TmmFileTests
     public void Parse_EmptyData_ReturnsFalse()
     {
         var tmm = new TmmFile(ReadOnlyMemory<byte>.Empty);
-        Assert.False(tmm.Parse());
+        Assert.False(tmm.Parsed);
         Assert.False(tmm.Parsed);
     }
 
@@ -21,7 +21,7 @@ public class TmmFileTests
     public void Parse_TooShort_ReturnsFalse()
     {
         var tmm = new TmmFile(new byte[10]);
-        Assert.False(tmm.Parse());
+        Assert.False(tmm.Parsed);
     }
 
     [Fact]
@@ -30,7 +30,7 @@ public class TmmFileTests
         var data = new byte[100];
         data[0] = 0xFF;
         var tmm = new TmmFile(data);
-        Assert.False(tmm.Parse());
+        Assert.False(tmm.Parsed);
     }
 
     [Fact]
@@ -38,7 +38,7 @@ public class TmmFileTests
     {
         var data = CreateMinimalTmmHeader(version: 10);
         var tmm = new TmmFile(data);
-        Assert.False(tmm.Parse());
+        Assert.False(tmm.Parsed);
     }
 
     [Fact]
@@ -49,7 +49,7 @@ public class TmmFileTests
         BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(4), 35);
         data[8] = 0x00; data[9] = 0x00; // Not DP
         var tmm = new TmmFile(data);
-        Assert.False(tmm.Parse());
+        Assert.False(tmm.Parsed);
     }
 
     [Fact]
@@ -57,7 +57,6 @@ public class TmmFileTests
     {
         var data = CreateSyntheticTmm();
         var tmm = new TmmFile(data);
-        Assert.True(tmm.Parse());
         Assert.True(tmm.Parsed);
         Assert.Equal(35u, tmm.Version);
         Assert.Empty(tmm.ImportNames);
@@ -72,7 +71,7 @@ public class TmmFileTests
     {
         var data = CreateSyntheticTmm(importNames: ["armory_a_age2", "test_model"]);
         var tmm = new TmmFile(data);
-        Assert.True(tmm.Parse());
+        Assert.True(tmm.Parsed);
         Assert.Equal(2, tmm.ImportNames.Length);
         Assert.Equal("armory_a_age2", tmm.ImportNames[0]);
         Assert.Equal("test_model", tmm.ImportNames[1]);
@@ -83,7 +82,7 @@ public class TmmFileTests
     {
         var data = CreateSyntheticTmm();
         var tmm = new TmmFile(data);
-        Assert.True(tmm.Parse());
+        Assert.True(tmm.Parsed);
 
         Assert.Equal(-1.0f, tmm.BoundingBox.MinX);
         Assert.Equal(-2.0f, tmm.BoundingBox.MinY);
@@ -102,7 +101,7 @@ public class TmmFileTests
             submodels: ["default"]);
 
         var tmm = new TmmFile(data);
-        Assert.True(tmm.Parse());
+        Assert.True(tmm.Parsed);
         Assert.Equal(2, tmm.MeshGroups.Length);
         Assert.Equal(100u, tmm.MeshGroups[0].VertexCount);
         Assert.Equal(2, tmm.Materials.Length);
@@ -115,7 +114,7 @@ public class TmmFileTests
     {
         var data = CreateSyntheticTmm(numBones: 2);
         var tmm = new TmmFile(data);
-        Assert.True(tmm.Parse());
+        Assert.True(tmm.Parsed);
         Assert.Equal(2, tmm.Bones.Length);
         Assert.Equal("bone_0", tmm.Bones[0].Name);
         Assert.Equal(-1, tmm.Bones[0].ParentId);
@@ -128,7 +127,7 @@ public class TmmFileTests
     {
         var data = CreateSyntheticTmm(numAttachments: 1, numBones: 1);
         var tmm = new TmmFile(data);
-        Assert.True(tmm.Parse());
+        Assert.True(tmm.Parsed);
         Assert.Single(tmm.Attachments);
         Assert.Equal("attach_0", tmm.Attachments[0].Name);
         Assert.Equal(0, tmm.Attachments[0].ParentBoneId);
@@ -142,7 +141,7 @@ public class TmmFileTests
         {
             var data = CreateSyntheticTmm(version: v);
             var tmm = new TmmFile(data);
-            Assert.True(tmm.Parse(), $"Version {v} should be accepted");
+            Assert.True(tmm.Parsed, $"Version {v} should be accepted");
         }
     }
 
@@ -168,7 +167,7 @@ public class TmmFileTests
         w.Write(0u); // numTriangleVerts
 
         var tmm = new TmmFile(ms.ToArray());
-        Assert.False(tmm.Parse());
+        Assert.False(tmm.Parsed);
     }
 
     [Fact]
@@ -182,7 +181,7 @@ public class TmmFileTests
             numAttachments: 1);
 
         var tmm = new TmmFile(data);
-        Assert.True(tmm.Parse());
+        Assert.True(tmm.Parsed);
 
         var summary = tmm.GetSummary();
         Assert.Contains("TMM Model", summary);
