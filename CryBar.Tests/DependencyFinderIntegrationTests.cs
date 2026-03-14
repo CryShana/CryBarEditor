@@ -446,7 +446,7 @@ public class DependencyFinderIntegrationTests
     // ========= Performance =========
 
     [SkippableFact]
-    public void Proto_FullParse_CompletesUnderOneSecond()
+    public void Proto_FullParse_CompletesUnder800ms()
     {
         const string BAR_FILE = @"game\data\gameplay\proto.xml.XMB";
 
@@ -463,8 +463,8 @@ public class DependencyFinderIntegrationTests
         var result = DependencyFinder.FindDependencies(xml, BAR_FILE, index);
         sw.Stop();
 
-        Assert.True(sw.Elapsed.TotalMilliseconds < 1000,
-            $"proto.xml dependency scan took {sw.ElapsedMilliseconds}ms, expected <1000ms");
+        Assert.True(sw.Elapsed.TotalMilliseconds < 800,
+            $"proto.xml dependency scan took {sw.ElapsedMilliseconds}ms, expected <800ms");
 
         // Sanity: should have found many groups and references
         Assert.True(result.Groups.Count > 1000, $"Expected many entity groups, got {result.Groups.Count}");
@@ -478,7 +478,7 @@ public class DependencyFinderIntegrationTests
     // ========= Speed: animfile dependency scan =========
 
     [SkippableFact]
-    public void AnimFile_Hoplite_DependencyScan_CompletesUnder5ms()
+    public void AnimFile_Hoplite_DependencyScan_CompletesUnder4ms()
     {
         Skip.IfNot(GameInstalled, "Game not found");
         var index = GetOrBuildIndex();
@@ -504,8 +504,8 @@ public class DependencyFinderIntegrationTests
 
         var avgMs = totalMs / RUNS;
 
-        Assert.True(avgMs < 5.0,
-            $"Hoplite animfile dependency scan averaged {avgMs:F3}ms, expected <5ms");
+        Assert.True(avgMs < 4.0,
+            $"Hoplite animfile dependency scan averaged {avgMs:F3}ms, expected <4ms");
     }
 
     // ========= Composite JSON =========
