@@ -110,216 +110,237 @@ public partial class MainWindow
         var text = "";
 
         PreviewedFileName = Path.GetFileName(relative_path);
+        PreviewedFileNote = "";
+        _txtEditor.Document = new TextDocument("Loading...");
+        _textMateInstallation.SetGrammar(null);
+
+        // Mark document as not ready — SearchWindow awaits this before highlighting
+        var previewTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _docReadyTask = previewTcs.Task;
 
         try
         {
-            var data_size = get_read_size(entry);
-            if (data_size > MAX_DATA_SIZE)
+            try
             {
-                await SetImagePreview(null);
-                _ = SetEditorText(".txt", "Data too big to be loaded for preview");
-                return;
-            }
-
-            using var rawData = await read(entry, token);
-            using var data = BarCompression.EnsureDecompressedPooled(rawData, out var type);
-                    
-            PreviewedFileNote = type switch
-            {
-                CompressionType.L33t => "(Decompressed L33t)",
-                CompressionType.Alz4 => "(Decompressed Alz4)",
-                _ => ""
-            };
-
-            if (IsImage(ext))
-            {
-                using (var image = SixLabors.ImageSharp.Image.Load(data.Span))
+                var data_size = get_read_size(entry);
+                if (data_size > MAX_DATA_SIZE)
                 {
-                    await SetImagePreview(image, token);
-                    PreviewedFileNote = $"[{image.Width}x{image.Height}]";
+                    await SetImagePreview(null);
+                    _ = SetEditorText(".txt", "Data too big to be loaded for preview");
+                    return;
                 }
 
-                return;
-            }
+                using var rawData = await read(entry, token);
+                var (decompressedData, type) = await Task.Run(() =>
+                {
+                    var d = BarCompression.EnsureDecompressedPooled(rawData, out var t);
+                    return (d, t);
+                });
+                using var data = decompressedData;
 
-            if (ext == ".xmb")
-            {
-                if (_docCache.TryGet(relative_path, out _))
+                PreviewedFileNote = type switch
                 {
-                    ext = ".xml";
-                    PreviewedFileNote = "(Converted to XML)";
-                }
-                else
+                    CompressionType.L33t => "(Decompressed L33t)",
+                    CompressionType.Alz4 => "(Decompressed Alz4)",
+                    _ => ""
+                };
+
+                if (IsImage(ext))
                 {
-                    var mem = data.Memory;
-                    var xmlText = await Task.Run(() => ConversionHelper.ConvertXmbToXmlText(mem.Span));
-                    if (xmlText != null)
+                    using (var image = SixLabors.ImageSharp.Image.Load(data.Span))
                     {
-                        PreviewedFileNote = "(Converted to XML)";
-                        text = xmlText;
+                        await SetImagePreview(image, token);
+                        PreviewedFileNote = $"[{image.Width}x{image.Height}]";
+                    }
+
+                    return;
+                }
+
+                if (ext == ".xmb")
+                {
+                    if (_docCache.TryGet(relative_path, out _))
+                    {
                         ext = ".xml";
+                        PreviewedFileNote = "(Converted to XML)";
                     }
                     else
                     {
-                        text = "Failed to parse XMB document";
-                        ext = ".txt";
-                    }
-                }
-            }
-            else if (ext == ".ddt")
-            {
-                var ddt = new DDTImage(data.Memory);
-                if (!ddt.ParseHeader())
-                {
-                    PreviewedFileNote = "(Failed to parse DDT)";
-                    return;
-                }
-
-                using var image = await BarFormatConverter.ParseDDT(ddt, max_resolution: 1024, token: token);
-                if (image == null)
-                {
-                    PreviewedFileNote = "(Failed to parse DDT)";
-                    return;
-                }
-
-                var preview_note = $"[{ddt.Version} {ddt.MipmapOffsets[0].Item3}x{ddt.MipmapOffsets[0].Item4}, {ddt.MipmapOffsets.Length} Mips, " +
-                    $"Usage: {(int)ddt.UsageFlag}, Format: {(int)ddt.FormatFlag}, Alpha: {(int)ddt.AlphaFlag}] ";
-
-                if (image.Width < ddt.BaseWidth || image.Height < ddt.BaseHeight)
-                    preview_note += $"- Downscaled to {image.Width}x{image.Height}";
-
-                PreviewedFileNote = preview_note;
-                await SetImagePreview(image, token);
-                return;
-            }
-            else if (ext == ".tmm")
-            {
-                var tmm = new TmmFile(data.Memory);
-                if (!tmm.Parsed)
-                {
-                    PreviewedFileNote = "(Failed to parse TMM)";
-                    return;
-                }
-
-                PreviewedFileNote = $"TMM v{tmm.Version} - {tmm.NumBones} bones, {tmm.NumMaterials} mats";
-                ShowTmmPreview(tmm.GetSummary(relative_path));
-
-                var tmmFileName = Path.GetFileName(relative_path);
-                // Copy: LoadTmm3DPreview is fire-and-forget but data's PooledBuffer is disposed on return
-                _ = LoadTmm3DPreview(tmmFileName, data.Memory.ToArray(), token);
-                return;
-            }
-            else if (ext == ".tma")
-            {
-                var tma = new TmaFile(data.Memory);
-                if (!tma.Parsed)
-                {
-                    PreviewedFileNote = "(Failed to parse TMA)";
-                    return;
-                }
-
-                ext = ".txt";
-                text = tma.GetSummary();
-                PreviewedFileNote = $"TMA v{tma.Version} - {tma.NumBones} bones, {tma.NumTracks} tracks";
-            }
-            else if (relative_path.EndsWith(".tmm.data", StringComparison.OrdinalIgnoreCase))
-            {
-                // Try to find the companion .tmm file
-                // TMM.DATA files are in ArtModelCacheModelData*.bar but TMMs are in ArtModelCacheMeta.bar
-                var tmmBaseName = Path.GetFileName(relative_path[..^5]); // e.g. "petrobolos.tmm"
-                TmmFile? companionTmm = null;
-
-                // First: check current BAR
-                if (_barFile?.Entries != null && _barStream != null)
-                {
-                    var tmmEntry = _barFile.Entries.FirstOrDefault(
-                        e => e.Name.Equals(tmmBaseName, StringComparison.OrdinalIgnoreCase));
-                    if (tmmEntry != null)
-                    {
-                        using var tmmData = await tmmEntry.ReadDataRawPooledAsync(_barStream);
-                        using var tmmRawData = BarCompression.EnsureDecompressedPooled(tmmData, out _);
-                        companionTmm = new TmmFile(tmmRawData.Memory);
-                        if (!companionTmm.Parsed) companionTmm = null;
-                    }
-                }
-
-                // Second: search all .bar files in the same directory
-                if (companionTmm == null && _barStream != null)
-                {
-                    companionTmm = await FindCompanionInSiblingBars<TmmFile>(
-                        _barStream.Name, tmmBaseName,
-                        async (entry, stream) =>
+                        var mem = data.Memory;
+                        var xmlText = await Task.Run(() => ConversionHelper.ConvertXmbToXmlText(mem.Span));
+                        if (xmlText != null)
                         {
-                            using var rawData = await entry.ReadDataRawPooledAsync(stream);
-                            using var data = BarCompression.EnsureDecompressedPooled(rawData, out _);       
-                            var tmm = new TmmFile(data.Memory);
-                            return tmm.Parsed ? tmm : null;
-                        });
-                }
-
-                if (companionTmm != null)
-                {
-                    var dataFile = new TmmDataFile(data.Memory,
-                        companionTmm.NumVertices, companionTmm.NumTriangleVerts,
-                        companionTmm.NumBones > 0);
-
-                    if (dataFile.Parsed)
-                    {
-                        ext = ".txt";
-                        text = dataFile.GetSummary();
-                        PreviewedFileNote = "TMM Data";
+                            PreviewedFileNote = "(Converted to XML)";
+                            text = xmlText;
+                            ext = ".xml";
+                        }
+                        else
+                        {
+                            text = "Failed to parse XMB document";
+                            ext = ".txt";
+                        }
                     }
-                    else
+                }
+                else if (ext == ".ddt")
+                {
+                    var ddt = new DDTImage(data.Memory);
+                    if (!ddt.ParseHeader())
                     {
-                        PreviewedFileNote = "(Failed to parse TMM data)";
+                        PreviewedFileNote = "(Failed to parse DDT)";
                         return;
                     }
+
+                    using var image = await BarFormatConverter.ParseDDT(ddt, max_resolution: 1024, token: token);
+                    if (image == null)
+                    {
+                        PreviewedFileNote = "(Failed to parse DDT)";
+                        return;
+                    }
+
+                    var preview_note = $"[{ddt.Version} {ddt.MipmapOffsets[0].Item3}x{ddt.MipmapOffsets[0].Item4}, {ddt.MipmapOffsets.Length} Mips, " +
+                        $"Usage: {(int)ddt.UsageFlag}, Format: {(int)ddt.FormatFlag}, Alpha: {(int)ddt.AlphaFlag}] ";
+
+                    if (image.Width < ddt.BaseWidth || image.Height < ddt.BaseHeight)
+                        preview_note += $"- Downscaled to {image.Width}x{image.Height}";
+
+                    PreviewedFileNote = preview_note;
+                    await SetImagePreview(image, token);
+                    return;
+                }
+                else if (ext == ".tmm")
+                {
+                    var tmm = new TmmFile(data.Memory);
+                    if (!tmm.Parsed)
+                    {
+                        PreviewedFileNote = "(Failed to parse TMM)";
+                        return;
+                    }
+
+                    PreviewedFileNote = $"TMM v{tmm.Version} - {tmm.NumBones} bones, {tmm.NumMaterials} mats";
+                    ShowTmmPreview(tmm.GetSummary(relative_path));
+
+                    var tmmFileName = Path.GetFileName(relative_path);
+                    // Copy: LoadTmm3DPreview is fire-and-forget but data's PooledBuffer is disposed on return
+                    _ = LoadTmm3DPreview(tmmFileName, data.Memory.ToArray(), token);
+                    return;
+                }
+                else if (ext == ".tma")
+                {
+                    var tma = new TmaFile(data.Memory);
+                    if (!tma.Parsed)
+                    {
+                        PreviewedFileNote = "(Failed to parse TMA)";
+                        return;
+                    }
+
+                    ext = ".txt";
+                    text = tma.GetSummary();
+                    PreviewedFileNote = $"TMA v{tma.Version} - {tma.NumBones} bones, {tma.NumTracks} tracks";
+                }
+                else if (relative_path.EndsWith(".tmm.data", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Try to find the companion .tmm file
+                    // TMM.DATA files are in ArtModelCacheModelData*.bar but TMMs are in ArtModelCacheMeta.bar
+                    var tmmBaseName = Path.GetFileName(relative_path[..^5]); // e.g. "petrobolos.tmm"
+                    TmmFile? companionTmm = null;
+
+                    // First: check current BAR
+                    if (_barFile?.Entries != null && _barStream != null)
+                    {
+                        var tmmEntry = _barFile.Entries.FirstOrDefault(
+                            e => e.Name.Equals(tmmBaseName, StringComparison.OrdinalIgnoreCase));
+                        if (tmmEntry != null)
+                        {
+                            using var tmmData = await tmmEntry.ReadDataRawPooledAsync(_barStream);
+                            using var tmmRawData = BarCompression.EnsureDecompressedPooled(tmmData, out _);
+                            companionTmm = new TmmFile(tmmRawData.Memory);
+                            if (!companionTmm.Parsed) companionTmm = null;
+                        }
+                    }
+
+                    // Second: search all .bar files in the same directory
+                    if (companionTmm == null && _barStream != null)
+                    {
+                        companionTmm = await FindCompanionInSiblingBars<TmmFile>(
+                            _barStream.Name, tmmBaseName,
+                            async (entry, stream) =>
+                            {
+                                using var rawData = await entry.ReadDataRawPooledAsync(stream);
+                                using var data = BarCompression.EnsureDecompressedPooled(rawData, out _);
+                                var tmm = new TmmFile(data.Memory);
+                                return tmm.Parsed ? tmm : null;
+                            });
+                    }
+
+                    if (companionTmm != null)
+                    {
+                        var dataFile = new TmmDataFile(data.Memory,
+                            companionTmm.NumVertices, companionTmm.NumTriangleVerts,
+                            companionTmm.NumBones > 0);
+
+                        if (dataFile.Parsed)
+                        {
+                            ext = ".txt";
+                            text = dataFile.GetSummary();
+                            PreviewedFileNote = "TMM Data";
+                        }
+                        else
+                        {
+                            PreviewedFileNote = "(Failed to parse TMM data)";
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        ext = ".txt";
+                        text = $"TMM Data file ({data_size:N0} bytes)\nCompanion .tmm not found in BAR - cannot decode without vertex/index counts.";
+                        PreviewedFileNote = "TMM Data (no companion)";
+                    }
                 }
                 else
                 {
-                    ext = ".txt";
-                    text = $"TMM Data file ({data_size:N0} bytes)\nCompanion .tmm not found in BAR - cannot decode without vertex/index counts.";
-                    PreviewedFileNote = "TMM Data (no companion)";
+                    if (data_size > MAX_DATA_TEXT_SIZE)
+                    {
+                        // to large for text file
+                        await SetImagePreview(null);
+                        _ = SetEditorText(".txt", "Data too big to preview as text");
+                        return;
+                    }
+
+                    var unicode = DetectIfUnicode(data.Span);
+                    PreviewedFileNote = unicode ? "[Unicode]" : "[UTF-8]";
+
+                    // set text
+                    text = unicode ?
+                        Encoding.Unicode.GetString(data.Span) :
+                        Encoding.UTF8.GetString(data.Span);
+
+                    if (ext is not ".xml" && GetXMLTagRegex().IsMatch(text))
+                        ext = ".xml";
+
+                    //if (ext == ".simjson")
+                    //   ext = ".json";
                 }
             }
-            else
+            catch (UnknownImageFormatException)
             {
-                if (data_size > MAX_DATA_TEXT_SIZE)
-                {
-                    // to large for text file
-                    await SetImagePreview(null);
-                    _ = SetEditorText(".txt", "Data too big to preview as text");
-                    return;
-                }
-
-                var unicode = DetectIfUnicode(data.Span);
-                PreviewedFileNote = unicode ? "[Unicode]" : "[UTF-8]";
-
-                // set text
-                text = unicode ?
-                    Encoding.Unicode.GetString(data.Span) :
-                    Encoding.UTF8.GetString(data.Span);
-
-                if (ext is not ".xml" && GetXMLTagRegex().IsMatch(text))
-                    ext = ".xml";
-
-                //if (ext == ".simjson")
-                //   ext = ".json";
+                ext = ".txt";
+                text = "Preview failed: Unrecognized image format";
             }
-        }
-        catch (UnknownImageFormatException)
-        {
-            ext = ".txt";
-            text = "Preview failed: Unrecognized image format";
-        }
-        catch (Exception ex)
-        {
-            ext = ".txt";
-            text = "Preview failed: " + ex.Message;
-        }
+            catch (Exception ex)
+            {
+                ext = ".txt";
+                text = "Preview failed: " + ex.Message;
+            }
 
-        await SetImagePreview(null);
-        await SetEditorText(ext, text, cacheKey: relative_path);
+            if (token.IsCancellationRequested) return;
+
+            await SetImagePreview(null);
+            await SetEditorText(ext, text, cacheKey: relative_path);
+        }
+        finally
+        {
+            previewTcs.TrySetResult();
+        }
     }
     #endregion
 
