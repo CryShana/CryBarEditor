@@ -75,7 +75,7 @@ public partial class MainWindow
 
         var soundInfo = BuildSoundsetPreviewText(e);
 
-        SetEditorText(".txt",
+        _ = SetEditorText(".txt",
         $"""
         Id:         {e.Id}
         Path:       {e.Path}
@@ -113,7 +113,7 @@ public partial class MainWindow
             if (data_size > MAX_DATA_SIZE)
             {
                 await SetImagePreview(null);
-                SetEditorText(".txt", "Data too big to be loaded for preview");
+                _ = SetEditorText(".txt", "Data too big to be loaded for preview");
                 return;
             }
 
@@ -271,7 +271,7 @@ public partial class MainWindow
                 {
                     // to large for text file
                     await SetImagePreview(null);
-                    SetEditorText(".txt", "Data too big to preview as text");
+                    _ = SetEditorText(".txt", "Data too big to preview as text");
                     return;
                 }
 
@@ -283,8 +283,8 @@ public partial class MainWindow
                     Encoding.Unicode.GetString(data.Span) :
                     Encoding.UTF8.GetString(data.Span);
 
-                var xml_tags = GetXMLTagRegex().Count(text);
-                if (xml_tags > 0) ext = ".xml";
+                if (ext is not ".xml" && GetXMLTagRegex().IsMatch(text))
+                    ext = ".xml";
 
                 //if (ext == ".simjson")
                 //   ext = ".json";
@@ -302,7 +302,7 @@ public partial class MainWindow
         }
 
         await SetImagePreview(null);
-        SetEditorText(ext, text);
+        await SetEditorText(ext, text, cacheKey: relative_path);
     }
     #endregion
 
@@ -360,13 +360,19 @@ public partial class MainWindow
         _imgPreview.Source = _previewImage;
     }
 
-    public void SetEditorText(string extension, string text)
+    public async Task SetEditorText(string extension, string text, string? cacheKey = null)
     {
+        // Cancel any in-progress async document build from the previous call
+        _docLoadCts?.Cancel();
+        _docLoadCts?.Dispose();
+        _docLoadCts = null;
+
         // ANY CLEANUP
         if (_foldingManager != null)
         {
             _foldingManager.Clear();
             FoldingManager.Uninstall(_foldingManager);
+            _foldingManager = null;
         }
 
         // PREPARE EXTENSION
@@ -385,19 +391,81 @@ public partial class MainWindow
         var scope = lang == null ? null : _registryOptions.GetScopeByLanguageId(lang.Id);
 
         _previewText = text;
-        _txtEditor.Document = new TextDocument(text);
-        _textMateInstallation.SetGrammar(scope);
 
-        // HANDLE FOLDING
-        if (ext is ".xml")
+        // Cache hit: assign immediately (document already built, no async needed)
+        if (cacheKey != null && _docCache.TryGet(cacheKey, out var cachedDoc))
         {
-            _foldingManager = FoldingManager.Install(_txtEditor.TextArea);
-            var strategy = new XmlFoldingStrategy();
-            strategy.UpdateFoldings(_foldingManager, _txtEditor.Document);
+            _docReadyTask = Task.CompletedTask;
+            _txtEditor.Document = cachedDoc!;
+            _textMateInstallation.SetGrammar(scope);
+            InstallFolding(ext, text.Length);
+            ScrollEditorToTop();
+            return;
         }
 
-        // SCROLL TO TOP (must be with a delay, because the document gets moved a bit)
-        Task.Delay(50).ContinueWith((t) => Dispatcher.UIThread.Post(() => _txtEditor.ScrollTo(0, 0)));
+        const int LARGE_TEXT_THRESHOLD = 500_000;
+        if (text.Length > LARGE_TEXT_THRESHOLD)
+        {
+            // Show a placeholder while the full document builds in the background
+            _txtEditor.Document = new TextDocument("Loading...");
+            _textMateInstallation.SetGrammar(null);
+
+            var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _docReadyTask = tcs.Task;
+
+            var cts = new CancellationTokenSource();
+            _docLoadCts = cts;
+
+            // Capture UI thread so the background thread can transfer document ownership
+            var uiThread = Thread.CurrentThread;
+
+            try
+            {
+                var fullDoc = await Task.Run(() =>
+                {
+                    var doc = new TextDocument(text);
+                    doc.SetOwnerThread(uiThread);
+                    return doc;
+                }, cts.Token);
+
+                if (cts.Token.IsCancellationRequested || _previewText != text) return;
+
+                _txtEditor.Document = fullDoc;
+                _textMateInstallation.SetGrammar(scope);
+                if (cacheKey != null) _docCache.Add(cacheKey, fullDoc);
+
+                InstallFolding(ext, text.Length);
+                ScrollEditorToTop();
+            }
+            finally
+            {
+                tcs.TrySetResult();
+            }
+            return;
+        }
+
+        // Small document — build synchronously, no snippet needed
+        _docReadyTask = Task.CompletedTask;
+        var doc = new TextDocument(text);
+        _txtEditor.Document = doc;
+        if (cacheKey != null) _docCache.Add(cacheKey, doc);
+        _textMateInstallation.SetGrammar(scope);
+        InstallFolding(ext, text.Length);
+        ScrollEditorToTop();
+    }
+
+    // The document shifts slightly after assignment, so we delay before scrolling
+    void ScrollEditorToTop() =>
+        Task.Delay(50).ContinueWith(_ => Dispatcher.UIThread.Post(() => _txtEditor.ScrollTo(0, 0)));
+
+    void InstallFolding(string ext, int textLength)
+    {
+        const int FOLDING_MAX_CHARS = 2_000_000; // skip XML folding on huge files — it's also slow
+        if (ext is not ".xml" || textLength > FOLDING_MAX_CHARS) return;
+
+        _foldingManager = FoldingManager.Install(_txtEditor.TextArea);
+        var strategy = new XmlFoldingStrategy();
+        strategy.UpdateFoldings(_foldingManager, _txtEditor.Document);
     }
     #endregion
 
@@ -538,7 +606,6 @@ public partial class MainWindow
 
     public void RefreshBankEntries()
     {
-        // TODO: filter
         BankEntries.Clear();
         if (_fmodBank?.Events == null)
             return;

@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using AvaloniaEdit.Document;
 using AvaloniaEdit.Folding;
 using AvaloniaEdit.TextMate;
 using CryBar;
@@ -98,9 +99,14 @@ public partial class MainWindow : SimpleWindow
 
     // 3D preview
     GlPreviewControl? _glPreview;
-    readonly PreviewMeshCache _meshCache = new(maxItems: 10);
+    readonly LruCache<PreviewMeshData> _meshCache = new(maxItems: 10);
     int _tmmSelectedTabIndex = 0;
     CancellationTokenSource? _meshConversionCts;
+
+    // Text document cache + async load cancellation
+    readonly LruCache<TextDocument> _docCache = new(maxItems: 10);
+    CancellationTokenSource? _docLoadCts;
+    internal Task _docReadyTask = Task.CompletedTask;
 
     /// <summary>
     /// This is used to find relative path for Root directory files
@@ -777,8 +783,11 @@ public partial class MainWindow : SimpleWindow
     {
         _meshConversionCts?.Cancel();
         _meshConversionCts?.Dispose();
+        _docLoadCts?.Cancel();
+        _docLoadCts?.Dispose();
         _glPreview = null;
         _meshCache.Clear();
+        _docCache.Clear();
         base.OnClosing(e);
     }
 }

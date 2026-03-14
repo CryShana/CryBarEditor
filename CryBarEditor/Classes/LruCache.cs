@@ -1,26 +1,27 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace CryBarEditor.Classes;
 
 /// <summary>
-/// Thread-safe LRU cache for PreviewMeshData, keyed by TMM file name (case-insensitive).
+/// Thread-safe LRU cache keyed by string (case-insensitive).
 /// </summary>
-public class PreviewMeshCache
+public class LruCache<TValue>
 {
     readonly int _maxItems;
-    readonly Dictionary<string, LinkedListNode<(string Key, PreviewMeshData Data)>> _map;
-    readonly LinkedList<(string Key, PreviewMeshData Data)> _list = new();
-    readonly object _lock = new();
+    readonly Dictionary<string, LinkedListNode<(string Key, TValue Value)>> _map;
+    readonly LinkedList<(string Key, TValue Value)> _list = new();
+    readonly Lock _lock = new();
 
-    public PreviewMeshCache(int maxItems = 10)
+    public LruCache(int maxItems)
     {
         _maxItems = maxItems;
-        _map = new Dictionary<string, LinkedListNode<(string Key, PreviewMeshData Data)>>(
+        _map = new Dictionary<string, LinkedListNode<(string Key, TValue Value)>>(
             maxItems, StringComparer.OrdinalIgnoreCase);
     }
 
-    public bool TryGet(string key, out PreviewMeshData? data)
+    public bool TryGet(string key, out TValue? value)
     {
         lock (_lock)
         {
@@ -28,15 +29,15 @@ public class PreviewMeshCache
             {
                 _list.Remove(node);
                 _list.AddFirst(node);
-                data = node.Value.Data;
+                value = node.Value.Value;
                 return true;
             }
-            data = null;
+            value = default;
             return false;
         }
     }
 
-    public void Add(string key, PreviewMeshData data)
+    public void Add(string key, TValue value)
     {
         lock (_lock)
         {
@@ -46,7 +47,7 @@ public class PreviewMeshCache
                 _map.Remove(key);
             }
 
-            var node = _list.AddFirst((key, data));
+            var node = _list.AddFirst((key, value));
             _map[key] = node;
 
             while (_map.Count > _maxItems)

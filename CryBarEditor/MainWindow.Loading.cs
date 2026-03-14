@@ -235,6 +235,7 @@ public partial class MainWindow
             if (_exportRootDirectory == dir)
                 throw new InvalidOperationException("Root directory is the same as export directory");
 
+            _docCache.Clear();
             RootDirectory = dir;
             LoadFilesFromRoot();
             RebuildFileIndex();
@@ -416,6 +417,7 @@ public partial class MainWindow
             OnPropertyChanged(nameof(IsBankFileSelected));
         }
 
+        _docCache.Clear();
         _barStream?.Dispose();
         var stream = File.OpenRead(bar_file);
 

@@ -562,8 +562,9 @@ public partial class SearchWindow : SimpleWindow
             if (!result.WithinContent || text.Length < 100)
                 return;
 
-            // wait a bit for editor to load
-            await Task.Delay(50);
+            // Wait for the full document to finish loading (may be async for large files)
+            await _owner._docReadyTask;
+            await Task.Delay(100);
 
             // this is index of character within file
             var index = result.IndexWithinContent;
