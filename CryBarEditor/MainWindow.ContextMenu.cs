@@ -121,6 +121,7 @@ public partial class MainWindow
             return;
 
         bank_play_csc?.Cancel();
+        bank_play_csc?.Dispose();
         bank_play_csc = new();
         _ = SelectedBankEntry.Play(bank_play_csc.Token);
     }

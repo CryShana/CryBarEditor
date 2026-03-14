@@ -112,6 +112,9 @@ public partial class SearchWindow : SimpleWindow
     protected override void OnClosing(WindowClosingEventArgs e)
     {
         _csc?.Cancel();
+        if (_owner != null)
+            _owner.OnBarFileLoaded -= OnBarFileChanged;
+        _rebuildSemaphore.Dispose();
         base.OnClosing(e);
     }
 
