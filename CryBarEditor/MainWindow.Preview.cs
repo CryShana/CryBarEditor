@@ -111,6 +111,20 @@ public partial class MainWindow
 
         PreviewedFileName = Path.GetFileName(relative_path);
         PreviewedFileNote = "";
+
+        // Cancel any in-progress background document build from a previous preview
+        _docLoadCts?.Cancel();
+        _docLoadCts?.Dispose();
+        _docLoadCts = null;
+
+        // Uninstall folding before replacing document — it holds references to the old document
+        if (_foldingManager != null)
+        {
+            _foldingManager.Clear();
+            FoldingManager.Uninstall(_foldingManager);
+            _foldingManager = null;
+        }
+
         _txtEditor.Document = new TextDocument("Loading...");
         _textMateInstallation.SetGrammar(null);
 
