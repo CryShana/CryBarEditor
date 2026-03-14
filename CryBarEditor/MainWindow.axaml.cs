@@ -17,6 +17,7 @@ using System.Threading.Tasks;
 using CryBarEditor.Controls;
 using TextMateSharp.Grammars;
 using Configuration = CryBarEditor.Classes.Configuration;
+using System.Linq;
 
 namespace CryBarEditor;
 
@@ -66,6 +67,26 @@ public partial class MainWindow : SimpleWindow
         if (!RootFileEntries.Contains(entry))
         {
             FilesQuery = "";
+        }
+
+        return entry;
+    }
+
+    /// <summary>
+    /// Finds a bar file entry by relative path from the full (unfiltered) list.
+    /// If found but not visible due to filter, clears the filter first.
+    /// </summary>
+    public BarFileEntry? FindAndRevealBarFileEntry(string relativePath)
+    {
+        if (_barFile?.Entries == null) return null;
+
+        var entry = _barFile.Entries.FirstOrDefault(f => f.RelativePath == relativePath);
+        if (entry == null) return null;
+
+        // If entry isn't in the filtered list, clear the filter to make it visible
+        if (!BarEntries.Contains(entry))
+        {
+            EntryQuery = "";
         }
 
         return entry;

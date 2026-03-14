@@ -232,11 +232,10 @@ public partial class QuickAccessWindow : SimpleWindow
                     return;
                 }
                 _owner.SelectedRootFileEntry = barTarget;
-                await Task.Delay(50);
+                    await Task.Delay(50);
 
                 // Then select the entry within the BAR
-                if (_owner.BarFile?.Entries == null) return;
-                var barEntry = _owner.BarFile.Entries.FirstOrDefault(e => e.RelativePath == entry.EntryRelativePath);
+                var barEntry = _owner.FindAndRevealBarFileEntry(entry.EntryRelativePath);
                 if (barEntry == null) return;
                 _owner.SelectedBarEntry = barEntry;
                 break;

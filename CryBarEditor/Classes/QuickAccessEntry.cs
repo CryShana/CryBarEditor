@@ -6,9 +6,9 @@ namespace CryBarEditor.Classes;
 
 public enum QuickAccessEntryType
 {
-    RootFile,
-    BarEntry,
-    FmodEvent
+    RootFile = 0,
+    BarEntry = 1,
+    FmodEvent = 2
 }
 
 public class QuickAccessEntry

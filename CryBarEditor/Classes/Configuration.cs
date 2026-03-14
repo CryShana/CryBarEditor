@@ -22,6 +22,7 @@ public class Configuration
     public List<QuickAccessEntry>? QuickAccessEntries { get; set; }
 }
 
+[JsonSourceGenerationOptions(DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(Configuration))]
 [JsonSerializable(typeof(List<QuickAccessEntry>))]
 public partial class CryBarJsonContext : JsonSerializerContext { }

@@ -544,19 +544,7 @@ public partial class SearchWindow : SimpleWindow
             if (!string.IsNullOrEmpty(bar_entry))
             {
                 // BAR file
-                if (_owner?.BarFile?.Entries == null)
-                    return;
-
-                BarFileEntry? toSelectBarEntry = null;
-                foreach (var entry in _owner.BarFile.Entries)
-                {
-                    if (entry.RelativePath != bar_entry)
-                        continue;
-
-                    toSelectBarEntry = entry;
-                    break;
-                }
-
+                var toSelectBarEntry = _owner.FindAndRevealBarFileEntry(bar_entry);
                 if (toSelectBarEntry == null)
                     return;
 
