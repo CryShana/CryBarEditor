@@ -6,6 +6,7 @@
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 	xmlns:ce="using:CryBarEditor"
 	xmlns:cc="using:CryBarEditor.Classes"
+	xmlns:converters="using:CryBarEditor.Converters"
 	xmlns:micons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
 	Title="Quick Access"
 	Width="420"
@@ -19,6 +20,10 @@
 	WindowStartupLocation="CenterOwner"
 	mc:Ignorable="d"
 	x:DataType="ce:QuickAccessWindow">
+	<Window.Resources>
+		<converters:QuickAccessTypeToIconKindConverter x:Key="typeToIconKind" />
+		<converters:QuickAccessTypeToForegroundConverter x:Key="typeToForeground" />
+	</Window.Resources>
 	<Window.Styles>
 		<Style Selector="ListBox">
 			<Setter Property="Background" Value="#171717" />
@@ -66,7 +71,7 @@
 		<!-- List -->
 		<ListBox ItemsSource="{Binding FilteredEntries}"
 				 SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
-				 ContainerPrepared="ListBox_ContainerPrepared">
+				 DoubleTapped="ListBox_DoubleTapped">
 			<ListBox.ItemTemplate>
 				<DataTemplate x:DataType="cc:QuickAccessEntry">
 					<DockPanel>
@@ -100,8 +105,10 @@
 												  IsVisible="{Binding !IsValid}"
 												  ToolTip.Tip="Item no longer found" />
 
-							<!-- Type icon (Kind set in ContainerPrepared) -->
-							<micons:MaterialIcon DockPanel.Dock="Left" x:Name="iconType" Kind="FileOutline"
+							<!-- Type icon -->
+							<micons:MaterialIcon DockPanel.Dock="Left"
+												  Kind="{Binding EntryType, Converter={StaticResource typeToIconKind}}"
+												  Foreground="{Binding EntryType, Converter={StaticResource typeToForeground}}"
 												  Width="16" Height="16" Margin="0,0,5,0"
 												  VerticalAlignment="Center" />
 

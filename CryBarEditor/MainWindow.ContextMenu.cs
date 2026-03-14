@@ -138,11 +138,15 @@ public partial class MainWindow
             TryLaunchEditorForFile(exportPath);
     }
 
+    bool _contextMenuIsFromBAR;
+
     void ContextMenu_Opened(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         var listbox = (ListBox)((ContextMenu)sender!).Parent!.Parent!;
+        _contextMenuIsFromBAR = IsContextFromBAR(listbox);
         ContextSelectedItemsCount = listbox.SelectedItems!.Count;
         OnPropertyChanged(nameof(CanOpenInEditor));
+        OnPropertyChanged(nameof(CanToggleQuickAccess));
         OnPropertyChanged(nameof(IsInQuickAccess));
         OnPropertyChanged(nameof(QuickAccessToggleText));
     }

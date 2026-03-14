@@ -22,6 +22,8 @@ public partial class MainWindow
 
     public string QuickAccessToggleText => IsInQuickAccess ? "Remove from Quick Access" : "Add to Quick Access";
 
+    public bool CanToggleQuickAccess => ContextSelectedItemsCount == 1;
+
     public string FmodQuickAccessToggleText
     {
         get
@@ -36,8 +38,9 @@ public partial class MainWindow
 
     string? GetCurrentQuickAccessKey()
     {
-        if (SelectedBarEntry != null && _barStream != null)
+        if (_contextMenuIsFromBAR && _barStream != null)
         {
+            if (SelectedBarEntry == null) return null;
             var barRelPath = GetBarRelativePath();
             if (barRelPath == null) return null;
             return QuickAccessEntry.FromBarEntry(SelectedBarEntry, barRelPath).GetKey();

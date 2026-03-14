@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.VisualTree;
 
 using CryBarEditor.Classes;
 
@@ -265,36 +264,19 @@ public partial class QuickAccessWindow : SimpleWindow
         }
     }
 
-    void ListBox_ContainerPrepared(object? sender, ContainerPreparedEventArgs e)
+    async void ListBox_DoubleTapped(object? sender, Avalonia.Input.TappedEventArgs e)
     {
-        if (e.Container is not ListBoxItem item) return;
+        if (_navigationInProgress || SelectedEntry == null || !SelectedEntry.IsValid) return;
 
-        // Schedule icon update after the visual tree is built
-        Avalonia.Threading.Dispatcher.UIThread.Post(() => UpdateEntryIcon(item),
-            Avalonia.Threading.DispatcherPriority.Loaded);
-    }
-
-    static readonly Avalonia.Media.SolidColorBrush IconDefaultBrush = new(Avalonia.Media.Color.Parse("#d9d9d9"));
-    static readonly Avalonia.Media.SolidColorBrush IconAccentBrush = new(Avalonia.Media.Color.Parse("#6f96bf"));
-
-    static void UpdateEntryIcon(ListBoxItem item)
-    {
-        if (item.DataContext is not QuickAccessEntry entry) return;
-
-        var icon = item.GetVisualDescendants()
-            .OfType<Material.Icons.Avalonia.MaterialIcon>()
-            .FirstOrDefault(i => i.Name == "iconType");
-        if (icon == null) return;
-
-        icon.Kind = entry.EntryType switch
+        _navigationInProgress = true;
+        try
         {
-            QuickAccessEntryType.BarEntry => Material.Icons.MaterialIconKind.ArchiveOutline,
-            QuickAccessEntryType.FmodEvent => Material.Icons.MaterialIconKind.MusicNote,
-            _ => Material.Icons.MaterialIconKind.FileOutline
-        };
-
-        icon.Foreground = entry.EntryType == QuickAccessEntryType.RootFile
-            ? IconDefaultBrush : IconAccentBrush;
+            await NavigateToEntry(SelectedEntry);
+        }
+        finally
+        {
+            _navigationInProgress = false;
+        }
     }
 
 }
