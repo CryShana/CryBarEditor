@@ -22,6 +22,13 @@ public static partial class DependencyFinder
     private static partial Regex StrKeyPattern();
 
     /// <summary>
+    /// Matches single-segment filenames with an alphabetic extension (e.g. "handattack.tactics").
+    /// Lookbehind/lookahead exclude matches that are part of a larger path already caught by PathPattern.
+    /// </summary>
+    [GeneratedRegex(@"(?<![\\\/\w])[A-Za-z][\w]*\.[A-Za-z][\w]+(?![\\\/\w])")]
+    private static partial Regex SingleSegmentFilePattern();
+
+    /// <summary>
     /// Soundset name from attribute: <soundset name="GreekMilitarySelect">
     /// </summary>
     [GeneratedRegex(@"<soundset[^>]*\bname=""([^""]+)""", RegexOptions.IgnoreCase)]
@@ -269,6 +276,22 @@ public static partial class DependencyFinder
                 refs.Add(new DependencyReference
                 {
                     RawValue = normalized,
+                    Type = DependencyRefType.FilePath,
+                    SourceTag = tag,
+                });
+            }
+        }
+
+        // Single-segment file references (e.g. "handattack.tactics")
+        foreach (Match m in SingleSegmentFilePattern().Matches(content))
+        {
+            var raw = m.Value;
+            var tag = DetectSourceTag(content, m.Index);
+            if (seen.Add((DependencyRefType.FilePath, raw)))
+            {
+                refs.Add(new DependencyReference
+                {
+                    RawValue = raw,
                     Type = DependencyRefType.FilePath,
                     SourceTag = tag,
                 });

@@ -469,6 +469,10 @@ public class DependencyFinderIntegrationTests
         // Sanity: should have found many groups and references
         Assert.True(result.Groups.Count > 1000, $"Expected many entity groups, got {result.Groups.Count}");
         Assert.True(result.GetAllReferences().Count() > 1000, $"Expected many references, got {result.GetAllReferences().Count()}");
+
+        var hopliteGroup = result.Groups.Find(x => x.EntityName == "Hoplite");
+        Assert.NotNull(hopliteGroup);
+        Assert.True(hopliteGroup.References.Count == 7);
     }
 
     // ========= Speed: animfile dependency scan =========
