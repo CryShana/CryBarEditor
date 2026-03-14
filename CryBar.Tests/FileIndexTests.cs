@@ -113,4 +113,97 @@ public class FileIndexTests
         var results = index.Find("armory_basecolor");
         Assert.Single(results);
     }
+
+    // --- FindByPartialPath tests ---
+
+    [Fact]
+    public void PartialPath_MatchesStemAcrossExtensions()
+    {
+        var index = new FileIndex();
+        index.Add(MakeEntry(@"intermediate\modelcache\greek\units\infantry\hoplite\hoplite_iron.tmm"));
+        index.Add(MakeEntry(@"intermediate\modelcache\greek\units\infantry\hoplite\hoplite_iron.tmm.data"));
+        index.Add(MakeEntry(@"game\art\greek\units\infantry\hoplite\hoplite_iron.fbximport"));
+        index.Add(MakeEntry(@"game\art\greek\units\infantry\hoplite\hoplite_iron.material.XMB"));
+
+        var results = index.FindByPartialPath(@"greek\units\infantry\hoplite\hoplite_iron");
+        Assert.Equal(4, results.Count);
+    }
+
+    [Fact]
+    public void PartialPath_SuffixFiltersProperly()
+    {
+        var index = new FileIndex();
+        index.Add(MakeEntry(@"game\art\greek\units\infantry\hoplite\hoplite_iron.fbximport"));
+        index.Add(MakeEntry(@"game\art\norse\units\infantry\hoplite\hoplite_iron.fbximport"));
+
+        var results = index.FindByPartialPath(@"greek\units\infantry\hoplite\hoplite_iron");
+        Assert.Single(results);
+        Assert.Contains("greek", results[0].FullRelativePath);
+    }
+
+    [Fact]
+    public void PartialPath_ExcludesSelf()
+    {
+        var index = new FileIndex();
+        index.Add(MakeEntry(@"game\art\greek\units\infantry\hoplite\hoplite.xml.XMB"));
+
+        var results = index.FindByPartialPath(
+            @"greek\units\infantry\hoplite\hoplite",
+            excludePath: @"game\art\greek\units\infantry\hoplite\hoplite.xml.XMB");
+        Assert.Empty(results);
+    }
+
+    [Fact]
+    public void PartialPath_MultipleResourceVariants()
+    {
+        var index = new FileIndex();
+        index.Add(MakeEntry(@"game\ui_myth_4k\resources\greek\player_color\units\hoplite_icon.png"));
+        index.Add(MakeEntry(@"game\ui_myth\resources\greek\player_color\units\hoplite_icon.png"));
+
+        var results = index.FindByPartialPath(@"resources\greek\player_color\units\hoplite_icon.png");
+        Assert.Equal(2, results.Count);
+    }
+
+    [Fact]
+    public void PartialPath_NoMatchWhenDirSegmentsMissing()
+    {
+        var index = new FileIndex();
+        index.Add(MakeEntry(@"game\art\units\hoplite\hoplite_iron.tmm"));
+
+        // Parsed path has "infantry" segment that doesn't exist in actual path
+        var results = index.FindByPartialPath(@"greek\units\infantry\hoplite\hoplite_iron");
+        Assert.Empty(results);
+    }
+
+    [Fact]
+    public void PartialPath_FileNameOnly()
+    {
+        var index = new FileIndex();
+        index.Add(MakeEntry(@"game\art\effects\impacts\hack.impacteffect.XMB"));
+
+        // No directory segments — should match by stem alone
+        var results = index.FindByPartialPath("hack");
+        Assert.Single(results);
+    }
+
+    [Fact]
+    public void PartialPath_WithExtension()
+    {
+        var index = new FileIndex();
+        index.Add(MakeEntry(@"game\art\vfx\popcornfx\Particles\impacts\crush\crush_unarmoured.pkfx"));
+
+        var results = index.FindByPartialPath(@"impacts\crush\crush_unarmoured.pkfx");
+        Assert.Single(results);
+    }
+
+    [Fact]
+    public void PartialPath_RemoveCleansStemIndex()
+    {
+        var index = new FileIndex();
+        index.Add(MakeEntry(@"game\art\hoplite.tmm"));
+        index.Remove(@"game\art\hoplite.tmm");
+
+        var results = index.FindByPartialPath("hoplite");
+        Assert.Empty(results);
+    }
 }

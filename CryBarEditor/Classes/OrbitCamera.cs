@@ -51,6 +51,7 @@ public class OrbitCamera
     {
         Azimuth += dAzimuth;
         Elevation = Math.Clamp(Elevation + dElevation, -89f, 89f);
+        Console.WriteLine("Current Azimuth: " + Azimuth + ", Elevation: " + Elevation);
     }
 
     public void Zoom(float delta)
@@ -80,7 +81,7 @@ public class OrbitCamera
         TargetZ = cz;
         float fovRad = Fov * System.MathF.PI / 180f;
         Distance = radius > 0 ? radius / System.MathF.Sin(fovRad / 2f) * 1.1f : 5f;
-        Azimuth = -30f;
-        Elevation = 20f;
+        Azimuth = 142f;
+        Elevation = 23f;
     }
 }
