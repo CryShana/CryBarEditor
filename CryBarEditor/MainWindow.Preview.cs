@@ -518,9 +518,18 @@ public partial class MainWindow
         ScrollEditorToTop();
     }
 
-    // The document shifts slightly after assignment, so we delay before scrolling
-    void ScrollEditorToTop() =>
-        Task.Delay(50).ContinueWith(_ => Dispatcher.UIThread.Post(() => _txtEditor.ScrollTo(0, 0)));
+    // The document shifts slightly after assignment, so we delay before scrolling.
+    // Version counter prevents stale scroll-to-top from overriding SearchWindow's scroll-to-match.
+    internal int _scrollVersion;
+    void ScrollEditorToTop()
+    {
+        var version = ++_scrollVersion;
+        Task.Delay(50).ContinueWith(_ => Dispatcher.UIThread.Post(() =>
+        {
+            if (_scrollVersion == version)
+                _txtEditor.ScrollTo(0, 0);
+        }));
+    }
 
     void InstallFolding(string ext, int textLength)
     {
@@ -536,9 +545,10 @@ public partial class MainWindow
     #region TMM 3D Preview
     void ShowTmmPreview(string metadataText)
     {
+        if (!_tmmTabControl.IsVisible)
+            _tmmTabControl.SelectedIndex = _tmmSelectedTabIndex;
         _flatPreview.IsVisible = false;
         _tmmTabControl.IsVisible = true;
-        _tmmTabControl.SelectedIndex = _tmmSelectedTabIndex;
         _tmmTabControl.SelectionChanged -= TmmTabControl_SelectionChanged;
         _tmmTabControl.SelectionChanged += TmmTabControl_SelectionChanged;
         _tmmMetadataEditor.Document = new TextDocument(metadataText);

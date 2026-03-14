@@ -568,6 +568,9 @@ public partial class SearchWindow : SimpleWindow
             // this is index of character within file
             var index = result.IndexWithinContent;
 
+            // Cancel any pending scroll-to-top from SetEditorText
+            _owner._scrollVersion++;
+
             var location = _owner._txtEditor.Document.GetLocation(index);
             _owner._txtEditor.ScrollTo(location.Line, location.Column);
 
