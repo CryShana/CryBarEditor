@@ -29,13 +29,13 @@ public static partial class DependencyFinder
     private static partial Regex SingleSegmentFilePattern();
 
     /// <summary>
-    /// Soundset name from attribute: <soundset name="GreekMilitarySelect">
+    /// Soundset name from attribute: &lt;soundset name="GreekMilitarySelect"&gt;
     /// </summary>
     [GeneratedRegex(@"<soundset[^>]*\bname=""([^""]+)""", RegexOptions.IgnoreCase)]
     private static partial Regex SoundsetNameAttrPattern();
 
     /// <summary>
-    /// Soundset name from element content: <soundset ...>LightningStrike</soundset>
+    /// Soundset name from element content: &lt;soundset ...&gt;LightningStrike&lt;/soundset&gt;
     /// Content must start with a letter (to avoid matching paths).
     /// </summary>
     [GeneratedRegex(@"<soundset[^>]*>([A-Za-z][\w]*)</soundset>", RegexOptions.IgnoreCase)]
@@ -79,65 +79,12 @@ public static partial class DependencyFinder
         };
     }
 
-    // Entity detection via XmlReader
+    // Group building
 
     /// <summary>
-    /// Identifies which XML tag names are "entity" tags: direct children of root that
-    /// appear ≥2 times AND have at least one instance with a name attribute.
-    /// Returns null if content is not XML or has no entity structure.
-    /// </summary>
-    static HashSet<string>? IdentifyEntityTags(string content)
-    {
-        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        var hasNameAttr = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        try
-        {
-            using var reader = XmlReader.Create(new StringReader(content), SafeXmlSettings);
-
-            // Advance to root element
-            while (reader.Read())
-                if (reader.NodeType == XmlNodeType.Element) break;
-            if (reader.NodeType != XmlNodeType.Element) return null;
-
-            int rootDepth = reader.Depth;
-            while (reader.Read())
-            {
-                if (reader.NodeType == XmlNodeType.Element && reader.Depth == rootDepth + 1)
-                {
-                    var tag = reader.Name;
-                    counts.TryGetValue(tag, out var c);
-                    counts[tag] = c + 1;
-
-                    if (reader.GetAttribute("name") != null)
-                        hasNameAttr.Add(tag);
-
-                    if (!reader.IsEmptyElement)
-                        reader.Skip();
-                }
-            }
-        }
-        catch (XmlException)
-        {
-            return null;
-        }
-
-        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (tag, count) in counts)
-        {
-            if (count >= 2 && hasNameAttr.Contains(tag))
-                result.Add(tag);
-        }
-
-        return result.Count > 0 ? result : null;
-    }
-
-    // Group building 
-
-    /// <summary>
-    /// Builds dependency groups. For XML with entity structure, uses XmlReader to read
-    /// each entity's content and extracts references per-entity. Non-entity content
-    /// and non-XML files go into an ungrouped group.
+    /// Builds dependency groups. For XML with entity structure, uses a single XmlReader pass
+    /// to collect all direct children, determine entity tags, and extract references in parallel.
+    /// Non-XML files go into an ungrouped group.
     /// </summary>
     static List<DependencyGroup> BuildGroups(string content)
     {
@@ -151,27 +98,8 @@ public static partial class DependencyFinder
                 : [];
         }
 
-        var entityTags = IdentifyEntityTags(content);
-        if (entityTags == null || entityTags.Count == 0)
-        {
-            var refs = ExtractReferences(content);
-            return refs.Count > 0
-                ? [new DependencyGroup { References = refs }]
-                : [];
-        }
-
-        return BuildGroupedReferences(content, entityTags);
-    }
-
-    /// <summary>
-    /// Second XmlReader pass: reads each entity element's OuterXml, extracts references per entity.
-    /// References outside entities go to an ungrouped group.
-    /// </summary>
-    static List<DependencyGroup> BuildGroupedReferences(string content, HashSet<string> entityTags)
-    {
-        var groups = new List<DependencyGroup>();
-        var entitySeenKeys = new HashSet<(DependencyRefType, string)>(RefKeyComparer.Instance);
-        var ungroupedRefs = new List<DependencyReference>();
+        // Single XmlReader pass: collect all direct children with their tag, name attr, and OuterXml
+        var children = new List<(string tag, string? name, string xml)>();
 
         try
         {
@@ -180,7 +108,13 @@ public static partial class DependencyFinder
             // Advance to root element
             while (reader.Read())
                 if (reader.NodeType == XmlNodeType.Element) break;
-            if (reader.NodeType != XmlNodeType.Element) return groups;
+            if (reader.NodeType != XmlNodeType.Element)
+            {
+                var refs = ExtractReferences(content);
+                return refs.Count > 0
+                    ? [new DependencyGroup { References = refs }]
+                    : [];
+            }
 
             int rootDepth = reader.Depth;
             while (reader.Read())
@@ -189,47 +123,104 @@ public static partial class DependencyFinder
                     continue;
 
                 var tag = reader.Name;
-                var isEntity = entityTags.Contains(tag);
-                var name = isEntity ? reader.GetAttribute("name") : null;
+                var name = reader.GetAttribute("name");
 
-                if (!isEntity || name == null)
+                if (reader.IsEmptyElement)
                 {
-                    // Non-entity or unnamed entity instance — extract refs as ungrouped
-                    if (!reader.IsEmptyElement)
-                    {
-                        var outerXml = reader.ReadOuterXml();
-                        var refs = ExtractReferences(outerXml);
-                        ungroupedRefs.AddRange(refs);
-                    }
-                    continue;
+                    children.Add((tag, name, ""));
                 }
-
-                // ReadOuterXml reads the full element content and advances past it
-                var entityXml = reader.ReadOuterXml();
-                var entityRefs = ExtractReferences(entityXml);
-
-                if (entityRefs.Count > 0)
+                else
                 {
-                    groups.Add(new DependencyGroup
-                    {
-                        EntityName = name,
-                        EntityType = tag.ToLowerInvariant(),
-                        References = entityRefs,
-                    });
-
-                    foreach (var r in entityRefs)
-                        entitySeenKeys.Add((r.Type, r.RawValue));
+                    children.Add((tag, name, reader.ReadOuterXml()));
                 }
             }
         }
         catch (XmlException)
         {
-            // XML parse error mid-way: return what we have so far
+            // XML parse error mid-way: process what we collected
         }
 
-        // Deduplicate ungrouped refs against entity-assigned refs
-        if (ungroupedRefs.Count > 0)
+        if (children.Count == 0)
         {
+            var refs = ExtractReferences(content);
+            return refs.Count > 0
+                ? [new DependencyGroup { References = refs }]
+                : [];
+        }
+
+        // Determine entity tags: direct children appearing ≥2 times with at least one name attribute
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var hasNameAttr = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (tag, name, _) in children)
+        {
+            counts.TryGetValue(tag, out var c);
+            counts[tag] = c + 1;
+            if (name != null)
+                hasNameAttr.Add(tag);
+        }
+
+        var entityTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (tag, count) in counts)
+        {
+            if (count >= 2 && hasNameAttr.Contains(tag))
+                entityTags.Add(tag);
+        }
+
+        if (entityTags.Count == 0)
+        {
+            // No entity structure — single ungrouped group
+            var refs = ExtractReferences(content);
+            return refs.Count > 0
+                ? [new DependencyGroup { References = refs }]
+                : [];
+        }
+
+        // Partition children into entities vs ungrouped
+        var entities = new List<(string name, string tag, string xml)>();
+        var ungroupedXmlChunks = new List<string>();
+
+        foreach (var (tag, name, xml) in children)
+        {
+            if (entityTags.Contains(tag) && name != null && xml.Length > 0)
+                entities.Add((name, tag, xml));
+            else if (xml.Length > 0)
+                ungroupedXmlChunks.Add(xml);
+        }
+
+        // Parallel regex extraction across entities
+        var entityResults = new (string name, string tag, List<DependencyReference> refs)[entities.Count];
+        Parallel.For(0, entities.Count, i =>
+        {
+            var (name, tag, xml) = entities[i];
+            entityResults[i] = (name, tag, ExtractReferences(xml));
+        });
+
+        // Assemble groups and deduplicate ungrouped refs
+        var groups = new List<DependencyGroup>();
+        var entitySeenKeys = new HashSet<(DependencyRefType, string)>(RefKeyComparer.Instance);
+
+        foreach (var (name, tag, entityRefs) in entityResults)
+        {
+            if (entityRefs.Count > 0)
+            {
+                groups.Add(new DependencyGroup
+                {
+                    EntityName = name,
+                    EntityType = tag.ToLowerInvariant(),
+                    References = entityRefs,
+                });
+
+                foreach (var r in entityRefs)
+                    entitySeenKeys.Add((r.Type, r.RawValue));
+            }
+        }
+
+        if (ungroupedXmlChunks.Count > 0)
+        {
+            var ungroupedRefs = new List<DependencyReference>();
+            foreach (var chunk in ungroupedXmlChunks)
+                ungroupedRefs.AddRange(ExtractReferences(chunk));
+
             var deduped = new List<DependencyReference>();
             foreach (var r in ungroupedRefs)
             {
@@ -262,58 +253,72 @@ public static partial class DependencyFinder
         var refs = new List<DependencyReference>();
         var seen = new HashSet<(DependencyRefType, string)>(RefKeyComparer.Instance);
 
-        // File paths
-        foreach (Match m in PathPattern().Matches(content))
+        bool hasSlash = content.Contains('\\') || content.Contains('/');
+
+        // File paths (require path separators)
+        if (hasSlash)
         {
-            var raw = m.Value;
-            if (raw.Contains("://")) continue; // filter URIs
-
-            var normalized = raw.Replace('/', '\\');
-            var tag = DetectSourceTag(content, m.Index);
-
-            if (seen.Add((DependencyRefType.FilePath, normalized)))
+            foreach (Match m in PathPattern().Matches(content))
             {
-                refs.Add(new DependencyReference
+                var raw = m.Value;
+                if (raw.Contains("://")) continue; // filter URIs
+
+                var normalized = raw.Replace('/', '\\');
+                var tag = DetectSourceTag(content, m.Index);
+
+                if (seen.Add((DependencyRefType.FilePath, normalized)))
                 {
-                    RawValue = normalized,
-                    Type = DependencyRefType.FilePath,
-                    SourceTag = tag,
-                });
+                    refs.Add(new DependencyReference
+                    {
+                        RawValue = normalized,
+                        Type = DependencyRefType.FilePath,
+                        SourceTag = tag,
+                    });
+                }
             }
         }
 
-        // Single-segment file references (e.g. "handattack.tactics")
-        foreach (Match m in SingleSegmentFilePattern().Matches(content))
+        // Single-segment file references (e.g. "handattack.tactics") — require a dot
+        if (content.Contains('.'))
         {
-            var raw = m.Value;
-            var tag = DetectSourceTag(content, m.Index);
-            if (seen.Add((DependencyRefType.FilePath, raw)))
+            foreach (Match m in SingleSegmentFilePattern().Matches(content))
             {
-                refs.Add(new DependencyReference
+                var raw = m.Value;
+                var tag = DetectSourceTag(content, m.Index);
+                if (seen.Add((DependencyRefType.FilePath, raw)))
                 {
-                    RawValue = raw,
-                    Type = DependencyRefType.FilePath,
-                    SourceTag = tag,
-                });
+                    refs.Add(new DependencyReference
+                    {
+                        RawValue = raw,
+                        Type = DependencyRefType.FilePath,
+                        SourceTag = tag,
+                    });
+                }
             }
         }
 
         // STR_ keys
-        foreach (Match m in StrKeyPattern().Matches(content))
+        if (content.Contains("STR_", StringComparison.Ordinal))
         {
-            if (seen.Add((DependencyRefType.StringKey, m.Value)))
+            foreach (Match m in StrKeyPattern().Matches(content))
             {
-                refs.Add(new DependencyReference
+                if (seen.Add((DependencyRefType.StringKey, m.Value)))
                 {
-                    RawValue = m.Value,
-                    Type = DependencyRefType.StringKey,
-                });
+                    refs.Add(new DependencyReference
+                    {
+                        RawValue = m.Value,
+                        Type = DependencyRefType.StringKey,
+                    });
+                }
             }
         }
 
-        // Soundset names (attribute form + content form)
-        ExtractSoundsetNames(SoundsetNameAttrPattern(), content, refs, seen, skipPaths: false);
-        ExtractSoundsetNames(SoundsetContentPattern(), content, refs, seen, skipPaths: true);
+        // Soundset names (require <soundset tag)
+        if (content.Contains("<soundset", StringComparison.OrdinalIgnoreCase))
+        {
+            ExtractSoundsetNames(SoundsetNameAttrPattern(), content, refs, seen, skipPaths: false);
+            ExtractSoundsetNames(SoundsetContentPattern(), content, refs, seen, skipPaths: true);
+        }
 
         return refs;
     }

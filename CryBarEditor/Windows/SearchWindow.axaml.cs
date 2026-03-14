@@ -46,7 +46,6 @@ public partial class SearchWindow : SimpleWindow
     public ObservableCollectionExtended<SearchResult> SearchResults { get; } = new();
 
     private Regex? _fileExclusionRegex;
-    private Task? _rebuildTask;
     private bool _rebuildPending;
     private readonly SemaphoreSlim _rebuildSemaphore = new(1, 1);
 
@@ -133,7 +132,7 @@ public partial class SearchWindow : SimpleWindow
                 _rebuildPending = false;
                 var filter = _exclusionFilter;
 
-                _rebuildTask = Task.Run(() =>
+                var task = Task.Run(() =>
                 {
                     if (string.IsNullOrWhiteSpace(filter))
                     {
@@ -149,10 +148,8 @@ public partial class SearchWindow : SimpleWindow
                     _fileExclusionRegex = new Regex(pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase);
                 });
 
-                await _rebuildTask.ConfigureAwait(false);
+                await task.ConfigureAwait(false);
             }
-
-            _rebuildTask = null;
         }
         finally
         {
@@ -194,9 +191,9 @@ public partial class SearchWindow : SimpleWindow
             return;
         }
 
-        // if rebuilding in progress, wait for it to finish
-        if (_rebuildTask != null)
-            await _rebuildTask;
+        // wait for any in-progress rebuild to finish
+        await _rebuildSemaphore.WaitAsync();
+        _rebuildSemaphore.Release();
 
         EnsureSettingsSaved();
 
