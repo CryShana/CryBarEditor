@@ -62,7 +62,7 @@ public class DependencyFinderTests
 
         var result = DependencyFinder.FindDependencies(content, @"game\data\gameplay\powers.xml.XMB");
 
-        var paths = result.AllReferences.Where(r => r.Type == DependencyRefType.FilePath).ToList();
+        var paths = result.GetAllReferences().Where(r => r.Type == DependencyRefType.FilePath).ToList();
         Assert.Equal(2, paths.Count);
         Assert.Contains(paths, r => r.RawValue.Contains(@"abilities\greek.abilities"));
         Assert.Contains(paths, r => r.RawValue.Contains(@"god_powers\greek.godpowers"));
@@ -83,12 +83,12 @@ public class DependencyFinderTests
 
         var result = DependencyFinder.FindDependencies(content, @"game\data\gameplay\god_powers\aotg.godpowers.XMB");
 
-        var soundsets = result.AllReferences.Where(r => r.Type == DependencyRefType.SoundsetName).ToList();
+        var soundsets = result.GetAllReferences().Where(r => r.Type == DependencyRefType.SoundsetName).ToList();
         Assert.Equal(2, soundsets.Count);
         Assert.Contains(soundsets, r => r.RawValue == "LightningStrike");
         Assert.Contains(soundsets, r => r.RawValue == "GodPowerStart");
 
-        var paths = result.AllReferences.Where(r => r.Type == DependencyRefType.FilePath).ToList();
+        var paths = result.GetAllReferences().Where(r => r.Type == DependencyRefType.FilePath).ToList();
         Assert.Single(paths);
     }
 
@@ -104,7 +104,7 @@ public class DependencyFinderTests
 
         var result = DependencyFinder.FindDependencies(content, @"game\art\events\thanksgiving\units\turkey\turkey.xml.XMB");
 
-        var paths = result.AllReferences.Where(r => r.Type == DependencyRefType.FilePath).ToList();
+        var paths = result.GetAllReferences().Where(r => r.Type == DependencyRefType.FilePath).ToList();
         Assert.Equal(2, paths.Count);
         Assert.Contains(paths, r => r.RawValue.Contains(@"turkey\turkey"));
         Assert.Contains(paths, r => r.RawValue.Contains("turkey_idle_a"));
@@ -124,11 +124,11 @@ public class DependencyFinderTests
 
         var result = DependencyFinder.FindDependencies(content, @"game\data\gameplay\tactics\hun_dun.tactics.XMB");
 
-        var paths = result.AllReferences.Where(r => r.Type == DependencyRefType.FilePath).ToList();
+        var paths = result.GetAllReferences().Where(r => r.Type == DependencyRefType.FilePath).ToList();
         Assert.Single(paths);
         Assert.Equal(@"effects\impacts\hack", paths[0].RawValue);
 
-        var strKeys = result.AllReferences.Where(r => r.Type == DependencyRefType.StringKey).ToList();
+        var strKeys = result.GetAllReferences().Where(r => r.Type == DependencyRefType.StringKey).ToList();
         Assert.Single(strKeys);
         Assert.Equal("STR_ACTION_HAND", strKeys[0].RawValue);
     }
@@ -151,7 +151,7 @@ public class DependencyFinderTests
         var result = DependencyFinder.FindDependencies(content,
             @"game\art\atlantean\units\naval\transport_ship_atlantean\transport_ship_atlantean_props.composite");
 
-        var paths = result.AllReferences.Where(r => r.Type == DependencyRefType.FilePath).ToList();
+        var paths = result.GetAllReferences().Where(r => r.Type == DependencyRefType.FilePath).ToList();
         Assert.Equal(2, paths.Count);
         Assert.Contains(paths, r => r.RawValue.Contains(@"transport_ship_atlantean\transport_ship_atlantean"));
         Assert.Contains(paths, r => r.RawValue.Contains(@"ship_rope_03"));
@@ -212,7 +212,7 @@ public class DependencyFinderTests
 
         var result = DependencyFinder.FindDependencies(content, @"game\sound\greek\vo\hoplite\hoplite.xml.XMB");
 
-        var soundsets = result.AllReferences.Where(r => r.Type == DependencyRefType.SoundsetName).ToList();
+        var soundsets = result.GetAllReferences().Where(r => r.Type == DependencyRefType.SoundsetName).ToList();
         Assert.Equal(2, soundsets.Count);
         Assert.Contains(soundsets, r => r.RawValue == "GreekMilitarySelect");
         Assert.Contains(soundsets, r => r.RawValue == "DeathMale");
@@ -230,7 +230,7 @@ public class DependencyFinderTests
 
         var result = DependencyFinder.FindDependencies(content, @"game\ui_myth\SystemResources.xaml");
 
-        var paths = result.AllReferences.Where(r => r.Type == DependencyRefType.FilePath).ToList();
+        var paths = result.GetAllReferences().Where(r => r.Type == DependencyRefType.FilePath).ToList();
         Assert.Equal(2, paths.Count);
     }
 
@@ -246,7 +246,7 @@ public class DependencyFinderTests
 
         var result = DependencyFinder.FindDependencies(content, "test.xml");
 
-        var strKeys = result.AllReferences.Where(r => r.Type == DependencyRefType.StringKey).ToList();
+        var strKeys = result.GetAllReferences().Where(r => r.Type == DependencyRefType.StringKey).ToList();
         Assert.Equal(2, strKeys.Count);
         Assert.Contains(strKeys, r => r.RawValue == "STR_UNIT_HOPLITE_NAME");
         Assert.Contains(strKeys, r => r.RawValue == "STR_UNIT_HOPLITE_LR");
@@ -290,7 +290,7 @@ public class DependencyFinderTests
         var result = DependencyFinder.FindDependencies(content,
             @"game\art\events\turkey\turkey.xml.XMB", index);
 
-        var paths = result.AllReferences.Where(r => r.Type == DependencyRefType.FilePath).ToList();
+        var paths = result.GetAllReferences().Where(r => r.Type == DependencyRefType.FilePath).ToList();
         Assert.Single(paths);
         // The stem "turkey" matches, but the entry itself should be excluded
         Assert.Empty(paths[0].Resolved);

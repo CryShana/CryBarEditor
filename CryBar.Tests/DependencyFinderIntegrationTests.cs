@@ -56,7 +56,6 @@ public class DependencyFinderIntegrationTests
                         FileName = entry.Name,
                         Source = FileIndexSource.BarEntry,
                         BarFilePath = barFilePath,
-                        BarRootPath = bar.RootPath,
                         EntryRelativePath = entry.RelativePath,
                     });
                 }
@@ -279,7 +278,7 @@ public class DependencyFinderIntegrationTests
         var result = DependencyFinder.FindDependencies(xml, @"game\data\gameplay\powers.xml.XMB", index);
 
         // powers.xml has <include> children — no name attr, so should be ungrouped
-        var allPaths = result.AllReferences.Where(r => r.Type == DependencyRefType.FilePath).ToList();
+        var allPaths = result.GetAllReferences().Where(r => r.Type == DependencyRefType.FilePath).ToList();
         Assert.True(allPaths.Count >= 10, $"Expected many include paths, got {allPaths.Count}");
 
         // abilities\greek.abilities should resolve to game\data\gameplay\abilities\greek.abilities.XMB
@@ -330,7 +329,7 @@ public class DependencyFinderIntegrationTests
         var (xml, entryPath) = found.Value;
         var result = DependencyFinder.FindDependencies(xml, entryPath, index);
 
-        var allPaths = result.AllReferences.Where(r => r.Type == DependencyRefType.FilePath).ToList();
+        var allPaths = result.GetAllReferences().Where(r => r.Type == DependencyRefType.FilePath).ToList();
         Assert.True(allPaths.Count >= 5, $"Hoplite animfile should have many path refs, got {allPaths.Count}");
 
         // TMModel references (e.g. hoplite_iron) should resolve to .tmm, .tmm.data, .fbximport, .material.XMB
@@ -375,7 +374,7 @@ public class DependencyFinderIntegrationTests
         var soundsetIndex = BuildSoundsetIndex(index);
         var result = DependencyFinder.FindDependencies(xml, entryPath, index, soundsetIndex);
 
-        var soundsets = result.AllReferences.Where(r => r.Type == DependencyRefType.SoundsetName).ToList();
+        var soundsets = result.GetAllReferences().Where(r => r.Type == DependencyRefType.SoundsetName).ToList();
         Assert.True(soundsets.Count >= 3, $"Hoplite soundset should have multiple soundset names, got {soundsets.Count}");
         Assert.Contains(soundsets, r => r.RawValue == "GreekMilitarySelect");
 
@@ -414,7 +413,7 @@ public class DependencyFinderIntegrationTests
         var result = DependencyFinder.FindDependencies(xml, entryPath, index);
 
         // Tactics files typically have impacteffect paths and STR_ keys
-        var allRefs = result.AllReferences.ToList();
+        var allRefs = result.GetAllReferences().ToList();
         Assert.True(allRefs.Count >= 1, $"Tactics file should have at least 1 reference, got {allRefs.Count}");
     }
 
@@ -469,7 +468,7 @@ public class DependencyFinderIntegrationTests
 
         // Sanity: should have found many groups and references
         Assert.True(result.Groups.Count > 1000, $"Expected many entity groups, got {result.Groups.Count}");
-        Assert.True(result.AllReferences.Count() > 1000, $"Expected many references, got {result.AllReferences.Count()}");
+        Assert.True(result.GetAllReferences().Count() > 1000, $"Expected many references, got {result.GetAllReferences().Count()}");
     }
 
     // ========= Speed: animfile dependency scan =========
@@ -533,7 +532,7 @@ public class DependencyFinderIntegrationTests
             : Path.Combine(bar.RootPath, entry.RelativePath);
         var result = DependencyFinder.FindDependencies(content, entryPath, index);
 
-        var paths = result.AllReferences.Where(r => r.Type == DependencyRefType.FilePath).ToList();
+        var paths = result.GetAllReferences().Where(r => r.Type == DependencyRefType.FilePath).ToList();
         Assert.True(paths.Count >= 1, $"Composite should have model_ref paths, got {paths.Count}");
 
         // At least one should resolve to .tmm or .fbximport

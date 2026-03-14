@@ -53,5 +53,5 @@ public class DependencyResult
     public required List<DependencyGroup> Groups { get; init; }
 
     /// <summary>All references flattened across groups.</summary>
-    public IEnumerable<DependencyReference> AllReferences => Groups.SelectMany(g => g.References);
+    public IEnumerable<DependencyReference> GetAllReferences() => Groups.SelectMany(g => g.References);
 }
