@@ -201,7 +201,12 @@ public static class BarFormatConverter
             offset += 4;
 
             // ATTRIBUTES
+            // Read all attributes first, letting later duplicates overwrite earlier ones
+            // (matches XmlDocument.Attributes.Append behavior for malformed XMB data)
             int attrib_count = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
+            var attribs = new (int idx, string text)[attrib_count];
+            int attrib_write_count = 0;
+
             for (int i = 0; i < attrib_count; i++)
             {
                 int attrib_idx = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
@@ -213,8 +218,18 @@ public static class BarFormatConverter
                     return false;
 
                 var attrib_text = attrib_text_length == 0 ? "" : Encoding.Unicode.GetString(data.Slice(offset, attrib_text_length)); offset += attrib_text_length;
-                writer.WriteAttributeString(attributes[attrib_idx], attrib_text);
+
+                // Overwrite if duplicate
+                bool found = false;
+                for (int j = 0; j < attrib_write_count; j++)
+                {
+                    if (attribs[j].idx == attrib_idx) { attribs[j] = (attrib_idx, attrib_text); found = true; break; }
+                }
+                if (!found) attribs[attrib_write_count++] = (attrib_idx, attrib_text);
             }
+
+            for (int i = 0; i < attrib_write_count; i++)
+                writer.WriteAttributeString(attributes[attribs[i].idx], attribs[i].text);
 
             // INNER TEXT (after attributes, before children)
             if (text.Length > 0)
