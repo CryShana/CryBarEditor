@@ -340,7 +340,6 @@ public partial class MainWindow
                         FileName = entry.Name,
                         Source = FileIndexSource.BarEntry,
                         BarFilePath = barFilePath,
-                        BarRootPath = barRootPath,
                         EntryRelativePath = entry.RelativePath,
                     });
                 }
