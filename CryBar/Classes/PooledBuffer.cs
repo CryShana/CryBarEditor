@@ -77,14 +77,12 @@ public class PooledBuffer : IDisposable
 
 	public void Dispose()
 	{
-		var buffer = _buffer;
+		var buffer = Interlocked.Exchange(ref _buffer, null);
 		if (buffer == null)
 			return;
 
-		_buffer = null;
-
 		// return if not moved
-		if (_moved == false)
+		if (!_moved)
 		{
 			ArrayPool<byte>.Shared.Return(buffer);
 		}

@@ -380,8 +380,9 @@ public partial class MainWindow
                     using var texData = await ReadFromIndexEntryPooledAsync(texEntries[0]);
                     if (texData != null)
                     {
-                        var ddtData = BarCompression.EnsureDecompressed(texData.Memory, out _);
-                        textures[texPath] = (texFileName, ddtData);
+                        using var decompressedTex = BarCompression.EnsureDecompressedPooled(texData, out _);
+                        // Must copy: dictionary outlives the pooled buffer
+                        textures[texPath] = (texFileName, decompressedTex.Span.ToArray());
                     }
                 }
             }

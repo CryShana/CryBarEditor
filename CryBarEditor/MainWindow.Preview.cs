@@ -196,7 +196,8 @@ public partial class MainWindow
                 ShowTmmPreview(tmm.GetSummary(relative_path));
 
                 var tmmFileName = Path.GetFileName(relative_path);
-                _ = LoadTmm3DPreview(tmmFileName, data.Memory, token);
+                // Copy: LoadTmm3DPreview is fire-and-forget but data's PooledBuffer is disposed on return
+                _ = LoadTmm3DPreview(tmmFileName, data.Memory.ToArray(), token);
                 return;
             }
             else if (ext == ".tma")

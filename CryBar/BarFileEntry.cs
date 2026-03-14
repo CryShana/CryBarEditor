@@ -91,8 +91,16 @@ public class BarFileEntry
     public async ValueTask<PooledBuffer> ReadDataRawPooledAsync(Stream stream, CancellationToken token = default)
     {
         var pooled = new PooledBuffer(SizeInArchive);
-        await ReadDataRawAsync(stream, pooled.Memory, token);
-        return pooled;
+        try
+        {
+            await ReadDataRawAsync(stream, pooled.Memory, token);
+            return pooled;
+        }
+        catch
+        {
+            pooled.Dispose();
+            throw;
+        }
     }
 
     /// <summary>
