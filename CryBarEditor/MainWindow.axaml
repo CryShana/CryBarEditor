@@ -117,8 +117,7 @@
 					IsVisible="{Binding SelectedCanHaveAdditiveMod}"
 					Click="MenuItem_CreateNewAdditiveMod"/>
 
-			<Separator />
-
+			<Separator IsVisible="{Binding CanToggleQuickAccess}" />
 			<MenuItem Header="{Binding QuickAccessToggleText}"
 					  Icon="{micons:MaterialIconExt Kind=Star}"
 					  IsVisible="{Binding CanToggleQuickAccess}"
