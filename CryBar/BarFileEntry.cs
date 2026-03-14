@@ -1,4 +1,6 @@
+using System.Buffers;
 using CommunityToolkit.HighPerformance.Buffers;
+using CryBar.Classes;
 
 namespace CryBar;
 
@@ -10,7 +12,7 @@ public class BarFileEntry
     public int SizeCompressed { get; set; }
     public int SizeInArchive { get; set; }
     public string RelativePath { get; set; }
-    public bool IsCompressed { get; set; } 
+    public bool IsCompressed { get; set; }
     #endregion
 
     public string Name { get; set; }
@@ -82,6 +84,30 @@ public class BarFileEntry
     }
 
     /// <summary>
+    /// Reads file content from BAR stream by renting byte array from ArrayPool
+    /// <br />
+    /// This data is raw and may be compressed
+    /// </summary>
+    public PooledBuffer ReadDataRawPooled(Stream stream)
+    {
+        var pooled = new PooledBuffer(SizeInArchive);
+        ReadDataRaw(stream, pooled.Span);
+        return pooled;
+    }
+
+    /// <summary>
+    /// Reads file content from BAR stream by renting byte array from ArrayPool
+    /// <br />
+    /// This data is raw and may be compressed
+    /// </summary>
+    public async ValueTask<PooledBuffer> ReadDataRawPooledAsync(Stream stream, CancellationToken token = default)
+    {
+        var pooled = new PooledBuffer(SizeInArchive);
+        await ReadDataRawAsync(stream, pooled.Memory, token);
+        return pooled;
+    }
+
+    /// <summary>
     /// Reads file content from BAR stream and outputs it to given Span.
     /// Make sure the span is large enough to accomodate [SizeInArchive] bytes.
     /// <br />
@@ -91,6 +117,18 @@ public class BarFileEntry
     {
         stream.Seek(ContentOffset, SeekOrigin.Begin);
         stream.ReadExactly(read_data.Slice(0, SizeInArchive));
+    }
+
+    /// <summary>
+    /// Reads file content from BAR stream and outputs it to given Memory.
+    /// Make sure the span is large enough to accomodate [SizeInArchive] bytes.
+    /// <br />
+    /// This data is raw and may be compressed
+    /// </summary>
+    public async ValueTask ReadDataRawAsync(Stream stream, Memory<byte> read_data, CancellationToken token = default)
+    {
+        stream.Seek(ContentOffset, SeekOrigin.Begin);
+        await stream.ReadExactlyAsync(read_data.Slice(0, SizeInArchive), token);
     }
 
     public Memory<byte> ReadDataDecompressed(Stream stream)
@@ -129,7 +167,7 @@ public class BarFileEntry
         }
         else if (raw.IsL33t())
         {
-            return BarCompression.DecompressL33t(raw, read_data);      
+            return BarCompression.DecompressL33t(raw, read_data);
         }
 
         return -1;

@@ -5,6 +5,7 @@ using Avalonia.Threading;
 using AvaloniaEdit.Document;
 using AvaloniaEdit.Folding;
 using CryBar;
+using CryBar.Classes;
 using CryBar.TMM;
 using CryBarEditor.Classes;
 using CryBarEditor.Controls;
@@ -93,8 +94,11 @@ public partial class MainWindow
     #endregion
 
     #region Preview core
-    public async Task Preview<T>(T entry, Func<T, string> get_rel_path,
-        Func<T, long> get_read_size, Func<T, Memory<byte>> read, CancellationToken token = default)
+    public async Task Preview<T>(T entry,
+        Func<T, string> get_rel_path,
+        Func<T, long> get_read_size,
+        Func<T, CancellationToken, ValueTask<PooledBuffer>> read,
+        CancellationToken token = default)
     {
         const int MAX_DATA_SIZE = 1_500_000_000;    // 1.5 GB
         const int MAX_DATA_TEXT_SIZE = 100_000_000; // 100 MB
@@ -117,7 +121,8 @@ public partial class MainWindow
                 return;
             }
 
-            var data = BarCompression.EnsureDecompressed(read(entry), out var type);
+            using var rawData = await read(entry, token);
+            var data = BarCompression.EnsureDecompressed(rawData.Memory, out var type);
             PreviewedFileNote = type switch
             {
                 CompressionType.L33t => "(Decompressed L33t)",

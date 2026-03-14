@@ -7,9 +7,9 @@ using AvaloniaEdit.TextMate;
 using CryBar;
 using CryBarEditor.Classes;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -19,6 +19,7 @@ using CryBarEditor.Controls;
 using TextMateSharp.Grammars;
 using Configuration = CryBarEditor.Classes.Configuration;
 using System.Linq;
+using CryBar.Classes;
 
 namespace CryBarEditor;
 
@@ -281,8 +282,8 @@ public partial class MainWindow : SimpleWindow
     readonly Func<BarFileEntry, string> F_GetFullRelativePathBAR;
     readonly Action<RootFileEntry, FileStream> F_CopyRoot;
     readonly Action<BarFileEntry, FileStream> F_CopyBAR;
-    readonly Func<RootFileEntry, Memory<byte>> F_ReadRoot;
-    readonly Func<BarFileEntry, Memory<byte>> F_ReadBAR;
+    readonly Func<RootFileEntry, CancellationToken, ValueTask<PooledBuffer>> F_ReadRoot;
+    readonly Func<BarFileEntry, CancellationToken, ValueTask<PooledBuffer>> F_ReadBAR;
     readonly Func<RootFileEntry, long> F_ReadSizeRoot;
     readonly Func<BarFileEntry, long> F_ReadSizeBAR;
 
@@ -317,8 +318,8 @@ public partial class MainWindow : SimpleWindow
             from.CopyTo(stream);
         };
         F_CopyBAR = (f, stream) => f.CopyData(_barStream!, stream);
-        F_ReadRoot = f => File.ReadAllBytes(Path.Combine(_rootDirectory, f.RelativePath));
-        F_ReadBAR = f => f.ReadDataRaw(_barStream!);
+        F_ReadRoot = (f, t) => PooledBuffer.FromFile(Path.Combine(_rootDirectory, f.RelativePath), t);
+        F_ReadBAR =  (f, t) => f.ReadDataRawPooledAsync(_barStream!, t);
         F_ReadSizeRoot = f => new FileInfo(Path.Combine(_rootDirectory, f.RelativePath)).Length;
         F_ReadSizeBAR = f => f.SizeUncompressed;
 

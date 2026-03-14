@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using CryBar;
+using CryBar.Classes;
 using CryBarEditor.Classes;
 using SixLabors.ImageSharp.PixelFormats;
 using System;
@@ -9,6 +10,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace CryBarEditor;
@@ -20,9 +22,12 @@ public partial class MainWindow
         bool should_convert,
         Func<T, string> getFullRelPath,
         Action<T, FileStream> copy,
-        Func<T, Memory<byte>> read,
-        ExportOptions? options = null)
+        Func<T, CancellationToken, ValueTask<PooledBuffer>> read,
+        ExportOptions? options = null,
+        CancellationToken token = default)
     {
+        // TOKEN:  token is not used to cancel export in progress, may want to check this out in future if needed
+        
         var progress = new Progress<string?>();
         IProgress<string?> p = progress;
 
@@ -86,7 +91,8 @@ public partial class MainWindow
                 // EXPORT DATA
                 if (isConvertible || shouldDecompress)
                 {
-                    var data = BarCompression.EnsureDecompressed(read(f), out _);
+                    using var rawData = await read(f, token);
+                    var data = BarCompression.EnsureDecompressed(rawData.Memory, out _);
 
                     if (isConvertible)
                     {
