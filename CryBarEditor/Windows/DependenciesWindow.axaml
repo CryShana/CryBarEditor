@@ -100,6 +100,19 @@
 										   Foreground="#808080" Margin="8,0,0,0"
 										   Text="{Binding ReferenceCountText}" />
 
+								<!-- Graph button (only when ≤50 refs) -->
+								<Button DockPanel.Dock="Right" Padding="2"
+										Background="#01000000" BorderThickness="0"
+										Click="ShowGraph_Click"
+										ToolTip.Tip="Show dependency graph"
+										Focusable="False" IsTabStop="False" Cursor="Hand"
+										Margin="4,0,0,0"
+										IsVisible="{Binding CanShowGraph}">
+									<micons:MaterialIcon Kind="VectorPolyline"
+														 Width="14" Height="14"
+														 Foreground="#6f96bf" />
+								</Button>
+
 								<!-- Navigate to group -->
 								<Button DockPanel.Dock="Right" Padding="2"
 										Background="#01000000" BorderThickness="0"

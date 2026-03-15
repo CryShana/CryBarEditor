@@ -37,7 +37,7 @@ public partial class DependenciesWindow : SimpleWindow
     public bool IsLoading
     {
         get => _isLoading;
-        set { _isLoading = value; OnSelfChanged(); }
+        set { _isLoading = value; OnSelfChanged(); OnPropertyChanged(nameof(StatusText)); }
     }
 
     public string WindowTitle { get; private set; } = "Dependencies";
@@ -66,6 +66,26 @@ public partial class DependenciesWindow : SimpleWindow
         // Size to owner height
         if (owner.Height > 0)
             Height = owner.Height;
+    }
+
+    public string CurrentEntryPath => _currentEntryPath;
+
+    /// <summary>
+    /// Shows the window in loading state immediately, before dependency analysis completes.
+    /// </summary>
+    public void StartLoading(string entryPath, string? displayName = null)
+    {
+        _currentEntryPath = entryPath;
+        IsLoading = true;
+        WindowTitle = $"Dependencies \u2014 {displayName ?? Path.GetFileName(entryPath)}";
+        OnPropertyChanged(nameof(WindowTitle));
+        Title = WindowTitle;
+
+        _allGroups.Clear();
+        FilteredGroups.Clear();
+        _resolvedNavigationIndex.Clear();
+        _totalRefs = 0;
+        OnPropertyChanged(nameof(StatusText));
     }
 
     public void LoadDependenciesFromResult(DependencyResult result, string? displayName = null, FileIndex? fileIndex = null)
@@ -197,6 +217,14 @@ public partial class DependenciesWindow : SimpleWindow
         {
             _navigationInProgress = false;
         }
+    }
+
+    void ShowGraph_Click(object? sender, RoutedEventArgs e)
+    {
+        var group = (sender as Button)?.DataContext as DependencyGroupItem;
+        if (group == null || !group.CanShowGraph) return;
+
+        DependencyGraphWindow.ShowForGroup(group, _currentFileIndex, _owner, this);
     }
 
     async Task NavigateToIndexEntry(FileIndexEntry entry)

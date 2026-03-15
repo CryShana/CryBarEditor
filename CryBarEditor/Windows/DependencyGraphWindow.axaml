@@ -1,0 +1,44 @@
+<Window
+	x:Class="CryBarEditor.DependencyGraphWindow"
+	xmlns="https://github.com/avaloniaui"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	xmlns:ce="using:CryBarEditor"
+	xmlns:micons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+	Title="{Binding WindowTitle}"
+	Width="900"
+	Height="700"
+	MinWidth="400"
+	MinHeight="300"
+	d:DesignHeight="700"
+	d:DesignWidth="900"
+	Background="#141414"
+	DataContext="{Binding RelativeSource={RelativeSource Self}}"
+	Foreground="#d9d9d9"
+	WindowStartupLocation="CenterOwner"
+	mc:Ignorable="d"
+	x:DataType="ce:DependencyGraphWindow">
+
+	<DockPanel>
+		<!-- Toolbar -->
+		<Border DockPanel.Dock="Top" Background="#1a1a1a" Padding="6,4">
+			<StackPanel Orientation="Horizontal" Spacing="8">
+				<Button Content="Reset View" Click="ResetView_Click"
+						Background="#2a2a2a" Foreground="#d9d9d9"
+						BorderThickness="0" Padding="8,4" Cursor="Hand" />
+				<TextBlock VerticalAlignment="Center" Foreground="#808080"
+						   Text="{Binding StatusText}" />
+			</StackPanel>
+		</Border>
+
+		<!-- Graph canvas area -->
+		<Border x:Name="CanvasHost" ClipToBounds="True" Background="#141414">
+			<Canvas x:Name="GraphCanvas" Background="Transparent" RenderTransformOrigin="0,0">
+				<Canvas.RenderTransform>
+					<MatrixTransform />
+				</Canvas.RenderTransform>
+			</Canvas>
+		</Border>
+	</DockPanel>
+</Window>

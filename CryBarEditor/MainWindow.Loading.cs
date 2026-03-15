@@ -350,9 +350,10 @@ public partial class MainWindow
         _fileIndex = index;
         ClearSoundCaches();
         _soundsetIndex = null; // will be rebuilt lazily or on demand
+        _cachedStringTableContent = null;
     }
 
-    async ValueTask<PooledBuffer?> ReadFromIndexEntryPooledAsync(FileIndexEntry entry)
+    internal async ValueTask<PooledBuffer?> ReadFromIndexEntryPooledAsync(FileIndexEntry entry)
     {
         if (entry.Source == FileIndexSource.RootFile)
         {
@@ -389,6 +390,31 @@ public partial class MainWindow
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// Looks up a STR_ key in the preferred language string table. Returns translated text or null.
+    /// </summary>
+    internal async ValueTask<string?> LookupStringKeyAsync(string key)
+    {
+        if (_fileIndex == null) return null;
+
+        if (_cachedStringTableContent == null)
+        {
+            var lang = string.IsNullOrWhiteSpace(_stringTableLanguage) ? "English" : _stringTableLanguage;
+            var stringTables = _fileIndex.Find("string_table.txt");
+            var preferred = stringTables.FirstOrDefault(e =>
+                e.FullRelativePath.Contains(lang, StringComparison.OrdinalIgnoreCase));
+            var tableEntry = preferred ?? stringTables.FirstOrDefault();
+            if (tableEntry == null) return null;
+
+            using var data = await ReadFromIndexEntryPooledAsync(tableEntry);
+            if (data == null) return null;
+
+            _cachedStringTableContent = ConversionHelper.GetTextContent(data.Span, tableEntry.FileName);
+        }
+
+        return StringTableParser.FindValue(_cachedStringTableContent, key);
     }
 
     public void LoadFMODBank(string fmod_bank_file)

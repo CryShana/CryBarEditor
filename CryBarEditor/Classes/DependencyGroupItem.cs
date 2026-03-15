@@ -15,6 +15,8 @@ public class DependencyGroupItem : INotifyPropertyChanged
     public string EntityTypeLabel => Group.EntityType ?? "";
     public int ReferenceCount => Group.References.Count;
     public string ReferenceCountText => $"{ReferenceCount} ref{(ReferenceCount != 1 ? "s" : "")}";
+    const int MaxGraphReferences = 50;
+    public bool CanShowGraph => ReferenceCount <= MaxGraphReferences;
     public List<DependencyReference> References => Group.References;
 
     public bool IsExpanded

@@ -12,6 +12,9 @@ public partial class MainWindow
 {
     DependenciesWindow? _dependenciesWindow;
     SoundsetIndex? _soundsetIndex;
+    string? _cachedStringTableContent;
+
+    internal SoundsetIndex? SoundsetIndex => _soundsetIndex;
 
     void MenuItem_ShowDependencies(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
@@ -76,20 +79,27 @@ public partial class MainWindow
     {
         if (_barStream == null) return;
 
+        var entryPath = GetBARFullRelativePath(entry);
+        var window = EnsureDependenciesWindow(entryPath);
+        if (window == null) return; // duplicate request
+
         try
         {
             using var rawData = await entry.ReadDataRawPooledAsync(_barStream);
-            var entryPath = GetBARFullRelativePath(entry);
 
             await EnsureSoundsetIndexAsync();
             var result = await DependencyFinder.FindDependenciesForFileAsync(
                 entryPath, rawData, _fileIndex, _soundsetIndex,
                 _stringTableLanguage, ReadFromIndexEntryPooledAsync);
-            ShowDependenciesForResult(result);
+            window.LoadDependenciesFromResult(result, fileIndex: _fileIndex);
         }
         catch (Exception ex)
         {
             _ = ShowError($"Failed to read file for dependency analysis:\n{ex.Message}");
+        }
+        finally
+        {
+            window.IsLoading = false;
         }
     }
 
@@ -97,39 +107,60 @@ public partial class MainWindow
     {
         if (!Directory.Exists(_rootDirectory)) return;
 
+        var entryPath = GetRootFullRelativePath(entry);
+        var window = EnsureDependenciesWindow(entryPath);
+        if (window == null) return; // duplicate request
+
         try
         {
             var path = Path.Combine(_rootDirectory, entry.RelativePath);
             using var rawData = await PooledBuffer.FromFile(path);
-            var entryPath = GetRootFullRelativePath(entry);
 
             await EnsureSoundsetIndexAsync();
             var result = await DependencyFinder.FindDependenciesForFileAsync(
                 entryPath, rawData, _fileIndex, _soundsetIndex,
                 _stringTableLanguage, ReadFromIndexEntryPooledAsync);
-            ShowDependenciesForResult(result);
+            window.LoadDependenciesFromResult(result, fileIndex: _fileIndex);
         }
         catch (Exception ex)
         {
             _ = ShowError($"Failed to read file for dependency analysis:\n{ex.Message}");
         }
+        finally
+        {
+            window.IsLoading = false;
+        }
     }
-
-
 
     void ShowDependenciesForResult(DependencyResult result, string? displayName = null)
     {
+        var window = EnsureDependenciesWindow(result.EntryPath, displayName);
+        if (window == null) return;
+        window.LoadDependenciesFromResult(result, displayName, _fileIndex);
+        window.IsLoading = false;
+    }
+
+    /// <summary>
+    /// Opens or reuses the DependenciesWindow, setting it to loading state immediately.
+    /// Returns null if the window is already loading the same path (duplicate request).
+    /// </summary>
+    DependenciesWindow? EnsureDependenciesWindow(string entryPath, string? displayName = null)
+    {
         if (_dependenciesWindow != null)
         {
-            _dependenciesWindow.LoadDependenciesFromResult(result, displayName, _fileIndex);
+            if (_dependenciesWindow.IsLoading && _dependenciesWindow.CurrentEntryPath == entryPath)
+                return null; // already loading this file
+
+            _dependenciesWindow.StartLoading(entryPath, displayName);
             _dependenciesWindow.Focus();
-            return;
+            return _dependenciesWindow;
         }
 
         _dependenciesWindow = new DependenciesWindow(this);
         _dependenciesWindow.Closed += (_, _) => _dependenciesWindow = null;
         _dependenciesWindow.Show(this);
-        _dependenciesWindow.LoadDependenciesFromResult(result, displayName, _fileIndex);
+        _dependenciesWindow.StartLoading(entryPath, displayName);
+        return _dependenciesWindow;
     }
 
     async Task EnsureSoundsetIndexAsync()
