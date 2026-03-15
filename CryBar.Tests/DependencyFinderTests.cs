@@ -313,6 +313,56 @@ public class DependencyFinderTests
     }
 
     [Fact]
+    public void ChildNameElement_GroupsByNameChildInsteadOfAttribute()
+    {
+        var content = """
+            <ages>
+                <age>
+                    <name>ArchaicAge</name>
+                    <displaynameid>STR_AGE_ARCHAIC</displaynameid>
+                    <icon>resources\in_game\score_age_1.png</icon>
+                    <smallicon>resources\postgame\timeline\Icon_Age1Small.png</smallicon>
+                </age>
+                <age>
+                    <name>ClassicalAge</name>
+                    <displaynameid>STR_AGE_CLASSICAL</displaynameid>
+                    <icon>resources\in_game\score_age_2.png</icon>
+                    <smallicon>resources\postgame\timeline\Icon_Age2Small.png</smallicon>
+                </age>
+            </ages>
+            """;
+
+        var result = DependencyFinder.FindDependencies(content, "game\\data\\ages.xml");
+        Assert.Equal(2, result.Groups.Count);
+        Assert.Equal("ArchaicAge", result.Groups[0].EntityName);
+        Assert.Equal("ClassicalAge", result.Groups[1].EntityName);
+    }
+
+    [Fact]
+    public void ChildNameElement_FavorStashItems_GroupsByNameChild()
+    {
+        var content = """
+            <favorstashitems>
+                <favorstashitem>
+                    <name>ClaimFavor</name>
+                    <titleid>STR_FAVOR_BONUS_CLAIM_FAVOR</titleid>
+                    <icon>resources\ui\favor_icon.png</icon>
+                </favorstashitem>
+                <favorstashitem>
+                    <name>SpendFavor</name>
+                    <titleid>STR_FAVOR_BONUS_SPEND_FAVOR</titleid>
+                    <icon>resources\ui\favor_spend.png</icon>
+                </favorstashitem>
+            </favorstashitems>
+            """;
+
+        var result = DependencyFinder.FindDependencies(content, "game\\data\\favorstash.xml");
+        Assert.Equal(2, result.Groups.Count);
+        Assert.Equal("ClaimFavor", result.Groups[0].EntityName);
+        Assert.Equal("SpendFavor", result.Groups[1].EntityName);
+    }
+
+    [Fact]
     public void SelfExclusion_DoesNotMatchOwnPath()
     {
         var index = new FileIndex();

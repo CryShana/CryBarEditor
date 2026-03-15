@@ -144,7 +144,13 @@ public static partial class DependencyFinder
                 }
                 else
                 {
-                    children.Add((tag, name, reader.ReadOuterXml()));
+                    var xml = reader.ReadOuterXml();
+
+                    // If no name attribute, check for a direct <name> child element
+                    if (name == null)
+                        name = ExtractChildNameElement(xml);
+
+                    children.Add((tag, name, xml));
                 }
             }
         }
@@ -161,21 +167,21 @@ public static partial class DependencyFinder
                 : [];
         }
 
-        // Determine entity tags: direct children appearing ≥2 times with at least one name attribute
+        // Determine entity tags: direct children appearing ≥2 times with at least one name (attribute or child element)
         var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        var hasNameAttr = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var hasName = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (tag, name, _) in children)
         {
             counts.TryGetValue(tag, out var c);
             counts[tag] = c + 1;
             if (name != null)
-                hasNameAttr.Add(tag);
+                hasName.Add(tag);
         }
 
         var entityTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (tag, count) in counts)
         {
-            if (count >= 2 && hasNameAttr.Contains(tag))
+            if (count >= 2 && hasName.Contains(tag))
                 entityTags.Add(tag);
         }
 
@@ -253,6 +259,29 @@ public static partial class DependencyFinder
         }
 
         return groups;
+    }
+
+    /// <summary>
+    /// Extracts text content of a direct &lt;name&gt; child element from an XML fragment.
+    /// Returns null if no such element exists.
+    /// </summary>
+    static string? ExtractChildNameElement(string outerXml)
+    {
+        try
+        {
+            using var reader = XmlReader.Create(new StringReader(outerXml), SafeXmlSettings);
+            if (!reader.ReadToFollowing("name")) return null;
+
+            // Only accept <name> as a direct child (depth 1 inside the outer element)
+            if (reader.Depth != 1) return null;
+
+            var value = reader.ReadElementContentAsString();
+            return string.IsNullOrWhiteSpace(value) ? null : value;
+        }
+        catch (XmlException)
+        {
+            return null;
+        }
     }
 
     // --- Reference extraction (regex-based, works on any content chunk) ---
