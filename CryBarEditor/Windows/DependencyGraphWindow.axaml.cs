@@ -582,7 +582,7 @@ public partial class DependencyGraphWindow : SimpleWindow
 
         var border = new Border
         {
-            Background = new SolidColorBrush(Color.Parse("#1e1e1e")),
+            Background = new SolidColorBrush(Color.Parse("#242424")),
             BorderBrush = new SolidColorBrush(Color.Parse("#333333")),
             BorderThickness = new Thickness(2, 1, 1, 1),
             CornerRadius = new CornerRadius(4),
@@ -661,7 +661,7 @@ public partial class DependencyGraphWindow : SimpleWindow
 
         var border = new Border
         {
-            Background = new SolidColorBrush(Color.Parse("#1a1a1a")),
+            Background = new SolidColorBrush(Color.Parse("#222222")),
             BorderBrush = new SolidColorBrush(color, 0.4),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(3),
@@ -1622,47 +1622,26 @@ public partial class DependencyGraphWindow : SimpleWindow
 
             double baseAngle = Math.Atan2(parentPos.Y, parentPos.X);
 
-            // Pre-create and measure all expansion nodes to compute proper spacing
-            var expansionNodes = new List<(DependencyReference Ref, Border Node, Color Color, double Width)>();
+            // Pre-create and measure all expansion nodes
+            var expansionNodes = new List<(DependencyReference Ref, Border Node, Color Color, Size Size)>();
             foreach (var r in allRefs)
             {
                 var refColor = GetRefTypeColor(r.Type);
                 var subNode = CreateReferenceNode(r, refColor);
-                expansionNodes.Add((r, subNode, refColor, MeasureNode(subNode).Width));
+                expansionNodes.Add((r, subNode, refColor, MeasureNode(subNode)));
             }
 
-            double maxNodeWidth = expansionNodes.Max(n => n.Width);
-            double effectiveWidth = maxNodeWidth + 30;
+            const int ExpansionRadialThreshold = 12;
 
-            // Use measured widths for arc/radius calculation
-            double subCircumference = allRefs.Count * effectiveWidth;
-            double subRadius = Math.Max(200, subCircumference / Math.PI);
-            double arcSpan = Math.Min(Math.PI * 0.8, allRefs.Count * 0.15 + 0.3);
-            double startAngle = baseAngle - arcSpan / 2;
-
-            for (int i = 0; i < expansionNodes.Count; i++)
+            if (allRefs.Count <= ExpansionRadialThreshold)
             {
-                var info = expansionNodes[i];
-                double angle = allRefs.Count == 1
-                    ? baseAngle
-                    : startAngle + i * arcSpan / Math.Max(1, allRefs.Count - 1);
-                double sx = parentPos.X + subRadius * Math.Cos(angle);
-                double sy = parentPos.Y + subRadius * Math.Sin(angle);
-
-                PlaceNode(info.Node, sx, sy);
-                spawnedControls.Add(info.Node);
-                newNodeSet.Add(info.Node);
-
-                var edge = CreateEdge(parentPos.X, parentPos.Y, sx, sy, info.Color, 1.0);
-                ConnectEdge(parentNode, edge);
-                ConnectEdge(info.Node, edge);
-                spawnedControls.Add(edge);
-
-                var visibleMatches = GetVisibleMatches(info.Ref);
-                if (visibleMatches.Count > 0)
-                {
-                    LayoutMatchSubNodes(info.Node, visibleMatches, sx, sy, angle, spawnedControls);
-                }
+                LayoutExpansionRadial(parentNode, parentPos, baseAngle, expansionNodes,
+                    spawnedControls, newNodeSet);
+            }
+            else
+            {
+                LayoutExpansionColumnar(parentNode, parentPos, baseAngle, expansionNodes,
+                    spawnedControls, newNodeSet);
             }
 
             _expansionChildren[parentNode] = spawnedControls;
@@ -1697,6 +1676,110 @@ public partial class DependencyGraphWindow : SimpleWindow
             }
         }
         return count;
+    }
+
+    /// <summary>
+    /// Radial arc layout for small expansions (≤12 refs). Fans out from parent node.
+    /// </summary>
+    void LayoutExpansionRadial(Border parentNode, (double X, double Y) parentPos, double baseAngle,
+        List<(DependencyReference Ref, Border Node, Color Color, Size Size)> nodes,
+        List<Control> spawnedControls, HashSet<Border> newNodeSet)
+    {
+        double maxWidth = nodes.Max(n => n.Size.Width);
+        double effectiveWidth = maxWidth + 30;
+
+        double subCircumference = nodes.Count * effectiveWidth;
+        double subRadius = Math.Max(200, subCircumference / Math.PI);
+        double arcSpan = Math.Min(Math.PI * 0.8, nodes.Count * 0.15 + 0.3);
+        double startAngle = baseAngle - arcSpan / 2;
+
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            var info = nodes[i];
+            double angle = nodes.Count == 1
+                ? baseAngle
+                : startAngle + i * arcSpan / Math.Max(1, nodes.Count - 1);
+            double sx = parentPos.X + subRadius * Math.Cos(angle);
+            double sy = parentPos.Y + subRadius * Math.Sin(angle);
+
+            PlaceNode(info.Node, sx, sy);
+            spawnedControls.Add(info.Node);
+            newNodeSet.Add(info.Node);
+
+            var edge = CreateEdge(parentPos.X, parentPos.Y, sx, sy, info.Color, 1.0);
+            ConnectEdge(parentNode, edge);
+            ConnectEdge(info.Node, edge);
+            spawnedControls.Add(edge);
+
+            var visibleMatches = GetVisibleMatches(info.Ref);
+            if (visibleMatches.Count > 0)
+                LayoutMatchSubNodes(info.Node, visibleMatches, sx, sy, angle, spawnedControls);
+        }
+    }
+
+    /// <summary>
+    /// Columnar layout for large expansions (>12 refs). Groups by type, stacks in columns
+    /// radiating outward from the parent node.
+    /// </summary>
+    void LayoutExpansionColumnar(Border parentNode, (double X, double Y) parentPos, double baseAngle,
+        List<(DependencyReference Ref, Border Node, Color Color, Size Size)> nodes,
+        List<Control> spawnedControls, HashSet<Border> newNodeSet)
+    {
+        var grouped = nodes.GroupBy(n => n.Ref.Type).OrderBy(g => g.Key).ToList();
+        int groupCount = grouped.Count;
+
+        // Fan columns around the base angle
+        double totalFanAngle = Math.Min(Math.PI * 0.8, groupCount * 0.5 + 0.3);
+        double fanStart = baseAngle - totalFanAngle / 2;
+
+        for (int g = 0; g < groupCount; g++)
+        {
+            var typeGroup = grouped[g].ToList();
+            double groupAngle = groupCount == 1
+                ? baseAngle
+                : fanStart + g * totalFanAngle / Math.Max(1, groupCount - 1);
+
+            double dirX = Math.Cos(groupAngle);
+            double dirY = Math.Sin(groupAngle);
+            double perpX = -dirY;
+            double perpY = dirX;
+
+            // Compute column dimensions from measured sizes
+            double maxWidth = typeGroup.Max(n => n.Size.Width);
+            double verticalSpacing = 8;
+            double totalHeight = typeGroup.Sum(n => n.Size.Height + verticalSpacing) - verticalSpacing;
+
+            bool hasSubNodes = typeGroup.Any(n => GetVisibleMatches(n.Ref).Count > 0);
+            double colDistance = 200 + (hasSubNodes ? maxWidth * 0.5 : 0);
+
+            double colCenterX = parentPos.X + dirX * colDistance;
+            double colCenterY = parentPos.Y + dirY * colDistance;
+
+            double stackOffset = -totalHeight / 2;
+
+            for (int i = 0; i < typeGroup.Count; i++)
+            {
+                var info = typeGroup[i];
+                double perpOffset = stackOffset + info.Size.Height / 2;
+                double nx = colCenterX + perpX * perpOffset;
+                double ny = colCenterY + perpY * perpOffset;
+
+                PlaceNode(info.Node, nx, ny);
+                spawnedControls.Add(info.Node);
+                newNodeSet.Add(info.Node);
+
+                var edge = CreateEdge(parentPos.X, parentPos.Y, nx, ny, info.Color, 1.0);
+                ConnectEdge(parentNode, edge);
+                ConnectEdge(info.Node, edge);
+                spawnedControls.Add(edge);
+
+                var visibleMatches = GetVisibleMatches(info.Ref);
+                if (visibleMatches.Count > 0)
+                    LayoutMatchSubNodes(info.Node, visibleMatches, nx, ny, groupAngle, spawnedControls);
+
+                stackOffset += info.Size.Height + verticalSpacing;
+            }
+        }
     }
 
     void CollapseChildren(Border parentNode, List<Control> children)
