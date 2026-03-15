@@ -43,6 +43,7 @@ public partial class MainWindow : SimpleWindow
 
     // EDITOR SETTINGS
     string _editorCommand = "";
+    string _stringTableLanguage = "";
 
     FMODBank? _fmodBank = null;
     BarFile? _barFile = null;
@@ -621,6 +622,7 @@ public partial class MainWindow : SimpleWindow
             _searchCaseSensitive = config.SearchCaseSensitive ?? true;
             _searchRegex = config.SearchUseRegex ?? false;
             _editorCommand = config.EditorCommand ?? "";
+            _stringTableLanguage = config.StringTableLanguage ?? "";
             _quickAccessEntries = config.QuickAccessEntries ?? new();
         }
         catch
@@ -656,6 +658,7 @@ public partial class MainWindow : SimpleWindow
             _lastConfiguration.SearchCaseSensitive = _searchCaseSensitive;
             _lastConfiguration.SearchUseRegex = _searchRegex;
             _lastConfiguration.EditorCommand = _editorCommand;
+            _lastConfiguration.StringTableLanguage = _stringTableLanguage;
             _lastConfiguration.QuickAccessEntries = _quickAccessEntries;
 
             File.WriteAllText(config_path, JsonSerializer.Serialize(_lastConfiguration, CryBarJsonContext.Default.Configuration));
@@ -691,12 +694,13 @@ public partial class MainWindow : SimpleWindow
     #region Settings & Editor
     async void MenuItem_Settings(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
-        var window = new SettingsWindow(_editorCommand);
+        var window = new SettingsWindow(_editorCommand, _stringTableLanguage);
         await window.ShowDialog(this);
 
         if (window.Confirmed)
         {
             _editorCommand = window.EditorCommand;
+            _stringTableLanguage = window.StringTableLanguage;
             SaveConfiguration();
             OnPropertyChanged(nameof(CanOpenInEditor));
         }

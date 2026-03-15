@@ -213,7 +213,20 @@ public partial class SearchWindow : SimpleWindow
         if (!IsCaseSensitive)
             regex_options |= RegexOptions.IgnoreCase;
 
-        var regex = IsRegex ? await Task.Run(() => new Regex(query, regex_options, TimeSpan.FromMilliseconds(800))) : null;
+        Regex? regex = null;
+        if (IsRegex)
+        {
+            try
+            {
+                regex = await Task.Run(() => new Regex(query, regex_options, TimeSpan.FromMilliseconds(800)));
+            }
+            catch (RegexParseException ex)
+            {
+                Status = $"Invalid regex: {ex.Message}";
+                CurrentlySearching = false;
+                return;
+            }
+        }
 
         // THIS IS THE SEARCH FUNCTION
         Func<string, int, (int index, int length)> searcher = regex == null ?

@@ -53,7 +53,7 @@ public static partial class DependencyFinder
     /// Groups results by entity when the content has XML entity structure (repeated direct children with name attributes).
     /// Optionally resolves parsed paths against <paramref name="index"/>.
     /// </summary>
-    public static DependencyResult FindDependencies(string content, string entryPath, FileIndex? index = null, SoundsetIndex? soundsetIndex = null)
+    public static DependencyResult FindDependencies(string content, string entryPath, FileIndex? index = null, SoundsetIndex? soundsetIndex = null, string? stringTableLanguage = null)
     {
         // Preprocess: unescape JSON double-backslashes
         var processed = content;
@@ -67,9 +67,10 @@ public static partial class DependencyFinder
         // Resolve against index
         if (index != null)
         {
+            var lang = string.IsNullOrWhiteSpace(stringTableLanguage) ? "English" : stringTableLanguage;
             foreach (var group in groups)
                 foreach (var r in group.References)
-                    ResolveReference(r, entryPath, index, soundsetIndex);
+                    ResolveReference(r, entryPath, index, soundsetIndex, lang);
         }
 
         return new DependencyResult
@@ -262,6 +263,7 @@ public static partial class DependencyFinder
             {
                 var raw = m.Value;
                 if (raw.Contains("://")) continue; // filter URIs
+                if (!IsLikelyPath(raw)) continue; // filter base64 and garbage
 
                 var normalized = raw.Replace('/', '\\');
                 var tag = DetectSourceTag(content, m.Index);
@@ -402,7 +404,7 @@ public static partial class DependencyFinder
 
     // Resolution
 
-    static void ResolveReference(DependencyReference reference, string entryPath, FileIndex index, SoundsetIndex? soundsetIndex)
+    static void ResolveReference(DependencyReference reference, string entryPath, FileIndex index, SoundsetIndex? soundsetIndex, string stringTableLanguage)
     {
         switch (reference.Type)
         {
@@ -417,12 +419,38 @@ public static partial class DependencyFinder
 
             case DependencyRefType.StringKey:
                 var stringTables = index.Find("string_table.txt");
-                var english = stringTables.FirstOrDefault(e =>
-                    e.FullRelativePath.Contains("English", StringComparison.OrdinalIgnoreCase));
-                if (english != null)
-                    reference.Resolved.Add(english);
+                var preferred = stringTables.FirstOrDefault(e =>
+                    e.FullRelativePath.Contains(stringTableLanguage, StringComparison.OrdinalIgnoreCase));
+                if (preferred != null)
+                    reference.Resolved.Add(preferred);
+                else if (stringTables.Count > 0)
+                    reference.Resolved.Add(stringTables[0]); // fallback to first available
                 break;
         }
+    }
+
+    /// <summary>
+    /// Rejects matches that look like base64-encoded data or other garbage rather than real file paths.
+    /// </summary>
+    static bool IsLikelyPath(string match)
+    {
+        // Base64-specific characters never appear in game file paths
+        if (match.Contains('+') || match.Contains('='))
+            return false;
+
+        // Exceeds MAX_PATH — no real game path is this long
+        if (match.Length > 260)
+            return false;
+
+        // Real game paths have at most ~8-10 segments; base64 with / can have dozens
+        int separatorCount = 0;
+        foreach (var c in match)
+        {
+            if (c is '/' or '\\' && ++separatorCount > 15)
+                return false;
+        }
+
+        return true;
     }
 
     static void ResolveSoundsetName(DependencyReference reference, SoundsetIndex soundsetIndex)

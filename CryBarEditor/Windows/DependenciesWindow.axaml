@@ -1,0 +1,178 @@
+<Window
+	x:Class="CryBarEditor.DependenciesWindow"
+	xmlns="https://github.com/avaloniaui"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	xmlns:ce="using:CryBarEditor"
+	xmlns:cc="using:CryBarEditor.Classes"
+	xmlns:cb="using:CryBar"
+	xmlns:converters="using:CryBarEditor.Converters"
+	xmlns:micons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+	Title="{Binding WindowTitle}"
+	Width="500"
+	MinWidth="300"
+	MinHeight="300"
+	d:DesignHeight="600"
+	d:DesignWidth="500"
+	Background="#141414"
+	DataContext="{Binding RelativeSource={RelativeSource Self}}"
+	Foreground="#d9d9d9"
+	WindowStartupLocation="CenterOwner"
+	mc:Ignorable="d"
+	x:DataType="ce:DependenciesWindow">
+	<Window.Resources>
+		<converters:DependencyRefTypeToIconKindConverter x:Key="refTypeToIconKind" />
+		<converters:DependencyRefTypeToForegroundConverter x:Key="refTypeToForeground" />
+	</Window.Resources>
+	<Window.Styles>
+		<Style Selector="ListBox">
+			<Setter Property="Background" Value="#171717" />
+		</Style>
+
+		<Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+			<Setter Property="Background" Value="#2b3c57" />
+		</Style>
+
+		<Style Selector="ListBoxItem:focus /template/ ContentPresenter">
+			<Setter Property="Background" Value="#2b3c57" />
+		</Style>
+
+		<Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+			<Setter Property="Background" Value="#1a2436" />
+		</Style>
+
+		<Style Selector="ListBoxItem">
+			<Setter Property="Padding" Value="4" />
+		</Style>
+
+		<!-- TextBox clear button -->
+		<Style Selector="TextBox.clearable">
+			<Setter Property="Padding" Value="8,5,26,5" />
+		</Style>
+
+		<!-- Expander styles -->
+		<Style Selector="Expander">
+			<Setter Property="Background" Value="Transparent" />
+		</Style>
+		<Style Selector="Expander /template/ ToggleButton">
+			<Setter Property="Background" Value="Transparent" />
+		</Style>
+	</Window.Styles>
+	<DockPanel Margin="10">
+		<!-- Filter -->
+		<Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+			<TextBox Classes="clearable" Text="{Binding Filter, Mode=TwoWay}"
+					 Watermark="Filter dependencies"
+					 TextChanged="FilterTextBox_TextChanged" />
+			<Button Classes="filterClear" HorizontalAlignment="Right" VerticalAlignment="Center"
+					Focusable="False" IsTabStop="False" Click="FilterClear_Click"
+					IsVisible="False" Background="Transparent" BorderThickness="0"
+					Padding="2" Margin="0,0,4,0" Cursor="Hand">
+				<micons:MaterialIcon Kind="Close" Width="14" Height="14" Foreground="#808080" />
+			</Button>
+		</Grid>
+
+		<!-- Loading indicator -->
+		<ProgressBar DockPanel.Dock="Top" IsIndeterminate="True" Margin="0,0,0,8"
+					 Height="3" IsVisible="{Binding IsLoading}" />
+
+		<!-- Status -->
+		<TextBlock DockPanel.Dock="Bottom" Margin="0,6,0,0" Foreground="Gray"
+				   Text="{Binding StatusText}" />
+
+		<!-- Groups list -->
+		<ListBox ItemsSource="{Binding FilteredGroups}"
+				 SelectionMode="Single">
+			<ListBox.ItemsPanel>
+				<ItemsPanelTemplate>
+					<VirtualizingStackPanel />
+				</ItemsPanelTemplate>
+			</ListBox.ItemsPanel>
+			<ListBox.ItemTemplate>
+				<DataTemplate x:DataType="cc:DependencyGroupItem">
+					<Expander IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
+							  HorizontalAlignment="Stretch">
+						<Expander.Header>
+							<DockPanel>
+								<!-- Ref count on right -->
+								<TextBlock DockPanel.Dock="Right" VerticalAlignment="Center"
+										   Foreground="#808080" Margin="8,0,0,0"
+										   Text="{Binding ReferenceCountText}" />
+
+								<!-- Entity type + name on left -->
+								<StackPanel VerticalAlignment="Center">
+									<TextBlock Text="{Binding EntityTypeLabel}"
+											   Foreground="#808080" FontSize="10"
+											   IsVisible="{Binding EntityTypeLabel, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+									<TextBlock Text="{Binding DisplayName}" />
+								</StackPanel>
+							</DockPanel>
+						</Expander.Header>
+
+						<!-- References (only realized when expanded) -->
+						<Border MaxHeight="300" Margin="10,0,0,0">
+							<ScrollViewer VerticalScrollBarVisibility="Auto">
+								<ItemsControl ItemsSource="{Binding References}">
+									<ItemsControl.ItemTemplate>
+										<DataTemplate x:DataType="cb:DependencyReference">
+											<DockPanel Margin="0,1">
+												<!-- Navigate button on right -->
+												<Button DockPanel.Dock="Right" Padding="2"
+														Background="#01000000" BorderThickness="0"
+														Click="NavigateToRef_Click"
+														ToolTip.Tip="Navigate to file (click again to cycle matches)"
+														Focusable="False" IsTabStop="False" Cursor="Hand"
+														Margin="4,0,0,0">
+													<StackPanel Orientation="Horizontal">
+														<micons:MaterialIcon Kind="SelectionEllipseArrowInside"
+																			 Width="14" Height="14"
+																			 Foreground="#6f96bf" />
+														<!-- Show match count badge when >1 resolved -->
+														<TextBlock Text="{Binding Resolved.Count}"
+																   Foreground="#808080" FontSize="10"
+																   VerticalAlignment="Center" Margin="2,0,0,0">
+															<TextBlock.IsVisible>
+																<Binding Path="Resolved.Count" Converter="{x:Static ce:DependenciesWindow.GreaterThan1Converter}" />
+															</TextBlock.IsVisible>
+														</TextBlock>
+													</StackPanel>
+												</Button>
+
+												<!-- Type icon -->
+												<micons:MaterialIcon DockPanel.Dock="Left"
+																	  Kind="{Binding Type, Converter={StaticResource refTypeToIconKind}}"
+																	  Foreground="{Binding Type, Converter={StaticResource refTypeToForeground}}"
+																	  Width="14" Height="14" Margin="0,0,5,0"
+																	  VerticalAlignment="Center" />
+
+												<!-- Unresolved indicator -->
+												<micons:MaterialIcon DockPanel.Dock="Left"
+																	  Kind="HelpCircleOutline"
+																	  Width="12" Height="12" Margin="0,0,3,0"
+																	  Foreground="#808080"
+																	  VerticalAlignment="Center"
+																	  ToolTip.Tip="Unresolved — not found in file index">
+													<micons:MaterialIcon.IsVisible>
+														<Binding Path="Resolved.Count" Converter="{x:Static ce:DependenciesWindow.EqualsZeroConverter}" />
+													</micons:MaterialIcon.IsVisible>
+												</micons:MaterialIcon>
+
+												<!-- Value text (selectable for copying) -->
+												<SelectableTextBlock VerticalAlignment="Center"
+														   TextTrimming="CharacterEllipsis"
+														   Foreground="{Binding Type, Converter={StaticResource refTypeToForeground}}"
+														   Text="{Binding RawValue}"
+														   ToolTip.Tip="{Binding RawValue}" />
+											</DockPanel>
+										</DataTemplate>
+									</ItemsControl.ItemTemplate>
+								</ItemsControl>
+							</ScrollViewer>
+						</Border>
+					</Expander>
+				</DataTemplate>
+			</ListBox.ItemTemplate>
+		</ListBox>
+	</DockPanel>
+</Window>

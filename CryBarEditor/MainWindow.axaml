@@ -95,8 +95,6 @@
 					IsVisible="{Binding CanExport}" Icon="{micons:MaterialIconExt Kind=Export}"
 					Click="MenuItem_ExportSelectedRawConverted" />
 
-			<Separator />
-
 			<MenuItem Header="{Binding ContextSelectedItemsCount, StringFormat='Advanced Export ({0} selected)...'}"
 					Icon="{micons:MaterialIconExt Kind=CogOutline}" IsVisible="{Binding CanExport}"
 					Click="MenuItem_AdvancedExport" />
@@ -122,6 +120,12 @@
 					  Icon="{micons:MaterialIconExt Kind=Star}"
 					  IsVisible="{Binding CanToggleQuickAccess}"
 					  Click="MenuItem_ToggleQuickAccess" />
+
+			<Separator IsVisible="{Binding CanShowDependencies}" />
+			<MenuItem Header="Show dependencies"
+					  Icon="{micons:MaterialIconExt Kind=FileTreeOutline}"
+					  IsVisible="{Binding CanShowDependencies}"
+					  Click="MenuItem_ShowDependencies" />
 		</ContextMenu>
 	</Window.Resources>
 
@@ -349,6 +353,10 @@
 									<MenuItem Header="{Binding #mainWindow.((ce:MainWindow)DataContext).FmodQuickAccessToggleText}"
 										Icon="{micons:MaterialIconExt Kind=Star}"
 										Click="MenuItem_ToggleQuickAccessFmod" />
+									<Separator />
+									<MenuItem Header="Show dependencies"
+										Icon="{micons:MaterialIconExt Kind=FileTreeOutline}"
+										Click="MenuItem_ShowDependenciesFmod" />
 								</ContextMenu>
 							</ListBox.ContextMenu>
 						</ListBox>

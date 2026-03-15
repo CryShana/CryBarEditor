@@ -6,7 +6,6 @@ using CryBarEditor.Classes;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
 
 namespace CryBarEditor;
@@ -208,57 +207,34 @@ public partial class QuickAccessWindow : SimpleWindow
             case QuickAccessEntryType.RootFile:
             {
                 if (entry.RootRelativePath == null) return;
-                var target = _owner.FindAndRevealRootFile(entry.RootRelativePath);
+                var target = _owner.NavigateToRootFile(entry.RootRelativePath);
                 if (target == null)
                 {
                     entry.IsValid = false;
                     RefreshFiltered();
-                    return;
                 }
-                _owner.SelectedRootFileEntry = target;
                 break;
             }
             case QuickAccessEntryType.BarEntry:
             {
                 if (entry.BarArchivePath == null || entry.EntryRelativePath == null) return;
-
-                // First navigate to the BAR archive (clears filter if needed)
-                var barTarget = _owner.FindAndRevealRootFile(entry.BarArchivePath);
-                if (barTarget == null)
+                var barEntry = await _owner.NavigateToBarEntryAsync(entry.BarArchivePath, entry.EntryRelativePath);
+                if (barEntry == null)
                 {
                     entry.IsValid = false;
                     RefreshFiltered();
-                    return;
                 }
-                _owner.SelectedRootFileEntry = barTarget;
-                await Task.Delay(50);
-
-                // Then select the entry within the BAR
-                var barEntry = _owner.FindAndRevealBarFileEntry(entry.EntryRelativePath);
-                if (barEntry == null) return;
-                _owner.SelectedBarEntry = barEntry;
                 break;
             }
             case QuickAccessEntryType.FmodEvent:
             {
                 if (entry.BankPath == null || entry.EventPath == null) return;
-
-                // Navigate to the bank file (clears filter if needed)
-                var bankTarget = _owner.FindAndRevealRootFile(entry.BankPath);
-                if (bankTarget == null)
+                var fmodEvent = await _owner.NavigateToFmodEventAsync(entry.BankPath, entry.EventPath);
+                if (fmodEvent == null)
                 {
                     entry.IsValid = false;
                     RefreshFiltered();
-                    return;
                 }
-                _owner.SelectedRootFileEntry = bankTarget;
-                await Task.Delay(50);
-
-                // Select the FMOD event
-                if (_owner.FmodBank?.Events == null) return;
-                var fmodEvent = _owner.FmodBank.Events.FirstOrDefault(e => e.Path == entry.EventPath);
-                if (fmodEvent == null) return;
-                _owner.SelectedBankEntry = fmodEvent;
                 break;
             }
         }

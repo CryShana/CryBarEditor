@@ -12,7 +12,7 @@
 		Foreground="#d9d9d9"
 		Background="#141414"
 		DataContext="{Binding RelativeSource={RelativeSource Self}}"
-		CanResize="False" Width="420" Height="200"
+		CanResize="False" Width="420" Height="280"
         Title="Settings">
 	<Border Padding="10" BorderThickness="2" BorderBrush="#d9d9d9">
 		<DockPanel>
@@ -23,11 +23,19 @@
 				<Button DockPanel.Dock="Right" Content="OK" Click="OKClick" IsDefault="True" />
 			</DockPanel>
 
-			<StackPanel>
-				<TextBlock Text="Editor command" FontWeight="Bold" Margin="0,0,0,4" />
-				<TextBox Text="{Binding EditorCommand, Mode=TwoWay}" Watermark="code &quot;{file}&quot;" />
-				<TextBlock Text=" {file} is placeholder for exported file path"
-						   Foreground="Gray" FontSize="14" Margin="0,4,0,0" TextWrapping="Wrap" />
+			<StackPanel Spacing="10">
+				<StackPanel>
+					<TextBlock Text="Editor command" FontWeight="Bold" Margin="0,0,0,4" />
+					<TextBox Text="{Binding EditorCommand, Mode=TwoWay}" Watermark="code &quot;{file}&quot;" />
+					<TextBlock Text=" {file} is placeholder for exported file path"
+							   Foreground="Gray" FontSize="14" Margin="0,4,0,0" TextWrapping="Wrap" />
+				</StackPanel>
+				<StackPanel>
+					<TextBlock Text="String table language" FontWeight="Bold" Margin="0,0,0,4" />
+					<TextBox Text="{Binding StringTableLanguage, Mode=TwoWay}" Watermark="English" />
+					<TextBlock Text="Language folder used when navigating to STR_ keys (default: English)"
+							   Foreground="Gray" FontSize="14" Margin="0,4,0,0" TextWrapping="Wrap" />
+				</StackPanel>
 			</StackPanel>
 		</DockPanel>
 	</Border>

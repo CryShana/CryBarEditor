@@ -141,6 +141,8 @@ public partial class MainWindow
 
     bool _contextMenuIsFromBAR;
 
+    public bool CanShowDependencies => ContextSelectedItemsCount == 1;
+
     void ContextMenu_Opened(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         var listbox = (ListBox)((ContextMenu)sender!).Parent!.Parent!;
@@ -150,6 +152,7 @@ public partial class MainWindow
         OnPropertyChanged(nameof(CanToggleQuickAccess));
         OnPropertyChanged(nameof(IsInQuickAccess));
         OnPropertyChanged(nameof(QuickAccessToggleText));
+        OnPropertyChanged(nameof(CanShowDependencies));
     }
     #endregion
 }

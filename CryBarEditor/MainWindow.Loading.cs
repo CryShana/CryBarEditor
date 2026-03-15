@@ -349,6 +349,7 @@ public partial class MainWindow
 
         _fileIndex = index;
         ClearSoundCaches();
+        _soundsetIndex = null; // will be rebuilt lazily or on demand
     }
 
     async ValueTask<PooledBuffer?> ReadFromIndexEntryPooledAsync(FileIndexEntry entry)
