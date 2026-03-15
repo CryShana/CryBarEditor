@@ -92,7 +92,10 @@ public partial class DependencyGraphWindow : SimpleWindow
     // Transform resolved after InitializeComponent
     MatrixTransform _graphTransform = null!;
 
-    // Colors
+    // Colors — declare base colors first, then derived aliases
+    static readonly Color SelectionColor = Color.Parse("#6f96bf");
+    static readonly Color FbxImportColor = Color.Parse("#90a4ae");
+
     static readonly Color FilePathColor = Color.Parse("#d9d9d9");
     static readonly Color StringKeyColor = Color.Parse("#c4a96a");
     static readonly Color SoundsetColor = SelectionColor;
@@ -100,7 +103,6 @@ public partial class DependencyGraphWindow : SimpleWindow
     static readonly Color CenterBorder = SelectionColor;
 
     static readonly Color TmmColor = Color.Parse("#8bc34a");
-    static readonly Color FbxImportColor = Color.Parse("#90a4ae");
     static readonly Color TmmDataColor = FbxImportColor;
     static readonly Color TextureColor = Color.Parse("#ce93d8");
     static readonly Color MaterialColor = Color.Parse("#ffb74d");
@@ -110,7 +112,6 @@ public partial class DependencyGraphWindow : SimpleWindow
     static readonly Color NodeBgColor = Color.Parse("#1e1e1e");
     static readonly Color MatchNodeBgColor = Color.Parse("#1a1a1a");
     static readonly Color BorderDarkColor = Color.Parse("#333333");
-    static readonly Color SelectionColor = Color.Parse("#6f96bf");
 
     int _baseRefCount;
     int _expandedRefCount;
