@@ -70,7 +70,7 @@ public partial class MainWindow
             var result = await Task.Run(() => DependencyFinder.FindDependenciesForFileAsync(
                 resolution.SourceFile, data, fileIndex, soundsetIndex,
                 lang, ReadFromIndexEntryPooledAsync,
-                filterEntityName: filterName).AsTask());
+                filterEntityName: filterName));
             ShowDependenciesForResult(result, displayName: resolution.SoundsetName);
         }
         catch (Exception ex)
@@ -97,7 +97,7 @@ public partial class MainWindow
             var lang = _stringTableLanguage;
             var result = await Task.Run(() => DependencyFinder.FindDependenciesForFileAsync(
                 entryPath, rawData, fileIndex, soundsetIndex,
-                lang, ReadFromIndexEntryPooledAsync).AsTask());
+                lang, ReadFromIndexEntryPooledAsync));
             window.LoadDependenciesFromResult(result, fileIndex: _fileIndex);
         }
         catch (Exception ex)
@@ -129,7 +129,7 @@ public partial class MainWindow
             var lang = _stringTableLanguage;
             var result = await Task.Run(() => DependencyFinder.FindDependenciesForFileAsync(
                 entryPath, rawData, fileIndex, soundsetIndex,
-                lang, ReadFromIndexEntryPooledAsync).AsTask());
+                lang, ReadFromIndexEntryPooledAsync));
             window.LoadDependenciesFromResult(result, fileIndex: _fileIndex);
         }
         catch (Exception ex)

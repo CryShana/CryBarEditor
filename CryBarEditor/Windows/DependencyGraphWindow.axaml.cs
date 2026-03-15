@@ -1787,8 +1787,9 @@ public partial class DependencyGraphWindow : SimpleWindow
             using var data = await _mainWindow.ReadFromIndexEntryPooledAsync(indexEntry);
             if (data == null) { btn.Content = "(read failed)"; btn.IsEnabled = true; return; }
 
-            var result = await DependencyFinder.FindDependenciesForFileAsync(
-                indexEntry.FullRelativePath, data, _fileIndex);
+            var fileIndex = _fileIndex;
+            var result = await Task.Run(() => DependencyFinder.FindDependenciesForFileAsync(
+                indexEntry.FullRelativePath, data, fileIndex));
 
             var allRefs = result.GetAllReferences().ToList();
             if (allRefs.Count == 0) { btn.Content = "(empty)"; btn.IsEnabled = true; return; }
