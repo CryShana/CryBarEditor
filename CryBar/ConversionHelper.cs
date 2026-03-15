@@ -193,6 +193,16 @@ public static class ConversionHelper
     }
 
     /// <summary>
+    /// Converts decompressed file data to text, handling XMB-to-XML conversion when needed.
+    /// </summary>
+    public static string GetTextContent(ReadOnlySpan<byte> data, string filePath)
+    {
+        if (Path.GetExtension(filePath).Equals(".xmb", StringComparison.OrdinalIgnoreCase))
+            return ConvertXmbToXmlText(data) ?? Encoding.UTF8.GetString(data);
+        return Encoding.UTF8.GetString(data);
+    }
+
+    /// <summary>
     /// Determines the converted file extension for a given source extension.
     /// Returns null if no conversion is applicable.
     /// </summary>

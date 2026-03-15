@@ -1,3 +1,6 @@
+using CryBar.Classes;
+
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 
@@ -53,7 +56,8 @@ public static partial class DependencyFinder
     /// Groups results by entity when the content has XML entity structure (repeated direct children with name attributes).
     /// Optionally resolves parsed paths against <paramref name="index"/>.
     /// </summary>
-    public static DependencyResult FindDependencies(string content, string entryPath, FileIndex? index = null, SoundsetIndex? soundsetIndex = null)
+    /// <param name="filterEntityName">When set, only return the group matching this entity name (case-insensitive).</param>
+    public static DependencyResult FindDependencies(string content, string entryPath, FileIndex? index = null, SoundsetIndex? soundsetIndex = null, string? stringTableLanguage = null, string? filterEntityName = null)
     {
         // Preprocess: unescape JSON double-backslashes
         var processed = content;
@@ -64,12 +68,21 @@ public static partial class DependencyFinder
         // Build groups (with entity detection for XML content)
         var groups = BuildGroups(processed);
 
+        // Filter to a single entity if requested
+        if (filterEntityName != null)
+        {
+            groups = groups
+                .Where(g => string.Equals(g.EntityName, filterEntityName, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
         // Resolve against index
         if (index != null)
         {
+            var lang = string.IsNullOrWhiteSpace(stringTableLanguage) ? "English" : stringTableLanguage;
             foreach (var group in groups)
                 foreach (var r in group.References)
-                    ResolveReference(r, entryPath, index, soundsetIndex);
+                    ResolveReference(r, entryPath, index, soundsetIndex, lang);
         }
 
         return new DependencyResult
@@ -131,7 +144,13 @@ public static partial class DependencyFinder
                 }
                 else
                 {
-                    children.Add((tag, name, reader.ReadOuterXml()));
+                    var xml = reader.ReadOuterXml();
+
+                    // If no name attribute, check for a direct <name> child element
+                    if (name == null)
+                        name = ExtractChildNameElement(xml);
+
+                    children.Add((tag, name, xml));
                 }
             }
         }
@@ -148,21 +167,21 @@ public static partial class DependencyFinder
                 : [];
         }
 
-        // Determine entity tags: direct children appearing ≥2 times with at least one name attribute
+        // Determine entity tags: direct children appearing ≥2 times with at least one name (attribute or child element)
         var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        var hasNameAttr = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var hasName = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (tag, name, _) in children)
         {
             counts.TryGetValue(tag, out var c);
             counts[tag] = c + 1;
             if (name != null)
-                hasNameAttr.Add(tag);
+                hasName.Add(tag);
         }
 
         var entityTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (tag, count) in counts)
         {
-            if (count >= 2 && hasNameAttr.Contains(tag))
+            if (count >= 2 && hasName.Contains(tag))
                 entityTags.Add(tag);
         }
 
@@ -242,6 +261,29 @@ public static partial class DependencyFinder
         return groups;
     }
 
+    /// <summary>
+    /// Extracts text content of a direct &lt;name&gt; child element from an XML fragment.
+    /// Returns null if no such element exists.
+    /// </summary>
+    static string? ExtractChildNameElement(string outerXml)
+    {
+        try
+        {
+            using var reader = XmlReader.Create(new StringReader(outerXml), SafeXmlSettings);
+            if (!reader.ReadToFollowing("name")) return null;
+
+            // Only accept <name> as a direct child (depth 1 inside the outer element)
+            if (reader.Depth != 1) return null;
+
+            var value = reader.ReadElementContentAsString();
+            return string.IsNullOrWhiteSpace(value) ? null : value;
+        }
+        catch (XmlException)
+        {
+            return null;
+        }
+    }
+
     // --- Reference extraction (regex-based, works on any content chunk) ---
 
     /// <summary>
@@ -262,6 +304,7 @@ public static partial class DependencyFinder
             {
                 var raw = m.Value;
                 if (raw.Contains("://")) continue; // filter URIs
+                if (!IsLikelyPath(raw)) continue; // filter base64 and garbage
 
                 var normalized = raw.Replace('/', '\\');
                 var tag = DetectSourceTag(content, m.Index);
@@ -402,7 +445,7 @@ public static partial class DependencyFinder
 
     // Resolution
 
-    static void ResolveReference(DependencyReference reference, string entryPath, FileIndex index, SoundsetIndex? soundsetIndex)
+    static void ResolveReference(DependencyReference reference, string entryPath, FileIndex index, SoundsetIndex? soundsetIndex, string stringTableLanguage)
     {
         switch (reference.Type)
         {
@@ -417,12 +460,176 @@ public static partial class DependencyFinder
 
             case DependencyRefType.StringKey:
                 var stringTables = index.Find("string_table.txt");
-                var english = stringTables.FirstOrDefault(e =>
-                    e.FullRelativePath.Contains("English", StringComparison.OrdinalIgnoreCase));
-                if (english != null)
-                    reference.Resolved.Add(english);
+                var preferred = stringTables.FirstOrDefault(e =>
+                    e.FullRelativePath.Contains(stringTableLanguage, StringComparison.OrdinalIgnoreCase));
+                if (preferred != null)
+                    reference.Resolved.Add(preferred);
+                else if (stringTables.Count > 0)
+                    reference.Resolved.Add(stringTables[0]); // fallback to first available
                 break;
         }
+    }
+
+    /// <summary>
+    /// Rejects matches that look like base64-encoded data or other garbage rather than real file paths.
+    /// </summary>
+    static bool IsLikelyPath(string match)
+    {
+        // Too short to be a real path (e.g. "yi\M", "1\9")
+        if (match.Length < 5)
+            return false;
+
+        // Trailing dot without extension (sentence fragments like "attack\explore plans to analyze.")
+        if (match[^1] == '.')
+            return false;
+
+        // Paths with spaces are almost certainly sentence fragments, not real game paths
+        if (match.Contains(' '))
+            return false;
+
+        // Base64-specific characters never appear in game file paths
+        if (match.Contains('+') || match.Contains('='))
+            return false;
+
+        // Exceeds MAX_PATH — no real game path is this long
+        if (match.Length > 260)
+            return false;
+
+        // Real game paths have meaningful segment names.
+        // Require at least one segment >= 3 chars to reject binary garbage.
+        int separatorCount = 0;
+        int segmentLength = 0;
+        bool hasLongSegment = false;
+        foreach (var c in match)
+        {
+            if (c is '/' or '\\')
+            {
+                if (segmentLength >= 3) hasLongSegment = true;
+                segmentLength = 0;
+                if (++separatorCount > 15)
+                    return false;
+            }
+            else
+            {
+                segmentLength++;
+            }
+        }
+        // Check the last segment too
+        if (segmentLength >= 3) hasLongSegment = true;
+
+        return hasLongSegment;
+    }
+
+    /// <summary>
+    /// Builds dependencies for a TMM model file: companion .tmm.data and .material files.
+    /// </summary>
+    public static DependencyResult FindDependenciesForTmm(string entryPath, FileIndex? index = null)
+    {
+        var refs = new List<DependencyReference>();
+        var tmmFileName = Path.GetFileName(entryPath);
+
+        // Companion geometry data file: {name}.tmm.data
+        var dataFileName = tmmFileName + ".data";
+        var dataRef = new DependencyReference
+        {
+            RawValue = dataFileName,
+            Type = DependencyRefType.FilePath,
+            SourceTag = "geometry",
+        };
+        if (index != null)
+            dataRef.Resolved.AddRange(index.Find(dataFileName));
+        refs.Add(dataRef);
+
+        // Companion material file: {stem}.material.XMB or {stem}.material
+        // Note: the .tmm extension is stripped — "armory_a_age2.tmm" → "armory_a_age2.material.XMB"
+        var tmmStem = Path.GetFileNameWithoutExtension(tmmFileName);
+        var matFileName = tmmStem + ".material";
+        var matRef = new DependencyReference
+        {
+            RawValue = matFileName,
+            Type = DependencyRefType.FilePath,
+            SourceTag = "material",
+        };
+        if (index != null)
+        {
+            var matEntries = index.Find(matFileName + ".XMB");
+            if (matEntries.Count == 0)
+                matEntries = index.Find(matFileName);
+            matRef.Resolved.AddRange(matEntries);
+        }
+        refs.Add(matRef);
+
+        return new DependencyResult
+        {
+            EntryPath = entryPath,
+            Groups = [new DependencyGroup { References = refs }],
+        };
+    }
+
+    /// <summary>
+    /// Unified entry point: determines file type, reads/decompresses data, and returns dependencies.
+    /// Handles .tmm (companion files), .bank (redirects to soundset), and text-based files (XML/JSON/etc).
+    /// </summary>
+    /// <param name="entryPath">Full relative path of the file being analyzed.</param>
+    /// <param name="fileData">Raw (possibly compressed) file data.</param>
+    /// <param name="index">File index for resolving references.</param>
+    /// <param name="soundsetIndex">Soundset index for resolving soundset names.</param>
+    /// <param name="stringTableLanguage">Preferred language for string table resolution.</param>
+    /// <param name="readFileAsync">Delegate to read a file from a FileIndexEntry (for bank→soundset redirect). Caller must dispose the returned buffer.</param>
+    /// <param name="filterEntityName">When set, only return the group matching this entity name.</param>
+    public static async ValueTask<DependencyResult> FindDependenciesForFileAsync(
+        string entryPath,
+        PooledBuffer fileData,
+        FileIndex? index,
+        SoundsetIndex? soundsetIndex = null,
+        string? stringTableLanguage = null,
+        Func<FileIndexEntry, ValueTask<PooledBuffer?>>? readFileAsync = null,
+        string? filterEntityName = null)
+    {
+        var ext = Path.GetExtension(entryPath);
+
+        // TMM: companion files only
+        if (ext.Equals(".tmm", StringComparison.OrdinalIgnoreCase))
+            return FindDependenciesForTmm(entryPath, index);
+
+        // Bank: redirect to associated soundset file
+        if (ext.Equals(".bank", StringComparison.OrdinalIgnoreCase))
+            return await FindDependenciesForBankAsync(entryPath, index, soundsetIndex, stringTableLanguage, readFileAsync);
+
+        // Text-based: decompress and parse
+        using var decompressed = BarCompression.EnsureDecompressedPooled(fileData, out _);
+        var content = ConversionHelper.GetTextContent(decompressed.Span, entryPath);
+        return FindDependencies(content, entryPath, index, soundsetIndex, stringTableLanguage, filterEntityName);
+    }
+
+    /// <summary>
+    /// Handles .bank files by finding and reading the associated soundset file.
+    /// E.g. "greek.bank" → reads "soundsets_greek.soundset.XMB" and parses its dependencies.
+    /// </summary>
+    static async ValueTask<DependencyResult> FindDependenciesForBankAsync(
+        string entryPath,
+        FileIndex? index,
+        SoundsetIndex? soundsetIndex,
+        string? stringTableLanguage,
+        Func<FileIndexEntry, ValueTask<PooledBuffer?>>? readFileAsync)
+    {
+        if (index == null || readFileAsync == null)
+            return new DependencyResult { EntryPath = entryPath, Groups = [] };
+
+        var bankName = Path.GetFileNameWithoutExtension(entryPath);
+        var soundsetFileName = $"soundsets_{bankName}.soundset.XMB";
+
+        var soundsetEntries = index.Find(soundsetFileName);
+        if (soundsetEntries.Count == 0)
+            return new DependencyResult { EntryPath = entryPath, Groups = [] };
+
+        using var data = await readFileAsync(soundsetEntries[0]);
+        if (data == null)
+            return new DependencyResult { EntryPath = entryPath, Groups = [] };
+
+        using var decompressed = BarCompression.EnsureDecompressedPooled(data, out _);
+        var content = ConversionHelper.GetTextContent(decompressed.Span, soundsetFileName);
+        return FindDependencies(content, soundsetFileName, index, soundsetIndex, stringTableLanguage);
     }
 
     static void ResolveSoundsetName(DependencyReference reference, SoundsetIndex soundsetIndex)

@@ -19,6 +19,7 @@ public class Configuration
     public bool? ExportTmmToGltf { get; set; }
     public string? EditorCommand { get; set; }
     public bool? ExportOpenInEditor { get; set; }
+    public string? StringTableLanguage { get; set; }
     public List<QuickAccessEntry>? QuickAccessEntries { get; set; }
 }
 

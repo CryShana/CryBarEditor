@@ -275,6 +275,94 @@ public class DependencyFinderTests
     }
 
     [Fact]
+    public void Tmm_MaterialResolvesToMaterialXmb_NotTmmFile()
+    {
+        var index = new FileIndex();
+        index.Add(MakeEntry(@"intermediate\modelcache\greek\armory_a_age2.tmm"));
+        index.Add(MakeEntry(@"intermediate\modelcache\greek\armory_a_age2.tmm.data"));
+        index.Add(MakeEntry(@"game\art\greek\armory_a_age2.material.XMB"));
+        index.Add(MakeEntry(@"game\art\greek\armory_a_age2.fbximport"));
+
+        var result = DependencyFinder.FindDependenciesForTmm(
+            @"intermediate\modelcache\greek\armory_a_age2.tmm", index);
+
+        Assert.Equal(2, result.Groups[0].References.Count);
+
+        var dataRef = result.Groups[0].References.First(r => r.SourceTag == "geometry");
+        Assert.Single(dataRef.Resolved);
+        Assert.Equal("armory_a_age2.tmm.data", dataRef.Resolved[0].FileName);
+
+        // Material: .tmm is stripped → searches for armory_a_age2.material.XMB
+        var matRef = result.Groups[0].References.First(r => r.SourceTag == "material");
+        Assert.Single(matRef.Resolved);
+        Assert.Equal("armory_a_age2.material.XMB", matRef.Resolved[0].FileName);
+    }
+
+    [Fact]
+    public void Tmm_MaterialResolvesEmpty_WhenNoMaterialFileExists()
+    {
+        var index = new FileIndex();
+        index.Add(MakeEntry(@"intermediate\modelcache\greek\armory_a_age2.tmm"));
+        index.Add(MakeEntry(@"game\art\greek\armory_a_age2.fbximport"));
+
+        var result = DependencyFinder.FindDependenciesForTmm(
+            @"intermediate\modelcache\greek\armory_a_age2.tmm", index);
+
+        var matRef = result.Groups[0].References.First(r => r.SourceTag == "material");
+        Assert.Empty(matRef.Resolved); // should NOT resolve to .tmm or .fbximport
+    }
+
+    [Fact]
+    public void ChildNameElement_GroupsByNameChildInsteadOfAttribute()
+    {
+        var content = """
+            <ages>
+                <age>
+                    <name>ArchaicAge</name>
+                    <displaynameid>STR_AGE_ARCHAIC</displaynameid>
+                    <icon>resources\in_game\score_age_1.png</icon>
+                    <smallicon>resources\postgame\timeline\Icon_Age1Small.png</smallicon>
+                </age>
+                <age>
+                    <name>ClassicalAge</name>
+                    <displaynameid>STR_AGE_CLASSICAL</displaynameid>
+                    <icon>resources\in_game\score_age_2.png</icon>
+                    <smallicon>resources\postgame\timeline\Icon_Age2Small.png</smallicon>
+                </age>
+            </ages>
+            """;
+
+        var result = DependencyFinder.FindDependencies(content, "game\\data\\ages.xml");
+        Assert.Equal(2, result.Groups.Count);
+        Assert.Equal("ArchaicAge", result.Groups[0].EntityName);
+        Assert.Equal("ClassicalAge", result.Groups[1].EntityName);
+    }
+
+    [Fact]
+    public void ChildNameElement_FavorStashItems_GroupsByNameChild()
+    {
+        var content = """
+            <favorstashitems>
+                <favorstashitem>
+                    <name>ClaimFavor</name>
+                    <titleid>STR_FAVOR_BONUS_CLAIM_FAVOR</titleid>
+                    <icon>resources\ui\favor_icon.png</icon>
+                </favorstashitem>
+                <favorstashitem>
+                    <name>SpendFavor</name>
+                    <titleid>STR_FAVOR_BONUS_SPEND_FAVOR</titleid>
+                    <icon>resources\ui\favor_spend.png</icon>
+                </favorstashitem>
+            </favorstashitems>
+            """;
+
+        var result = DependencyFinder.FindDependencies(content, "game\\data\\favorstash.xml");
+        Assert.Equal(2, result.Groups.Count);
+        Assert.Equal("ClaimFavor", result.Groups[0].EntityName);
+        Assert.Equal("SpendFavor", result.Groups[1].EntityName);
+    }
+
+    [Fact]
     public void SelfExclusion_DoesNotMatchOwnPath()
     {
         var index = new FileIndex();

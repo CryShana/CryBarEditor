@@ -123,18 +123,7 @@ public partial class MainWindow
         if (data == null) return (null, null);
 
         using var decompressed = BarCompression.EnsureDecompressedPooled(data, out _);
-        string? xmlText;
-
-        if (fileName.EndsWith(".XMB", StringComparison.OrdinalIgnoreCase))
-        {
-            xmlText = ConversionHelper.ConvertXmbToXmlText(decompressed.Span);
-        }
-        else
-        {
-            xmlText = Encoding.UTF8.GetString(decompressed.Span);
-        }
-
-        if (xmlText == null) return (null, null);
+        var xmlText = ConversionHelper.GetTextContent(decompressed.Span, fileName);
 
         try
         {

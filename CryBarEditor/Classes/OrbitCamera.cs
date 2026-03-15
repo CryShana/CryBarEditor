@@ -51,7 +51,6 @@ public class OrbitCamera
     {
         Azimuth += dAzimuth;
         Elevation = Math.Clamp(Elevation + dElevation, -89f, 89f);
-        Console.WriteLine("Current Azimuth: " + Azimuth + ", Elevation: " + Elevation);
     }
 
     public void Zoom(float delta)

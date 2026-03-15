@@ -102,11 +102,16 @@ public class FileIndex
 
         bool hasPath = norm.Contains('/');
 
-        // Precompute extension variants for the query filename
-        string? strippedFileName = null;
-        var lastDot = fileName.LastIndexOf('.');
-        if (lastDot > 0)
-            strippedFileName = fileName[..lastDot];
+        // Precompute: if query ends with a known extension, compute the stripped version
+        string? queryWithoutKnownExt = null;
+        foreach (var ext in KnownExtensions)
+        {
+            if (fileName.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
+            {
+                queryWithoutKnownExt = fileName[..^ext.Length];
+                break;
+            }
+        }
 
         // Single pass: classify each candidate (normalize once per candidate)
         List<FileIndexEntry>? exactPath = null;
@@ -130,13 +135,6 @@ public class FileIndex
                 continue;
             }
 
-            // Extension-flexible: query's filename without extension matches entry filename
-            if (strippedFileName != null && entryName.Equals(strippedFileName, StringComparison.OrdinalIgnoreCase))
-            {
-                (extMatch ??= []).Add(entry);
-                continue;
-            }
-
             // Extension-flexible: entry filename matches query + known extension
             foreach (var ext in KnownExtensions)
             {
@@ -146,6 +144,12 @@ public class FileIndex
                     break;
                 }
             }
+
+            // Extension-flexible: query has known extension, entry matches without it
+            if (queryWithoutKnownExt != null && entryName.Equals(queryWithoutKnownExt, StringComparison.OrdinalIgnoreCase))
+            {
+                (extMatch ??= []).Add(entry);
+            }
         }
 
         if (exactPath is { Count: > 0 }) return exactPath;
@@ -154,8 +158,16 @@ public class FileIndex
         var nameResult = exactName ?? extMatch;
         if (nameResult == null)
         {
-            // Stem matched but no filename-level match — return all (extensionless query fallback)
-            nameResult = candidates;
+            // Stem matched but no filename-level match — only return candidates whose filename
+            // starts with the query filename (handles extensionless queries like "proto" → "proto.xml.XMB")
+            var prefixMatches = new List<FileIndexEntry>();
+            foreach (var entry in candidates)
+            {
+                var entryName = Normalize(entry.FileName);
+                if (entryName.StartsWith(fileName + ".", StringComparison.OrdinalIgnoreCase))
+                    prefixMatches.Add(entry);
+            }
+            nameResult = prefixMatches.Count > 0 ? prefixMatches : [];
         }
 
         // Path suffix filter when query has directory components
