@@ -63,10 +63,14 @@ public partial class MainWindow
             }
 
             await EnsureSoundsetIndexAsync();
-            var result = await DependencyFinder.FindDependenciesForFileAsync(
-                resolution.SourceFile, data, _fileIndex, _soundsetIndex,
-                _stringTableLanguage, ReadFromIndexEntryPooledAsync,
-                filterEntityName: resolution.SoundsetName);
+            var fileIndex = _fileIndex;
+            var soundsetIndex = _soundsetIndex;
+            var lang = _stringTableLanguage;
+            var filterName = resolution.SoundsetName;
+            var result = await Task.Run(() => DependencyFinder.FindDependenciesForFileAsync(
+                resolution.SourceFile, data, fileIndex, soundsetIndex,
+                lang, ReadFromIndexEntryPooledAsync,
+                filterEntityName: filterName).AsTask());
             ShowDependenciesForResult(result, displayName: resolution.SoundsetName);
         }
         catch (Exception ex)
@@ -88,9 +92,12 @@ public partial class MainWindow
             using var rawData = await entry.ReadDataRawPooledAsync(_barStream);
 
             await EnsureSoundsetIndexAsync();
-            var result = await DependencyFinder.FindDependenciesForFileAsync(
-                entryPath, rawData, _fileIndex, _soundsetIndex,
-                _stringTableLanguage, ReadFromIndexEntryPooledAsync);
+            var fileIndex = _fileIndex;
+            var soundsetIndex = _soundsetIndex;
+            var lang = _stringTableLanguage;
+            var result = await Task.Run(() => DependencyFinder.FindDependenciesForFileAsync(
+                entryPath, rawData, fileIndex, soundsetIndex,
+                lang, ReadFromIndexEntryPooledAsync).AsTask());
             window.LoadDependenciesFromResult(result, fileIndex: _fileIndex);
         }
         catch (Exception ex)
@@ -117,9 +124,12 @@ public partial class MainWindow
             using var rawData = await PooledBuffer.FromFile(path);
 
             await EnsureSoundsetIndexAsync();
-            var result = await DependencyFinder.FindDependenciesForFileAsync(
-                entryPath, rawData, _fileIndex, _soundsetIndex,
-                _stringTableLanguage, ReadFromIndexEntryPooledAsync);
+            var fileIndex = _fileIndex;
+            var soundsetIndex = _soundsetIndex;
+            var lang = _stringTableLanguage;
+            var result = await Task.Run(() => DependencyFinder.FindDependenciesForFileAsync(
+                entryPath, rawData, fileIndex, soundsetIndex,
+                lang, ReadFromIndexEntryPooledAsync).AsTask());
             window.LoadDependenciesFromResult(result, fileIndex: _fileIndex);
         }
         catch (Exception ex)
