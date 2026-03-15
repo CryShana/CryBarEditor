@@ -23,13 +23,19 @@
 	<DockPanel>
 		<!-- Toolbar -->
 		<Border DockPanel.Dock="Top" Background="#1a1a1a" Padding="6,4">
-			<StackPanel Orientation="Horizontal" Spacing="8">
-				<Button Content="Reset View" Click="ResetView_Click"
-						Background="#2a2a2a" Foreground="#d9d9d9"
-						BorderThickness="0" Padding="8,4" Cursor="Hand" />
-				<TextBlock VerticalAlignment="Center" Foreground="#808080"
-						   Text="{Binding StatusText}" />
-			</StackPanel>
+			<DockPanel>
+				<CheckBox DockPanel.Dock="Right" Content="Link duplicate nodes"
+						  IsChecked="{Binding LinkDuplicates}"
+						  Foreground="#808080" FontSize="11"
+						  VerticalAlignment="Center" Margin="8,0,4,0" />
+				<StackPanel Orientation="Horizontal" Spacing="8">
+					<Button Content="Reset View" Click="ResetView_Click"
+							Background="#2a2a2a" Foreground="#d9d9d9"
+							BorderThickness="0" Padding="8,4" Cursor="Hand" />
+					<TextBlock VerticalAlignment="Center" Foreground="#808080"
+							   Text="{Binding StatusText}" />
+				</StackPanel>
+			</DockPanel>
 		</Border>
 
 		<!-- Graph canvas area -->

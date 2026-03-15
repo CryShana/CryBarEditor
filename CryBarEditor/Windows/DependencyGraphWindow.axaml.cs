@@ -68,6 +68,12 @@ public partial class DependencyGraphWindow : SimpleWindow
     readonly HashSet<string> _visitedPaths = new();
     // Tracks all nodes+edges spawned by an expansion (for collapse)
     readonly Dictionary<Border, List<Control>> _expansionChildren = new();
+    // Tracks first node per resolved FullRelativePath for duplicate detection
+    readonly Dictionary<string, Border> _resolvedPathNodes = new();
+    // Dashed duplicate links (throbbing animation)
+    readonly List<Line> _duplicateLinks = new();
+    DispatcherTimer? _duplicatePulseTimer;
+    double _duplicatePulsePhase;
 
     // Animation state
     bool _isAnimating;
@@ -115,6 +121,20 @@ public partial class DependencyGraphWindow : SimpleWindow
 
     int _baseRefCount;
     int _expandedRefCount;
+
+    bool _linkDuplicates = true;
+
+    public bool LinkDuplicates
+    {
+        get => _linkDuplicates;
+        set
+        {
+            if (_linkDuplicates == value) return;
+            _linkDuplicates = value;
+            OnSelfChanged();
+            SetDuplicateLinksVisible(value);
+        }
+    }
 
     public string WindowTitle { get; private set; } = "Dependency Graph";
     public string StatusText { get; private set; } = "";
@@ -188,6 +208,9 @@ public partial class DependencyGraphWindow : SimpleWindow
         _selectedNodes.Clear();
         _multiDragStartPositions.Clear();
         _activeNodePreviews.Clear();
+        _resolvedPathNodes.Clear();
+        StopDuplicatePulse();
+        _duplicateLinks.Clear();
 
         WindowTitle = $"Dependency Graph \u2014 {_group.DisplayName}";
         OnPropertyChanged(nameof(WindowTitle));
@@ -464,10 +487,17 @@ public partial class DependencyGraphWindow : SimpleWindow
     {
         var stack = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 4 };
 
-        // Type icon
+        // For single-resolved matches, use the match file style for icon and color
+        var iconKind = GetRefTypeIcon(reference.Type);
+        if (reference.Resolved.Count == 1 && reference.Type != DependencyRefType.StringKey)
+        {
+            iconKind = GetMatchFileStyle(reference.Resolved[0].FileName).icon;
+            color = GetEffectiveRefColor(reference);
+        }
+
         stack.Children.Add(new MaterialIcon
         {
-            Kind = GetRefTypeIcon(reference.Type),
+            Kind = iconKind,
             Width = 14, Height = 14,
             Foreground = new SolidColorBrush(color)
         });
@@ -486,7 +516,7 @@ public partial class DependencyGraphWindow : SimpleWindow
             FontSize = 11
         });
 
-        // Single resolved match: show resolved filename inline (merged node)
+        // Single resolved match: show resolved filename inline (no duplicate icon)
         if (reference.Resolved.Count == 1 && reference.Type != DependencyRefType.StringKey)
         {
             var resolved = reference.Resolved[0];
@@ -494,14 +524,7 @@ public partial class DependencyGraphWindow : SimpleWindow
             // Only show if different from raw value
             if (!resolvedName.Equals(IOPath.GetFileName(reference.RawValue), StringComparison.OrdinalIgnoreCase))
             {
-                var (matchColor, matchIcon) = GetMatchFileStyle(resolvedName);
-                var resolvedLine = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 3 };
-                resolvedLine.Children.Add(new MaterialIcon
-                {
-                    Kind = matchIcon, Width = 10, Height = 10,
-                    Foreground = new SolidColorBrush(matchColor)
-                });
-                resolvedLine.Children.Add(new TextBlock
+                contentStack.Children.Add(new TextBlock
                 {
                     Text = resolvedName,
                     Foreground = new SolidColorBrush(GenericColor),
@@ -509,10 +532,7 @@ public partial class DependencyGraphWindow : SimpleWindow
                     MaxWidth = 180,
                     TextTrimming = TextTrimming.CharacterEllipsis
                 });
-                contentStack.Children.Add(resolvedLine);
             }
-
-            // Image/TMM preview is lazy-loaded via eye button click only
         }
 
         // StringKey: show translated text
@@ -752,6 +772,84 @@ public partial class DependencyGraphWindow : SimpleWindow
         }
     }
 
+    /// <summary>
+    /// Gets the resolved FullRelativePath for a node, if it points to a concrete file.
+    /// Reference nodes with 1 resolved match and match nodes both have a path.
+    /// </summary>
+    static string? GetNodeResolvedPath(Border node)
+    {
+        if (node.Tag is FileIndexEntry fie)
+            return fie.FullRelativePath;
+        if (node.Tag is DependencyReference r && r.Resolved.Count == 1)
+            return r.Resolved[0].FullRelativePath;
+        return null;
+    }
+
+    void CreateDuplicateLink(Border nodeA, Border nodeB)
+    {
+        if (!_nodePositions.TryGetValue(nodeA, out var posA)) return;
+        if (!_nodePositions.TryGetValue(nodeB, out var posB)) return;
+
+        var line = new Line
+        {
+            StartPoint = new Point(posA.X, posA.Y),
+            EndPoint = new Point(posB.X, posB.Y),
+            Stroke = new SolidColorBrush(SelectionColor, 0.5),
+            StrokeThickness = 1.5,
+            StrokeDashArray = [4, 3],
+            IsVisible = _linkDuplicates
+        };
+        GraphCanvas.Children.Insert(0, line);
+        _edgeElements.Add(line);
+        _duplicateLinks.Add(line);
+
+        // Connect edges so dragging updates them
+        ConnectEdge(nodeA, line);
+        ConnectEdge(nodeB, line);
+
+        // Start pulse animation if not already running and links are visible
+        if (_linkDuplicates)
+            EnsureDuplicatePulseRunning();
+    }
+
+    void DuplicatePulse_Tick(object? sender, EventArgs e)
+    {
+        _duplicatePulsePhase += 0.08;
+        if (_duplicatePulsePhase > 2 * Math.PI) _duplicatePulsePhase -= 2 * Math.PI;
+
+        // Gentle opacity throb between 0.2 and 0.6
+        double opacity = 0.4 + 0.2 * Math.Sin(_duplicatePulsePhase);
+        var brush = new SolidColorBrush(SelectionColor, opacity);
+        foreach (var line in _duplicateLinks)
+            line.Stroke = brush;
+    }
+
+    void EnsureDuplicatePulseRunning()
+    {
+        if (_duplicatePulseTimer != null) return;
+        _duplicatePulsePhase = 0;
+        _duplicatePulseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
+        _duplicatePulseTimer.Tick += DuplicatePulse_Tick;
+        _duplicatePulseTimer.Start();
+    }
+
+    void StopDuplicatePulse()
+    {
+        _duplicatePulseTimer?.Stop();
+        _duplicatePulseTimer = null;
+    }
+
+    void SetDuplicateLinksVisible(bool visible)
+    {
+        foreach (var line in _duplicateLinks)
+            line.IsVisible = visible;
+
+        if (visible && _duplicateLinks.Count > 0)
+            EnsureDuplicatePulseRunning();
+        else
+            StopDuplicatePulse();
+    }
+
     #endregion
 
     #region Layout
@@ -767,6 +865,16 @@ public partial class DependencyGraphWindow : SimpleWindow
         _nodeElements.Add(node);
         _nodeElementsSet.Add(node);
         _nodePositions[node] = (x, y);
+
+        // Duplicate detection: link nodes that resolve to the same file
+        var resolvedPath = GetNodeResolvedPath(node);
+        if (resolvedPath != null)
+        {
+            if (_resolvedPathNodes.TryGetValue(resolvedPath, out var existingNode))
+                CreateDuplicateLink(existingNode, node);
+            else
+                _resolvedPathNodes[resolvedPath] = node;
+        }
     }
 
     /// <summary>
@@ -1293,7 +1401,7 @@ public partial class DependencyGraphWindow : SimpleWindow
     {
         if (node.Tag is DependencyReference r)
         {
-            var color = GetRefTypeColor(r.Type);
+            var color = GetEffectiveRefColor(r);
             node.BorderBrush = new LinearGradientBrush
             {
                 StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
@@ -1831,14 +1939,16 @@ public partial class DependencyGraphWindow : SimpleWindow
         List<(DependencyReference Ref, Border Node, Color Color, Size Size)> nodes,
         List<Control> spawnedControls, HashSet<Border> newNodeSet)
     {
-        // Compute per-node effective widths accounting for subtree fan-out
+        // Pre-compute visible matches and effective widths accounting for subtree fan-out
+        var visibleMatchesCache = new List<FileIndexEntry>[nodes.Count];
         var effectiveWidths = new double[nodes.Count];
         for (int i = 0; i < nodes.Count; i++)
         {
+            var matches = GetVisibleMatches(nodes[i].Ref);
+            visibleMatchesCache[i] = matches;
             double baseWidth = nodes[i].Size.Width + 30;
-            var matchCount = GetVisibleMatches(nodes[i].Ref).Count;
-            if (matchCount > 0)
-                baseWidth += matchCount * 60; // extra angular space for sub-node fan
+            if (matches.Count > 0)
+                baseWidth += matches.Count * 60; // extra angular space for sub-node fan
             effectiveWidths[i] = baseWidth;
         }
 
@@ -1878,7 +1988,7 @@ public partial class DependencyGraphWindow : SimpleWindow
             ConnectEdge(info.Node, edge);
             spawnedControls.Add(edge);
 
-            var visibleMatches = GetVisibleMatches(info.Ref);
+            var visibleMatches = visibleMatchesCache[i];
             if (visibleMatches.Count > 0)
                 LayoutMatchSubNodes(info.Node, visibleMatches, sx, sy, angle, spawnedControls, newNodeSet);
         }
@@ -1915,6 +2025,24 @@ public partial class DependencyGraphWindow : SimpleWindow
                 _animStartPositions.Remove(node);
                 _animTargetPositions.Remove(node);
                 _activeNodePreviews.Remove(node);
+
+                // Remove from resolved path tracking (allow re-registration)
+                var resolvedPath = GetNodeResolvedPath(node);
+                if (resolvedPath != null && _resolvedPathNodes.TryGetValue(resolvedPath, out var tracked) && tracked == node)
+                    _resolvedPathNodes.Remove(resolvedPath);
+
+                // Remove duplicate links involving this node
+                if (_nodeEdges.TryGetValue(node, out var nodeEdgesForDup))
+                {
+                    _duplicateLinks.RemoveAll(link =>
+                    {
+                        if (!nodeEdgesForDup.Contains(link)) return false;
+                        GraphCanvas.Children.Remove(link);
+                        _edgeElements.Remove(link);
+                        return true;
+                    });
+                }
+
                 if (_nodeEdges.Remove(node, out var nodeEdgeList))
                 {
                     // Clean edge references from connected nodes
@@ -1928,11 +2056,15 @@ public partial class DependencyGraphWindow : SimpleWindow
             else if (child is Line line)
             {
                 _edgeElements.Remove(line);
+                _duplicateLinks.Remove(line);
                 // Remove from parent's edge list
                 if (_nodeEdges.TryGetValue(parentNode, out var parentEdges))
                     parentEdges.Remove(line);
             }
         }
+
+        if (_duplicateLinks.Count == 0)
+            StopDuplicatePulse();
     }
 
     #endregion
@@ -2192,6 +2324,17 @@ public partial class DependencyGraphWindow : SimpleWindow
         DependencyRefType.SoundsetName => SoundsetColor,
         _ => FilePathColor
     };
+
+    /// <summary>
+    /// Returns the effective display color for a reference node, accounting for
+    /// single-resolved matches that should use the match file style color.
+    /// </summary>
+    static Color GetEffectiveRefColor(DependencyReference r)
+    {
+        if (r.Resolved.Count == 1 && r.Type != DependencyRefType.StringKey)
+            return GetMatchFileStyle(r.Resolved[0].FileName).color;
+        return GetRefTypeColor(r.Type);
+    }
 
     static MaterialIconKind GetRefTypeIcon(DependencyRefType type) => type switch
     {
