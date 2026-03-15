@@ -636,6 +636,10 @@ public partial class DependencyGraphWindow : SimpleWindow
         }
         else if (props.IsLeftButtonPressed && !_isDraggingNode)
         {
+            // Only start selection if clicking on empty canvas, not on a node
+            if (e.Source is Control source && IsInsideGraphNode(source))
+                return;
+
             // Left-click on empty canvas area starts rectangular selection
             _isRectSelecting = true;
             _rectSelectStart = e.GetPosition(GraphCanvas);
@@ -960,6 +964,18 @@ public partial class DependencyGraphWindow : SimpleWindow
         while (control != null)
         {
             if (control is Button) return true;
+            control = control.Parent as Control;
+        }
+        return false;
+    }
+
+    bool IsInsideGraphNode(Control? control)
+    {
+        while (control != null)
+        {
+            if (control is Border b && _nodeElements.Contains(b))
+                return true;
+
             control = control.Parent as Control;
         }
         return false;
