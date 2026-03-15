@@ -155,7 +155,7 @@ public partial class DependencyGraphWindow : SimpleWindow
             _mainWindow = owner
         };
         _instance.Closed += (_, _) => _instance = null;
-        _instance.Show(ownerWindow);
+        _instance.Show();
         _instance.BuildGraph();
     }
 
@@ -582,7 +582,7 @@ public partial class DependencyGraphWindow : SimpleWindow
 
         var border = new Border
         {
-            Background = new SolidColorBrush(Color.Parse("#242424")),
+            Background = new SolidColorBrush(Color.Parse("#141414")),
             BorderBrush = new SolidColorBrush(Color.Parse("#333333")),
             BorderThickness = new Thickness(2, 1, 1, 1),
             CornerRadius = new CornerRadius(4),
@@ -661,7 +661,7 @@ public partial class DependencyGraphWindow : SimpleWindow
 
         var border = new Border
         {
-            Background = new SolidColorBrush(Color.Parse("#222222")),
+            Background = new SolidColorBrush(Color.Parse("#141414")),
             BorderBrush = new SolidColorBrush(color, 0.4),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(3),
@@ -771,58 +771,154 @@ public partial class DependencyGraphWindow : SimpleWindow
     }
 
     /// <summary>
+    /// Builds an AABB bounding box for a node at a given center position.
+    /// </summary>
+    static (double Left, double Top, double Right, double Bottom) GetNodeBox(Border node, double cx, double cy, double padding)
+    {
+        var size = node.DesiredSize;
+        return (
+            cx - size.Width / 2 - padding / 2,
+            cy - size.Height / 2 - padding / 2,
+            cx + size.Width / 2 + padding / 2,
+            cy + size.Height / 2 + padding / 2
+        );
+    }
+
+    /// <summary>
+    /// Checks AABB overlap between two boxes.
+    /// </summary>
+    static bool BoxesOverlap(
+        (double Left, double Top, double Right, double Bottom) a,
+        (double Left, double Top, double Right, double Bottom) b)
+    {
+        return a.Left < b.Right && a.Right > b.Left && a.Top < b.Bottom && a.Bottom > b.Top;
+    }
+
+    /// <summary>
+    /// Resolves overlaps among a set of nodes by iteratively pushing overlapping pairs apart.
+    /// Both nodes in each overlapping pair are moved (each by half the required distance).
+    /// Runs multiple passes to handle cascading overlaps.
+    /// Returns target positions for all nodes that moved.
+    /// </summary>
+    Dictionary<Border, (double X, double Y)> ResolveInternalOverlaps(HashSet<Border> nodeSet, double padding = 20, int maxPasses = 4)
+    {
+        // Work with a mutable copy of current positions
+        var positions = new Dictionary<Border, (double X, double Y)>();
+        foreach (var node in nodeSet)
+        {
+            if (_nodePositions.TryGetValue(node, out var pos))
+                positions[node] = pos;
+        }
+
+        var nodeList = positions.Keys.ToList();
+        bool anyMoved = false;
+
+        for (int pass = 0; pass < maxPasses; pass++)
+        {
+            bool movedThisPass = false;
+
+            for (int i = 0; i < nodeList.Count; i++)
+            {
+                var nodeA = nodeList[i];
+                var posA = positions[nodeA];
+                var boxA = GetNodeBox(nodeA, posA.X, posA.Y, padding);
+
+                for (int j = i + 1; j < nodeList.Count; j++)
+                {
+                    var nodeB = nodeList[j];
+                    var posB = positions[nodeB];
+                    var boxB = GetNodeBox(nodeB, posB.X, posB.Y, padding);
+
+                    if (!BoxesOverlap(boxA, boxB)) continue;
+
+                    // Push apart: each node moves half the overlap distance
+                    var dx = posB.X - posA.X;
+                    var dy = posB.Y - posA.Y;
+                    var dist = Math.Sqrt(dx * dx + dy * dy);
+
+                    if (dist < 1) { dx = 1; dy = 0; dist = 1; }
+
+                    var overlapX = Math.Min(boxA.Right - boxB.Left, boxB.Right - boxA.Left);
+                    var overlapY = Math.Min(boxA.Bottom - boxB.Top, boxB.Bottom - boxA.Top);
+                    var pushDist = (Math.Min(overlapX, overlapY) + padding) / 2;
+
+                    var pushX = (dx / dist) * pushDist;
+                    var pushY = (dy / dist) * pushDist;
+
+                    positions[nodeA] = (posA.X - pushX, posA.Y - pushY);
+                    positions[nodeB] = (posB.X + pushX, posB.Y + pushY);
+
+                    // Refresh boxA for subsequent comparisons in this pass
+                    posA = positions[nodeA];
+                    boxA = GetNodeBox(nodeA, posA.X, posA.Y, padding);
+
+                    movedThisPass = true;
+                }
+            }
+
+            if (!movedThisPass) break;
+            anyMoved = true;
+        }
+
+        if (!anyMoved) return new Dictionary<Border, (double X, double Y)>();
+
+        // Return only nodes that actually moved
+        var result = new Dictionary<Border, (double X, double Y)>();
+        foreach (var (node, newPos) in positions)
+        {
+            if (!_nodePositions.TryGetValue(node, out var origPos)) continue;
+            if (Math.Abs(newPos.X - origPos.X) > 0.5 || Math.Abs(newPos.Y - origPos.Y) > 0.5)
+                result[node] = newPos;
+        }
+        return result;
+    }
+
+    /// <summary>
     /// Computes overlap-free positions for newly placed nodes by pushing existing nodes away.
     /// Returns a dictionary of nodes that need to move and their target positions.
     /// </summary>
-    Dictionary<Border, (double X, double Y)> ComputeOverlapDisplacements(HashSet<Border> excludeFromPush, double padding = 20)
+    Dictionary<Border, (double X, double Y)> ComputeOverlapDisplacements(HashSet<Border> newNodes, double padding = 20)
     {
-        var displacements = new Dictionary<Border, (double X, double Y)>();
+        // First: resolve overlaps among the new nodes themselves
+        var displacements = ResolveInternalOverlaps(newNodes, padding);
 
-        // Build bounding boxes for all nodes
+        // Apply internal displacements immediately (so bounding boxes are accurate for external push)
+        foreach (var (node, target) in displacements)
+        {
+            var size = node.DesiredSize;
+            Canvas.SetLeft(node, target.X - size.Width / 2);
+            Canvas.SetTop(node, target.Y - size.Height / 2);
+            UpdateEdgesForNode(node, target.X, target.Y);
+            _nodePositions[node] = target;
+        }
+
+        // Second: push existing nodes away from (now resolved) new nodes
         var boxes = new Dictionary<Border, (double Left, double Top, double Right, double Bottom)>();
         foreach (var node in _nodeElements)
         {
             if (!_nodePositions.TryGetValue(node, out var pos)) continue;
-            var size = node.DesiredSize;
-            boxes[node] = (
-                pos.X - size.Width / 2 - padding / 2,
-                pos.Y - size.Height / 2 - padding / 2,
-                pos.X + size.Width / 2 + padding / 2,
-                pos.Y + size.Height / 2 + padding / 2
-            );
+            boxes[node] = GetNodeBox(node, pos.X, pos.Y, padding);
         }
 
-        // For each excluded (newly placed) node, check overlap with all pushable nodes
-        foreach (var newNode in excludeFromPush)
+        foreach (var newNode in newNodes)
         {
             if (!boxes.TryGetValue(newNode, out var newBox)) continue;
 
             foreach (var existingNode in _nodeElements)
             {
-                if (excludeFromPush.Contains(existingNode)) continue;
+                if (newNodes.Contains(existingNode)) continue;
                 if (!boxes.TryGetValue(existingNode, out var existBox)) continue;
 
-                // Check AABB overlap
-                if (newBox.Left >= existBox.Right || newBox.Right <= existBox.Left ||
-                    newBox.Top >= existBox.Bottom || newBox.Bottom <= existBox.Top)
-                    continue;
+                if (!BoxesOverlap(newBox, existBox)) continue;
 
-                // Compute push direction: from new node center to existing node center
                 if (!_nodePositions.TryGetValue(existingNode, out var existPos)) continue;
                 if (!_nodePositions.TryGetValue(newNode, out var newPos)) continue;
                 var dx = existPos.X - newPos.X;
                 var dy = existPos.Y - newPos.Y;
                 var dist = Math.Sqrt(dx * dx + dy * dy);
 
-                if (dist < 1)
-                {
-                    // Nodes are on top of each other, push in a random-ish direction
-                    dx = 1;
-                    dy = 0;
-                    dist = 1;
-                }
+                if (dist < 1) { dx = 1; dy = 0; dist = 1; }
 
-                // Compute the minimum push distance to resolve overlap
                 var overlapX = Math.Min(newBox.Right - existBox.Left, existBox.Right - newBox.Left);
                 var overlapY = Math.Min(newBox.Bottom - existBox.Top, existBox.Bottom - newBox.Top);
                 var pushDist = Math.Min(overlapX, overlapY) + padding;
@@ -830,13 +926,16 @@ public partial class DependencyGraphWindow : SimpleWindow
                 var pushX = (dx / dist) * pushDist;
                 var pushY = (dy / dist) * pushDist;
 
-                // Accumulate displacements
                 if (displacements.TryGetValue(existingNode, out var existing))
                     displacements[existingNode] = (existing.X + pushX, existing.Y + pushY);
                 else
                     displacements[existingNode] = (existPos.X + pushX, existPos.Y + pushY);
             }
         }
+
+        // Remove new nodes from displacements — they were already snapped in place above
+        foreach (var node in newNodes)
+            displacements.Remove(node);
 
         return displacements;
     }
