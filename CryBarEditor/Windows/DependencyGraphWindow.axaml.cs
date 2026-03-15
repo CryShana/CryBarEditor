@@ -16,6 +16,8 @@ using Material.Icons.Avalonia;
 
 using SixLabors.ImageSharp.PixelFormats;
 
+using Avalonia.Threading;
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -59,12 +61,24 @@ public partial class DependencyGraphWindow : SimpleWindow
 
     // Graph state
     readonly List<Border> _nodeElements = [];
+    readonly HashSet<Border> _nodeElementsSet = new();
     readonly List<Line> _edgeElements = [];
     readonly Dictionary<Border, List<Line>> _nodeEdges = new();
     readonly Dictionary<Border, (double X, double Y)> _nodePositions = new();
     readonly HashSet<string> _visitedPaths = new();
     // Tracks all nodes+edges spawned by an expansion (for collapse)
     readonly Dictionary<Border, List<Control>> _expansionChildren = new();
+
+    // Animation state
+    bool _isAnimating;
+    DispatcherTimer? _animTimer;
+    readonly Dictionary<Border, (double X, double Y)> _animStartPositions = new();
+    readonly Dictionary<Border, (double X, double Y)> _animTargetPositions = new();
+    readonly Dictionary<Border, Size> _animNodeSizes = new();
+    double _animProgress;
+    const double AnimDurationMs = 300;
+    const double AnimIntervalMs = 16; // ~60fps
+    Action? _animCompleteCallback;
 
     // Bitmaps created for previews (disposed on graph rebuild/close)
     readonly List<Bitmap> _previewBitmaps = [];
@@ -93,8 +107,19 @@ public partial class DependencyGraphWindow : SimpleWindow
 
     const double NodeWidth = 220;
 
+    int _baseRefCount;
+    int _expandedRefCount;
+
     public string WindowTitle { get; private set; } = "Dependency Graph";
     public string StatusText { get; private set; } = "";
+
+    void UpdateStatusText()
+    {
+        StatusText = _expandedRefCount > 0
+            ? $"{_baseRefCount} references (+{_expandedRefCount} expanded)"
+            : $"{_baseRefCount} references";
+        OnPropertyChanged(nameof(StatusText));
+    }
 
     CancellationTokenSource? _thumbnailCts;
 
@@ -138,6 +163,8 @@ public partial class DependencyGraphWindow : SimpleWindow
     {
         if (_group == null) return;
 
+        SnapAnimationToEnd();
+
         _thumbnailCts?.Cancel();
         _thumbnailCts = new CancellationTokenSource();
 
@@ -146,6 +173,7 @@ public partial class DependencyGraphWindow : SimpleWindow
 
         GraphCanvas.Children.Clear();
         _nodeElements.Clear();
+        _nodeElementsSet.Clear();
         _edgeElements.Clear();
         _nodeEdges.Clear();
         _nodePositions.Clear();
@@ -159,8 +187,9 @@ public partial class DependencyGraphWindow : SimpleWindow
         Title = WindowTitle;
 
         var refs = _group.References;
-        StatusText = $"{refs.Count} references";
-        OnPropertyChanged(nameof(StatusText));
+        _baseRefCount = refs.Count;
+        _expandedRefCount = 0;
+        UpdateStatusText();
 
         var centerX = 0.0;
         var centerY = 0.0;
@@ -180,17 +209,52 @@ public partial class DependencyGraphWindow : SimpleWindow
             if (matches.Count > 0) hasSubNodes = true;
         }
 
-        // Use wider spacing when sub-nodes are present
-        double effectiveNodeWidth = hasSubNodes ? NodeWidth + 60 : NodeWidth + 20;
-
         var grouped = refs.GroupBy(r => r.Type).OrderBy(g => g.Key).ToList();
 
-        double minCircumference = refs.Count * effectiveNodeWidth;
-        double radius = Math.Max(250, minCircumference / (2 * Math.PI));
+        const int RadialThreshold = 12;
+
+        if (refs.Count <= RadialThreshold)
+        {
+            LayoutRadial(centerNode, centerX, centerY, grouped, visibleMatchesMap, hasSubNodes);
+        }
+        else
+        {
+            LayoutColumnar(centerNode, centerX, centerY, grouped, visibleMatchesMap);
+        }
+
+        ResetView();
+    }
+
+    /// <summary>
+    /// Radial layout for small graphs (≤12 refs). Nodes arranged in a circle around center.
+    /// Uses measured node widths for spacing to prevent overlaps.
+    /// </summary>
+    void LayoutRadial(Border centerNode, double centerX, double centerY,
+        List<IGrouping<DependencyRefType, DependencyReference>> grouped,
+        Dictionary<DependencyReference, List<FileIndexEntry>> visibleMatchesMap,
+        bool hasSubNodes)
+    {
+        var refs = grouped.SelectMany(g => g).ToList();
+
+        // Pre-create all nodes and measure their actual widths
+        var nodeInfos = new List<(DependencyReference Ref, Border Node, Color Color, double Width)>();
+        foreach (var r in refs)
+        {
+            var refColor = GetRefTypeColor(r.Type);
+            var refNode = CreateReferenceNode(r, refColor);
+            nodeInfos.Add((r, refNode, refColor, MeasureNode(refNode).Width));
+        }
+
+        // Compute radius from actual node widths + padding for sub-nodes
+        double subNodePadding = hasSubNodes ? 80 : 20;
+        double totalArcLength = nodeInfos.Sum(n => n.Width + subNodePadding);
+        double radius = Math.Max(250, totalArcLength / (2 * Math.PI));
 
         double totalAngle = 2 * Math.PI;
         double currentAngle = -Math.PI / 2;
 
+        // Re-group for arc allocation per type
+        int refIdx = 0;
         foreach (var typeGroup in grouped)
         {
             var groupRefs = typeGroup.ToList();
@@ -198,31 +262,100 @@ public partial class DependencyGraphWindow : SimpleWindow
 
             for (int i = 0; i < groupRefs.Count; i++)
             {
-                var r = groupRefs[i];
+                var info = nodeInfos[refIdx++];
                 double angle = currentAngle + (i + 0.5) * arcSpan / groupRefs.Count;
                 double nx = centerX + radius * Math.Cos(angle);
                 double ny = centerY + radius * Math.Sin(angle);
 
-                var refColor = GetRefTypeColor(r.Type);
-                var refNode = CreateReferenceNode(r, refColor);
-                PlaceNode(refNode, nx, ny);
+                PlaceNode(info.Node, nx, ny);
 
-                var edge = CreateEdge(centerX, centerY, nx, ny, refColor, 1.5);
+                var edge = CreateEdge(centerX, centerY, nx, ny, info.Color, 1.5);
                 ConnectEdge(centerNode, edge);
-                ConnectEdge(refNode, edge);
+                ConnectEdge(info.Node, edge);
 
-                // Only show sub-nodes for multiple matches (single match is merged into parent node)
-                var visibleMatches = visibleMatchesMap[r];
+                var visibleMatches = visibleMatchesMap[info.Ref];
                 if (visibleMatches.Count > 0)
-                {
-                    LayoutMatchSubNodes(refNode, visibleMatches, nx, ny, angle);
-                }
+                    LayoutMatchSubNodes(info.Node, visibleMatches, nx, ny, angle);
             }
 
             currentAngle += arcSpan;
         }
+    }
 
-        ResetView();
+    /// <summary>
+    /// Columnar grid layout for large graphs (>12 refs). Each type group becomes
+    /// a column radiating outward from center. Nodes stack vertically within columns
+    /// with spacing based on actual measured dimensions.
+    /// </summary>
+    void LayoutColumnar(Border centerNode, double centerX, double centerY,
+        List<IGrouping<DependencyRefType, DependencyReference>> grouped,
+        Dictionary<DependencyReference, List<FileIndexEntry>> visibleMatchesMap)
+    {
+        int groupCount = grouped.Count;
+        double angleStep = 2 * Math.PI / Math.Max(groupCount, 1);
+        double startAngle = -Math.PI / 2;
+
+        for (int g = 0; g < groupCount; g++)
+        {
+            var typeGroup = grouped[g];
+            var groupRefs = typeGroup.ToList();
+            double groupAngle = startAngle + g * angleStep;
+
+            // Direction vector for this column
+            double dirX = Math.Cos(groupAngle);
+            double dirY = Math.Sin(groupAngle);
+            // Perpendicular direction for stacking
+            double perpX = -dirY;
+            double perpY = dirX;
+
+            // Pre-create and measure all nodes in this column
+            var columnNodes = new List<(DependencyReference Ref, Border Node, Color Color, double Width, double Height)>();
+            foreach (var r in groupRefs)
+            {
+                var refColor = GetRefTypeColor(r.Type);
+                var refNode = CreateReferenceNode(r, refColor);
+                var size = MeasureNode(refNode);
+                columnNodes.Add((r, refNode, refColor, size.Width, size.Height));
+            }
+
+            // Compute column dimensions
+            double maxWidth = columnNodes.Max(n => n.Width);
+            double verticalSpacing = 8;
+            double totalHeight = columnNodes.Sum(n => n.Height + verticalSpacing) - verticalSpacing;
+
+            // Column distance from center — close enough to be readable
+            // Account for sub-nodes by using more distance when matches exist
+            bool columnHasSubNodes = groupRefs.Any(r => visibleMatchesMap[r].Count > 0);
+            double colDistance = 200 + (columnHasSubNodes ? maxWidth * 0.5 : 0);
+
+            // Column center point
+            double colCenterX = centerX + dirX * colDistance;
+            double colCenterY = centerY + dirY * colDistance;
+
+            // Stack nodes along the perpendicular direction, centered on column center
+            double stackOffset = -totalHeight / 2;
+
+            for (int i = 0; i < columnNodes.Count; i++)
+            {
+                var info = columnNodes[i];
+                double perpOffset = stackOffset + info.Height / 2;
+                double nx = colCenterX + perpX * perpOffset;
+                double ny = colCenterY + perpY * perpOffset;
+
+                PlaceNode(info.Node, nx, ny);
+
+                var edge = CreateEdge(centerX, centerY, nx, ny, info.Color, 1.5);
+                ConnectEdge(centerNode, edge);
+                ConnectEdge(info.Node, edge);
+
+                // Sub-nodes: place along the same outward direction from this node
+                var visibleMatches = visibleMatchesMap[info.Ref];
+                if (visibleMatches.Count > 0)
+                    LayoutMatchSubNodes(info.Node, visibleMatches, nx, ny, groupAngle);
+
+                stackOffset += info.Height + verticalSpacing;
+            }
+        }
     }
 
     /// <summary>
@@ -244,28 +377,36 @@ public partial class DependencyGraphWindow : SimpleWindow
 
     void LayoutMatchSubNodes(Border parentNode, List<FileIndexEntry> matches, double parentX, double parentY, double parentAngle, List<Control>? trackingList = null)
     {
-        // Calculate radius and arc based on match count
-        double subCircumference = matches.Count * (170 + 20);
+        // Pre-create and measure all match nodes
+        var matchNodes = new List<(FileIndexEntry Match, Border Node, Color Color, MaterialIconKind Icon, double Width)>();
+        foreach (var match in matches)
+        {
+            var (matchColor, matchIcon) = GetMatchFileStyle(match.FileName);
+            var matchNode = CreateMatchNode(match, matchColor, matchIcon);
+            matchNodes.Add((match, matchNode, matchColor, matchIcon, MeasureNode(matchNode).Width));
+        }
+
+        // Use measured widths for spacing
+        double maxWidth = matchNodes.Max(n => n.Width);
+        double subCircumference = matches.Count * (maxWidth + 20);
         double subRadius = Math.Max(100, subCircumference / Math.PI); // half circle
         double subArcSpan = Math.Min(Math.PI / 2, matches.Count * 0.35);
 
-        for (int j = 0; j < matches.Count; j++)
+        for (int j = 0; j < matchNodes.Count; j++)
         {
-            var match = matches[j];
+            var info = matchNodes[j];
             double subAngle = matches.Count == 1
                 ? parentAngle
                 : parentAngle - subArcSpan / 2 + j * subArcSpan / Math.Max(1, matches.Count - 1);
             double sx = parentX + subRadius * Math.Cos(subAngle);
             double sy = parentY + subRadius * Math.Sin(subAngle);
 
-            var (matchColor, matchIcon) = GetMatchFileStyle(match.FileName);
-            var matchNode = CreateMatchNode(match, matchColor, matchIcon);
-            PlaceNode(matchNode, sx, sy);
-            trackingList?.Add(matchNode);
+            PlaceNode(info.Node, sx, sy);
+            trackingList?.Add(info.Node);
 
-            var subEdge = CreateEdge(parentX, parentY, sx, sy, matchColor, 1.0);
+            var subEdge = CreateEdge(parentX, parentY, sx, sy, info.Color, 1.0);
             ConnectEdge(parentNode, subEdge);
-            ConnectEdge(matchNode, subEdge);
+            ConnectEdge(info.Node, subEdge);
             trackingList?.Add(subEdge);
         }
     }
@@ -609,14 +750,191 @@ public partial class DependencyGraphWindow : SimpleWindow
 
     void PlaceNode(Border node, double x, double y)
     {
-        node.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        var size = node.DesiredSize;
+        // Use DesiredSize if already measured, otherwise measure now
+        var size = node.DesiredSize.Width > 0 ? node.DesiredSize : MeasureNode(node);
 
         Canvas.SetLeft(node, x - size.Width / 2);
         Canvas.SetTop(node, y - size.Height / 2);
         GraphCanvas.Children.Add(node);
         _nodeElements.Add(node);
+        _nodeElementsSet.Add(node);
         _nodePositions[node] = (x, y);
+    }
+
+    /// <summary>
+    /// Measures a node and returns its desired size. Caches the result in DesiredSize.
+    /// </summary>
+    static Size MeasureNode(Border node)
+    {
+        node.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return node.DesiredSize;
+    }
+
+    /// <summary>
+    /// Computes overlap-free positions for newly placed nodes by pushing existing nodes away.
+    /// Returns a dictionary of nodes that need to move and their target positions.
+    /// </summary>
+    Dictionary<Border, (double X, double Y)> ComputeOverlapDisplacements(HashSet<Border> excludeFromPush, double padding = 20)
+    {
+        var displacements = new Dictionary<Border, (double X, double Y)>();
+
+        // Build bounding boxes for all nodes
+        var boxes = new Dictionary<Border, (double Left, double Top, double Right, double Bottom)>();
+        foreach (var node in _nodeElements)
+        {
+            if (!_nodePositions.TryGetValue(node, out var pos)) continue;
+            var size = node.DesiredSize;
+            boxes[node] = (
+                pos.X - size.Width / 2 - padding / 2,
+                pos.Y - size.Height / 2 - padding / 2,
+                pos.X + size.Width / 2 + padding / 2,
+                pos.Y + size.Height / 2 + padding / 2
+            );
+        }
+
+        // For each excluded (newly placed) node, check overlap with all pushable nodes
+        foreach (var newNode in excludeFromPush)
+        {
+            if (!boxes.TryGetValue(newNode, out var newBox)) continue;
+
+            foreach (var existingNode in _nodeElements)
+            {
+                if (excludeFromPush.Contains(existingNode)) continue;
+                if (!boxes.TryGetValue(existingNode, out var existBox)) continue;
+
+                // Check AABB overlap
+                if (newBox.Left >= existBox.Right || newBox.Right <= existBox.Left ||
+                    newBox.Top >= existBox.Bottom || newBox.Bottom <= existBox.Top)
+                    continue;
+
+                // Compute push direction: from new node center to existing node center
+                if (!_nodePositions.TryGetValue(existingNode, out var existPos)) continue;
+                if (!_nodePositions.TryGetValue(newNode, out var newPos)) continue;
+                var dx = existPos.X - newPos.X;
+                var dy = existPos.Y - newPos.Y;
+                var dist = Math.Sqrt(dx * dx + dy * dy);
+
+                if (dist < 1)
+                {
+                    // Nodes are on top of each other, push in a random-ish direction
+                    dx = 1;
+                    dy = 0;
+                    dist = 1;
+                }
+
+                // Compute the minimum push distance to resolve overlap
+                var overlapX = Math.Min(newBox.Right - existBox.Left, existBox.Right - newBox.Left);
+                var overlapY = Math.Min(newBox.Bottom - existBox.Top, existBox.Bottom - newBox.Top);
+                var pushDist = Math.Min(overlapX, overlapY) + padding;
+
+                var pushX = (dx / dist) * pushDist;
+                var pushY = (dy / dist) * pushDist;
+
+                // Accumulate displacements
+                if (displacements.TryGetValue(existingNode, out var existing))
+                    displacements[existingNode] = (existing.X + pushX, existing.Y + pushY);
+                else
+                    displacements[existingNode] = (existPos.X + pushX, existPos.Y + pushY);
+            }
+        }
+
+        return displacements;
+    }
+
+    #endregion
+
+    #region Animation
+
+    /// <summary>
+    /// Smoothly animates nodes from their current positions to target positions.
+    /// Blocks all interaction until animation completes.
+    /// </summary>
+    void AnimateNodesToTargets(Dictionary<Border, (double X, double Y)> targets, Action? onComplete = null)
+    {
+        if (targets.Count == 0)
+        {
+            onComplete?.Invoke();
+            return;
+        }
+
+        // If already animating, snap current animation to end first
+        SnapAnimationToEnd();
+
+        _isAnimating = true;
+        _animProgress = 0;
+        _animCompleteCallback = onComplete;
+        _animStartPositions.Clear();
+        _animTargetPositions.Clear();
+        _animNodeSizes.Clear();
+
+        foreach (var (node, target) in targets)
+        {
+            if (!_nodePositions.TryGetValue(node, out var current)) continue;
+            _animStartPositions[node] = current;
+            _animTargetPositions[node] = target;
+            _animNodeSizes[node] = node.DesiredSize;
+        }
+
+        _animTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(AnimIntervalMs) };
+        _animTimer.Tick += AnimationTick;
+        _animTimer.Start();
+    }
+
+    void AnimationTick(object? sender, EventArgs e)
+    {
+        _animProgress += AnimIntervalMs / AnimDurationMs;
+
+        if (_animProgress >= 1.0)
+        {
+            SnapAnimationToEnd();
+            return;
+        }
+
+        // Ease-out cubic: 1 - (1-t)^3
+        var t = 1.0 - Math.Pow(1.0 - _animProgress, 3);
+
+        foreach (var (node, start) in _animStartPositions)
+        {
+            if (!_animTargetPositions.TryGetValue(node, out var target)) continue;
+            if (!_animNodeSizes.TryGetValue(node, out var size)) continue;
+            var x = start.X + (target.X - start.X) * t;
+            var y = start.Y + (target.Y - start.Y) * t;
+
+            Canvas.SetLeft(node, x - size.Width / 2);
+            Canvas.SetTop(node, y - size.Height / 2);
+            UpdateEdgesForNode(node, x, y);
+            _nodePositions[node] = (x, y);
+        }
+    }
+
+    void SnapAnimationToEnd()
+    {
+        if (_animTimer != null)
+        {
+            _animTimer.Stop();
+            _animTimer.Tick -= AnimationTick;
+            _animTimer = null;
+        }
+
+        // Snap all nodes to final positions
+        foreach (var (node, target) in _animTargetPositions)
+        {
+            if (!_nodePositions.ContainsKey(node)) continue;
+            var size = _animNodeSizes.TryGetValue(node, out var cached) ? cached : node.DesiredSize;
+            Canvas.SetLeft(node, target.X - size.Width / 2);
+            Canvas.SetTop(node, target.Y - size.Height / 2);
+            UpdateEdgesForNode(node, target.X, target.Y);
+            _nodePositions[node] = target;
+        }
+
+        _animStartPositions.Clear();
+        _animTargetPositions.Clear();
+        _animNodeSizes.Clear();
+        _isAnimating = false;
+
+        var callback = _animCompleteCallback;
+        _animCompleteCallback = null;
+        callback?.Invoke();
     }
 
     #endregion
@@ -625,6 +943,7 @@ public partial class DependencyGraphWindow : SimpleWindow
 
     void CanvasHost_PointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        if (_isAnimating) { e.Handled = true; return; }
         var props = e.GetCurrentPoint(CanvasHost).Properties;
 
         if (props.IsRightButtonPressed || props.IsMiddleButtonPressed)
@@ -780,6 +1099,7 @@ public partial class DependencyGraphWindow : SimpleWindow
 
     void Node_PointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        if (_isAnimating) { e.Handled = true; return; }
         if (sender is not Border node) return;
         var props = e.GetCurrentPoint(node).Properties;
         if (!props.IsLeftButtonPressed) return;
@@ -901,6 +1221,7 @@ public partial class DependencyGraphWindow : SimpleWindow
 
     async void Node_DoubleTapped(object? sender, Avalonia.Input.TappedEventArgs e)
     {
+        if (_isAnimating) return;
         // Don't navigate when double-tapping buttons (Hide/Show, Play, Preview, etc.)
         if (IsInsideButton(e.Source as Control))
             return;
@@ -973,7 +1294,7 @@ public partial class DependencyGraphWindow : SimpleWindow
     {
         while (control != null)
         {
-            if (control is Border b && _nodeElements.Contains(b))
+            if (control is Border b && _nodeElementsSet.Contains(b))
                 return true;
 
             control = control.Parent as Control;
@@ -1235,6 +1556,7 @@ public partial class DependencyGraphWindow : SimpleWindow
 
     async void RecursiveLoad_Click(object? sender, RoutedEventArgs e)
     {
+        if (_isAnimating) return;
         if (sender is not Button btn || btn.Tag is not DependencyReference reference) return;
         if (reference.Resolved.Count == 0) return;
         await ExpandOrCollapseAsync(btn, reference.Resolved[0], reference.RawValue);
@@ -1242,6 +1564,7 @@ public partial class DependencyGraphWindow : SimpleWindow
 
     async void MatchExpandCollapse_Click(object? sender, RoutedEventArgs e)
     {
+        if (_isAnimating) return;
         if (sender is not Button btn || btn.Tag is not FileIndexEntry entry) return;
         await ExpandOrCollapseAsync(btn, entry, entry.FullRelativePath);
     }
@@ -1256,9 +1579,12 @@ public partial class DependencyGraphWindow : SimpleWindow
         // Collapse if already expanded
         if (_expansionChildren.TryGetValue(parentNode, out var children))
         {
+            var collapsedNodeCount = CountExpansionNodes(parentNode);
             CollapseChildren(parentNode, children);
             _expansionChildren.Remove(parentNode);
             _visitedPaths.Remove(pathKey);
+            _expandedRefCount = Math.Max(0, _expandedRefCount - collapsedNodeCount);
+            UpdateStatusText();
             btn.Content = "Show";
             ToolTip.SetTip(btn, "Show dependencies");
             return;
@@ -1292,46 +1618,85 @@ public partial class DependencyGraphWindow : SimpleWindow
             ToolTip.SetTip(btn, "Hide dependencies");
 
             var spawnedControls = new List<Control>();
+            var newNodeSet = new HashSet<Border>();
 
             double baseAngle = Math.Atan2(parentPos.Y, parentPos.X);
-            double subCircumference = allRefs.Count * (NodeWidth + 20);
+
+            // Pre-create and measure all expansion nodes to compute proper spacing
+            var expansionNodes = new List<(DependencyReference Ref, Border Node, Color Color, double Width)>();
+            foreach (var r in allRefs)
+            {
+                var refColor = GetRefTypeColor(r.Type);
+                var subNode = CreateReferenceNode(r, refColor);
+                expansionNodes.Add((r, subNode, refColor, MeasureNode(subNode).Width));
+            }
+
+            double maxNodeWidth = expansionNodes.Max(n => n.Width);
+            double effectiveWidth = maxNodeWidth + 30;
+
+            // Use measured widths for arc/radius calculation
+            double subCircumference = allRefs.Count * effectiveWidth;
             double subRadius = Math.Max(200, subCircumference / Math.PI);
             double arcSpan = Math.Min(Math.PI * 0.8, allRefs.Count * 0.15 + 0.3);
             double startAngle = baseAngle - arcSpan / 2;
 
-            for (int i = 0; i < allRefs.Count; i++)
+            for (int i = 0; i < expansionNodes.Count; i++)
             {
-                var r = allRefs[i];
+                var info = expansionNodes[i];
                 double angle = allRefs.Count == 1
                     ? baseAngle
                     : startAngle + i * arcSpan / Math.Max(1, allRefs.Count - 1);
                 double sx = parentPos.X + subRadius * Math.Cos(angle);
                 double sy = parentPos.Y + subRadius * Math.Sin(angle);
 
-                var refColor = GetRefTypeColor(r.Type);
-                var subNode = CreateReferenceNode(r, refColor);
-                PlaceNode(subNode, sx, sy);
-                spawnedControls.Add(subNode);
+                PlaceNode(info.Node, sx, sy);
+                spawnedControls.Add(info.Node);
+                newNodeSet.Add(info.Node);
 
-                var edge = CreateEdge(parentPos.X, parentPos.Y, sx, sy, refColor, 1.0);
+                var edge = CreateEdge(parentPos.X, parentPos.Y, sx, sy, info.Color, 1.0);
                 ConnectEdge(parentNode, edge);
-                ConnectEdge(subNode, edge);
+                ConnectEdge(info.Node, edge);
                 spawnedControls.Add(edge);
 
-                var visibleMatches = GetVisibleMatches(r);
+                var visibleMatches = GetVisibleMatches(info.Ref);
                 if (visibleMatches.Count > 0)
                 {
-                    LayoutMatchSubNodes(subNode, visibleMatches, sx, sy, angle, spawnedControls);
+                    LayoutMatchSubNodes(info.Node, visibleMatches, sx, sy, angle, spawnedControls);
                 }
             }
 
             _expansionChildren[parentNode] = spawnedControls;
+            _expandedRefCount += spawnedControls.Count(c => c is Border);
+            UpdateStatusText();
+
+            // Push existing nodes away from newly placed ones to resolve overlaps
+            var displacements = ComputeOverlapDisplacements(newNodeSet);
+            if (displacements.Count > 0)
+                AnimateNodesToTargets(displacements);
         }
         catch
         {
             btn.Content = "(error)";
             btn.IsEnabled = true;
         }
+    }
+
+    /// <summary>
+    /// Recursively counts all Border nodes in an expansion tree (for status text tracking).
+    /// </summary>
+    int CountExpansionNodes(Border parentNode)
+    {
+        if (!_expansionChildren.TryGetValue(parentNode, out var children)) return 0;
+        int count = 0;
+        foreach (var child in children)
+        {
+            if (child is Border childNode)
+            {
+                count++;
+                count += CountExpansionNodes(childNode);
+            }
+        }
+        return count;
     }
 
     void CollapseChildren(Border parentNode, List<Control> children)
@@ -1354,7 +1719,10 @@ public partial class DependencyGraphWindow : SimpleWindow
             if (child is Border node)
             {
                 _nodeElements.Remove(node);
+                _nodeElementsSet.Remove(node);
                 _nodePositions.Remove(node);
+                _animStartPositions.Remove(node);
+                _animTargetPositions.Remove(node);
                 if (_nodeEdges.Remove(node, out var nodeEdgeList))
                 {
                     // Clean edge references from connected nodes
@@ -1676,6 +2044,7 @@ public partial class DependencyGraphWindow : SimpleWindow
 
     protected override void OnClosed(EventArgs e)
     {
+        SnapAnimationToEnd();
         _thumbnailCts?.Cancel();
         _thumbnailCts?.Dispose();
         DisposePlaybackBank();
