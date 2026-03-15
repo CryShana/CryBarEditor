@@ -82,6 +82,8 @@ public partial class DependencyGraphWindow : SimpleWindow
 
     // Bitmaps created for previews (disposed on graph rebuild/close)
     readonly List<Bitmap> _previewBitmaps = [];
+    // Tracks active preview controls per node (for toggle)
+    readonly Dictionary<Border, (Control Preview, Bitmap? Bitmap)> _activeNodePreviews = new();
 
     // FMOD playback state
     CancellationTokenSource? _playbackCts;
@@ -155,7 +157,7 @@ public partial class DependencyGraphWindow : SimpleWindow
             _mainWindow = owner
         };
         _instance.Closed += (_, _) => _instance = null;
-        _instance.Show();
+        _instance.Show(owner);
         _instance.BuildGraph();
     }
 
@@ -181,6 +183,7 @@ public partial class DependencyGraphWindow : SimpleWindow
         _expansionChildren.Clear();
         _selectedNodes.Clear();
         _multiDragStartPositions.Clear();
+        _activeNodePreviews.Clear();
 
         WindowTitle = $"Dependency Graph \u2014 {_group.DisplayName}";
         OnPropertyChanged(nameof(WindowTitle));
@@ -1359,10 +1362,23 @@ public partial class DependencyGraphWindow : SimpleWindow
         if (sender is not Button btn || btn.Tag is not FileIndexEntry entry) return;
         if (_mainWindow == null) return;
 
-        // Find the parent node Border to insert the preview into
         var parentNode = FindParentBorder(btn);
         if (parentNode == null) return;
 
+        // Toggle off: remove existing preview
+        if (_activeNodePreviews.TryGetValue(parentNode, out var active))
+        {
+            RemovePreviewFromNode(parentNode, active.Preview);
+            if (active.Bitmap != null)
+            {
+                _previewBitmaps.Remove(active.Bitmap);
+                active.Bitmap.Dispose();
+            }
+            _activeNodePreviews.Remove(parentNode);
+            return;
+        }
+
+        // Toggle on: load preview
         btn.IsEnabled = false;
 
         try
@@ -1377,6 +1393,10 @@ public partial class DependencyGraphWindow : SimpleWindow
             }
         }
         catch { }
+        finally
+        {
+            btn.IsEnabled = true;
+        }
     }
 
     static bool IsInsideButton(Control? control)
@@ -1419,12 +1439,14 @@ public partial class DependencyGraphWindow : SimpleWindow
         if (bitmap == null) return;
 
         _previewBitmaps.Add(bitmap);
-        AppendPreviewToNode(node, new Avalonia.Controls.Image
+        var preview = new Avalonia.Controls.Image
         {
             Source = bitmap,
             Width = 96, Height = 96,
             Margin = new Thickness(0, 4, 0, 0)
-        });
+        };
+        AppendPreviewToNode(node, preview);
+        _activeNodePreviews[node] = (preview, bitmap);
     }
 
     async Task LoadTmmPreviewIntoNode(Border node, FileIndexEntry entry)
@@ -1451,14 +1473,15 @@ public partial class DependencyGraphWindow : SimpleWindow
 
         if (companionData == null)
         {
-            // Fallback: show text info only
-            AppendPreviewToNode(node, new TextBlock
+            var textPreview = new TextBlock
             {
                 Text = $"TMM v{tmm.Version} \u2014 {tmm.NumBones} bones, {tmm.NumMaterials} mats",
                 Foreground = new SolidColorBrush(TmmColor),
                 FontSize = 9,
                 Margin = new Thickness(0, 4, 0, 0)
-            });
+            };
+            AppendPreviewToNode(node, textPreview);
+            _activeNodePreviews[node] = (textPreview, null);
             return;
         }
 
@@ -1467,13 +1490,15 @@ public partial class DependencyGraphWindow : SimpleWindow
             var mesh = MeshDataBuilder.BuildFromTmm(data.Memory, companionData.Memory);
             if (mesh == null)
             {
-                AppendPreviewToNode(node, new TextBlock
+                var failPreview = new TextBlock
                 {
                     Text = $"TMM v{tmm.Version} (mesh build failed)",
                     Foreground = new SolidColorBrush(TmmColor),
                     FontSize = 9,
                     Margin = new Thickness(0, 4, 0, 0)
-                });
+                };
+                AppendPreviewToNode(node, failPreview);
+                _activeNodePreviews[node] = (failPreview, null);
                 return;
             }
 
@@ -1481,12 +1506,14 @@ public partial class DependencyGraphWindow : SimpleWindow
             if (bitmap != null)
             {
                 _previewBitmaps.Add(bitmap);
-                AppendPreviewToNode(node, new Avalonia.Controls.Image
+                var imgPreview = new Avalonia.Controls.Image
                 {
                     Source = bitmap,
                     Width = 96, Height = 96,
                     Margin = new Thickness(0, 4, 0, 0)
-                });
+                };
+                AppendPreviewToNode(node, imgPreview);
+                _activeNodePreviews[node] = (imgPreview, bitmap);
             }
         }
     }
@@ -1514,6 +1541,27 @@ public partial class DependencyGraphWindow : SimpleWindow
         }
 
         stack.Children.Add(preview);
+    }
+
+    static void RemovePreviewFromNode(Border node, Control preview)
+    {
+        if (node.Child is not StackPanel stack) return;
+        stack.Children.Remove(preview);
+
+        // If only one child left (the wrapped horizontal panel), unwrap it
+        if (stack.Orientation == Avalonia.Layout.Orientation.Vertical && stack.Children.Count == 1
+            && stack.Children[0] is StackPanel inner && inner.Orientation == Avalonia.Layout.Orientation.Horizontal)
+        {
+            stack.Children.RemoveAt(0);
+            stack.Orientation = Avalonia.Layout.Orientation.Horizontal;
+            stack.Spacing = inner.Spacing;
+            while (inner.Children.Count > 0)
+            {
+                var child = inner.Children[0];
+                inner.Children.RemoveAt(0);
+                stack.Children.Add(child);
+            }
+        }
     }
 
     async Task NavigateToEntryAsync(FileIndexEntry entry)
