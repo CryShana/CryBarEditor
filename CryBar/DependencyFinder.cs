@@ -53,7 +53,8 @@ public static partial class DependencyFinder
     /// Groups results by entity when the content has XML entity structure (repeated direct children with name attributes).
     /// Optionally resolves parsed paths against <paramref name="index"/>.
     /// </summary>
-    public static DependencyResult FindDependencies(string content, string entryPath, FileIndex? index = null, SoundsetIndex? soundsetIndex = null, string? stringTableLanguage = null)
+    /// <param name="filterEntityName">When set, only return the group matching this entity name (case-insensitive).</param>
+    public static DependencyResult FindDependencies(string content, string entryPath, FileIndex? index = null, SoundsetIndex? soundsetIndex = null, string? stringTableLanguage = null, string? filterEntityName = null)
     {
         // Preprocess: unescape JSON double-backslashes
         var processed = content;
@@ -63,6 +64,14 @@ public static partial class DependencyFinder
 
         // Build groups (with entity detection for XML content)
         var groups = BuildGroups(processed);
+
+        // Filter to a single entity if requested
+        if (filterEntityName != null)
+        {
+            groups = groups
+                .Where(g => string.Equals(g.EntityName, filterEntityName, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
 
         // Resolve against index
         if (index != null)
@@ -434,6 +443,18 @@ public static partial class DependencyFinder
     /// </summary>
     static bool IsLikelyPath(string match)
     {
+        // Too short to be a real path (e.g. "yi\M", "1\9")
+        if (match.Length < 5)
+            return false;
+
+        // Trailing dot without extension (sentence fragments like "attack\explore plans to analyze.")
+        if (match[^1] == '.')
+            return false;
+
+        // Paths with spaces are almost certainly sentence fragments, not real game paths
+        if (match.Contains(' '))
+            return false;
+
         // Base64-specific characters never appear in game file paths
         if (match.Contains('+') || match.Contains('='))
             return false;
@@ -442,15 +463,73 @@ public static partial class DependencyFinder
         if (match.Length > 260)
             return false;
 
-        // Real game paths have at most ~8-10 segments; base64 with / can have dozens
+        // Real game paths have meaningful segment names.
+        // Require at least one segment >= 3 chars to reject binary garbage.
         int separatorCount = 0;
+        int segmentLength = 0;
+        bool hasLongSegment = false;
         foreach (var c in match)
         {
-            if (c is '/' or '\\' && ++separatorCount > 15)
-                return false;
+            if (c is '/' or '\\')
+            {
+                if (segmentLength >= 3) hasLongSegment = true;
+                segmentLength = 0;
+                if (++separatorCount > 15)
+                    return false;
+            }
+            else
+            {
+                segmentLength++;
+            }
         }
+        // Check the last segment too
+        if (segmentLength >= 3) hasLongSegment = true;
 
-        return true;
+        return hasLongSegment;
+    }
+
+    /// <summary>
+    /// Builds dependencies for a TMM model file: companion .tmm.data and .material files.
+    /// </summary>
+    public static DependencyResult FindDependenciesForTmm(string entryPath, FileIndex? index = null)
+    {
+        var refs = new List<DependencyReference>();
+        var tmmFileName = Path.GetFileName(entryPath);
+
+        // Companion geometry data file: {name}.tmm.data
+        var dataFileName = tmmFileName + ".data";
+        var dataRef = new DependencyReference
+        {
+            RawValue = dataFileName,
+            Type = DependencyRefType.FilePath,
+            SourceTag = "geometry",
+        };
+        if (index != null)
+            dataRef.Resolved.AddRange(index.Find(dataFileName));
+        refs.Add(dataRef);
+
+        // Companion material file: {name}.tmm.material or {name}.tmm.material.XMB
+        var matFileName = tmmFileName + ".material";
+        var matRef = new DependencyReference
+        {
+            RawValue = matFileName,
+            Type = DependencyRefType.FilePath,
+            SourceTag = "material",
+        };
+        if (index != null)
+        {
+            var matEntries = index.Find(matFileName + ".XMB");
+            if (matEntries.Count == 0)
+                matEntries = index.Find(matFileName);
+            matRef.Resolved.AddRange(matEntries);
+        }
+        refs.Add(matRef);
+
+        return new DependencyResult
+        {
+            EntryPath = entryPath,
+            Groups = [new DependencyGroup { References = refs }],
+        };
     }
 
     static void ResolveSoundsetName(DependencyReference reference, SoundsetIndex soundsetIndex)

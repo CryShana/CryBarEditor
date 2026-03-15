@@ -22,6 +22,8 @@ public partial class DependenciesWindow : SimpleWindow
 
     readonly MainWindow _owner;
     readonly List<DependencyGroupItem> _allGroups = new();
+    string _currentEntryPath = "";
+    FileIndex? _currentFileIndex;
 
     /// <summary>
     /// Tracks per-reference which resolved index to navigate to next (cycles on repeated clicks).
@@ -47,6 +49,7 @@ public partial class DependenciesWindow : SimpleWindow
     int _totalRefs;
 
     // Simple converters for XAML bindings
+    public static IValueConverter GreaterThan0Converter { get; } = new FuncValueConverter<int, bool>(v => v > 0);
     public static IValueConverter GreaterThan1Converter { get; } = new FuncValueConverter<int, bool>(v => v > 1);
     public static IValueConverter EqualsZeroConverter { get; } = new FuncValueConverter<int, bool>(v => v == 0);
     public static IValueConverter PluralSConverter { get; } = new FuncValueConverter<int, string>(v => v != 1 ? "es" : "");
@@ -67,9 +70,12 @@ public partial class DependenciesWindow : SimpleWindow
             Height = owner.Height;
     }
 
-    public void LoadDependencies(string content, string entryPath, FileIndex? fileIndex, SoundsetIndex? soundsetIndex, string? stringTableLanguage = null)
+    public void LoadDependencies(string content, string entryPath, FileIndex? fileIndex, SoundsetIndex? soundsetIndex, string? stringTableLanguage = null, string? filterEntityName = null)
     {
-        WindowTitle = $"Dependencies \u2014 {Path.GetFileName(entryPath)}";
+        _currentEntryPath = entryPath;
+        _currentFileIndex = fileIndex;
+        var displayName = filterEntityName ?? Path.GetFileName(entryPath);
+        WindowTitle = $"Dependencies \u2014 {displayName}";
         OnPropertyChanged(nameof(WindowTitle));
         Title = WindowTitle;
 
@@ -81,7 +87,7 @@ public partial class DependenciesWindow : SimpleWindow
 
         Task.Run(() =>
         {
-            var result = DependencyFinder.FindDependencies(content, entryPath, fileIndex, soundsetIndex, stringTableLanguage);
+            var result = DependencyFinder.FindDependencies(content, entryPath, fileIndex, soundsetIndex, stringTableLanguage, filterEntityName);
             var items = result.Groups.Select(g => new DependencyGroupItem(g)).ToList();
 
             Dispatcher.UIThread.InvokeAsync(() =>
@@ -94,6 +100,27 @@ public partial class DependenciesWindow : SimpleWindow
                 OnPropertyChanged(nameof(StatusText));
             });
         });
+    }
+
+    /// <summary>
+    /// Loads a pre-computed DependencyResult (e.g. from TMM parsing).
+    /// </summary>
+    public void LoadDependenciesFromResult(DependencyResult result)
+    {
+        _currentEntryPath = result.EntryPath;
+        WindowTitle = $"Dependencies \u2014 {Path.GetFileName(result.EntryPath)}";
+        OnPropertyChanged(nameof(WindowTitle));
+        Title = WindowTitle;
+
+        _allGroups.Clear();
+        FilteredGroups.Clear();
+        _resolvedNavigationIndex.Clear();
+
+        var items = result.Groups.Select(g => new DependencyGroupItem(g)).ToList();
+        _allGroups.AddRange(items);
+        _totalRefs = _allGroups.Sum(g => g.ReferenceCount);
+        RefreshFiltered();
+        OnPropertyChanged(nameof(StatusText));
     }
 
     void RefreshFiltered()
@@ -136,13 +163,71 @@ public partial class DependenciesWindow : SimpleWindow
             _resolvedNavigationIndex.TryGetValue(reference, out var idx);
             if (idx >= reference.Resolved.Count) idx = 0;
 
-            await NavigateToIndexEntry(reference.Resolved[idx]);
+            var entry = reference.Resolved[idx];
 
-            // For string keys, highlight the key in the previewed document
-            if (reference.Type == DependencyRefType.StringKey)
-                await _owner.HighlightTextInPreviewAsync(reference.RawValue);
+            // SoundsetName → bank file: navigate to the FMOD event instead
+            if (reference.Type == DependencyRefType.SoundsetName &&
+                entry.FileName.EndsWith(".bank", StringComparison.OrdinalIgnoreCase))
+            {
+                await NavigateToFmodEventBySoundsetName(entry, reference.RawValue);
+            }
+            else
+            {
+                await NavigateToIndexEntry(entry);
+
+                // Highlight the reference value in the previewed document
+                if (reference.Type is DependencyRefType.StringKey or DependencyRefType.SoundsetName)
+                    await _owner.HighlightTextInPreviewAsync(reference.RawValue);
+                else if (reference.Type == DependencyRefType.FilePath && reference.SourceTag == "sound")
+                    await _owner.HighlightTextInPreviewAsync(reference.RawValue);
+            }
 
             _resolvedNavigationIndex[reference] = idx + 1;
+        }
+        finally
+        {
+            _navigationInProgress = false;
+        }
+    }
+
+    async Task NavigateToFmodEventBySoundsetName(FileIndexEntry bankEntry, string soundsetName)
+    {
+        // Find the bank root file path
+        var bankRelPath = bankEntry.FullRelativePath;
+        var rootRelevantPath = _owner.RootFileRootPath;
+        if (rootRelevantPath != "-" && bankRelPath.StartsWith(rootRelevantPath, StringComparison.OrdinalIgnoreCase))
+            bankRelPath = bankRelPath[rootRelevantPath.Length..];
+
+        // Navigate to bank, then find FMOD event by soundset name (= last segment of event path)
+        _owner.NavigateToRootFile(bankRelPath);
+        await Task.Delay(50);
+
+        var fmodEvent = _owner.FmodBank?.Events?.FirstOrDefault(
+            ev => ev.Path.EndsWith("/" + soundsetName, StringComparison.OrdinalIgnoreCase));
+        if (fmodEvent != null)
+            _owner.SelectedBankEntry = fmodEvent;
+    }
+
+    async void NavigateToGroup_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_navigationInProgress) return;
+
+        var group = (sender as Button)?.DataContext as DependencyGroupItem;
+        if (group == null) return;
+
+        _navigationInProgress = true;
+        try
+        {
+            // Find the source file in the file index
+            var sourceEntries = _currentFileIndex?.Find(Path.GetFileName(_currentEntryPath));
+            if (sourceEntries != null && sourceEntries.Count > 0)
+            {
+                await NavigateToIndexEntry(sourceEntries[0]);
+
+                // For named groups, highlight the entity name in the preview
+                if (group.Group.EntityName != null)
+                    await _owner.HighlightTextInPreviewAsync(group.Group.EntityName);
+            }
         }
         finally
         {

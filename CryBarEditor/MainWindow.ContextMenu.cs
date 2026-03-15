@@ -1,4 +1,6 @@
 using Avalonia.Controls;
+
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -141,7 +143,30 @@ public partial class MainWindow
 
     bool _contextMenuIsFromBAR;
 
-    public bool CanShowDependencies => ContextSelectedItemsCount == 1;
+    /// <summary>Binary extensions that cannot be parsed for text-based dependency references.</summary>
+    static readonly HashSet<string> BinaryExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".BAR", ".blob", ".ddt", ".wav", ".mp3", ".ogg", ".fnt", ".ttf", ".otf",
+        ".cur", ".ico", ".bmp", ".png", ".jpg", ".jpeg", ".gif", ".tga", ".psd",
+        ".exe", ".dll", ".pdb", ".data", ".tma",
+    };
+
+    public bool CanShowDependencies
+    {
+        get
+        {
+            if (ContextSelectedItemsCount != 1) return false;
+            var relPath = _contextMenuIsFromBAR
+                ? SelectedBarEntry?.RelativePath ?? ""
+                : SelectedRootFileEntry?.RelativePath ?? "";
+            var ext = Path.GetExtension(relPath);
+            // .bank files are binary but we handle them by redirecting to their soundset file
+            if (ext.Equals(".bank", StringComparison.OrdinalIgnoreCase)) return true;
+            // .tmm files are binary but have known dependencies
+            if (ext.Equals(".tmm", StringComparison.OrdinalIgnoreCase)) return true;
+            return !BinaryExtensions.Contains(ext);
+        }
+    }
 
     void ContextMenu_Opened(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {

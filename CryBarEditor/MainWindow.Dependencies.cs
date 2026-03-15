@@ -28,7 +28,10 @@ public partial class MainWindow
         else
         {
             if (SelectedRootFileEntry == null) return;
-            _ = ShowDependenciesForRootFile(SelectedRootFileEntry);
+            if (SelectedRootFileEntry.RelativePath.EndsWith(".bank", StringComparison.OrdinalIgnoreCase))
+                _ = ShowDependenciesForBankFile(SelectedRootFileEntry);
+            else
+                _ = ShowDependenciesForRootFile(SelectedRootFileEntry);
         }
     }
 
@@ -61,7 +64,7 @@ public partial class MainWindow
 
         using var decompressed = BarCompression.EnsureDecompressedPooled(data, out _);
         var content = GetTextContent(decompressed.Span, resolution.SourceFile);
-        ShowDependenciesFor(content, resolution.SourceFile);
+        ShowDependenciesFor(content, resolution.SourceFile, filterEntityName: resolution.SoundsetName);
     }
 
     async Task ShowDependenciesForBarEntry(BarFileEntry entry)
@@ -72,12 +75,56 @@ public partial class MainWindow
         {
             using var rawData = await entry.ReadDataRawPooledAsync(_barStream);
             using var data = BarCompression.EnsureDecompressedPooled(rawData, out _);
+            var entryPath = GetBARFullRelativePath(entry);
+
+            if (entry.RelativePath.EndsWith(".tmm", StringComparison.OrdinalIgnoreCase))
+            {
+                ShowDependenciesForResult(DependencyFinder.FindDependenciesForTmm(entryPath, _fileIndex));
+                return;
+            }
+
             var content = GetTextContent(data.Span, entry.RelativePath);
-            ShowDependenciesFor(content, GetBARFullRelativePath(entry));
+            ShowDependenciesFor(content, entryPath);
         }
         catch (Exception ex)
         {
             _ = ShowError($"Failed to read file for dependency analysis:\n{ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Handles "Show dependencies" for a .bank root file by finding and reading
+    /// the associated soundset file (e.g. greek.bank → soundsets_greek.soundset.XMB).
+    /// </summary>
+    async Task ShowDependenciesForBankFile(RootFileEntry entry)
+    {
+        // Extract culture from bank filename: "greek.bank" → "greek"
+        var bankName = Path.GetFileNameWithoutExtension(entry.RelativePath);
+        var soundsetFileName = $"soundsets_{bankName}.soundset.XMB";
+
+        var soundsetEntries = _fileIndex?.Find(soundsetFileName);
+        if (soundsetEntries == null || soundsetEntries.Count == 0)
+        {
+            _ = ShowError($"Could not find associated soundset file: {soundsetFileName}");
+            return;
+        }
+
+        try
+        {
+            using var data = await ReadFromIndexEntryPooledAsync(soundsetEntries[0]);
+            if (data == null)
+            {
+                _ = ShowError($"Could not read soundset file: {soundsetFileName}");
+                return;
+            }
+
+            using var decompressed = BarCompression.EnsureDecompressedPooled(data, out _);
+            var content = GetTextContent(decompressed.Span, soundsetFileName);
+            ShowDependenciesFor(content, soundsetFileName);
+        }
+        catch (Exception ex)
+        {
+            _ = ShowError($"Failed to read soundset file for dependency analysis:\n{ex.Message}");
         }
     }
 
@@ -90,8 +137,16 @@ public partial class MainWindow
             var path = Path.Combine(_rootDirectory, entry.RelativePath);
             using var rawData = await PooledBuffer.FromFile(path);
             using var data = BarCompression.EnsureDecompressedPooled(rawData, out _);
+            var entryPath = GetRootFullRelativePath(entry);
+
+            if (entry.RelativePath.EndsWith(".tmm", StringComparison.OrdinalIgnoreCase))
+            {
+                ShowDependenciesForResult(DependencyFinder.FindDependenciesForTmm(entryPath, _fileIndex));
+                return;
+            }
+
             var content = GetTextContent(data.Span, entry.RelativePath);
-            ShowDependenciesFor(content, GetRootFullRelativePath(entry));
+            ShowDependenciesFor(content, entryPath);
         }
         catch (Exception ex)
         {
@@ -109,11 +164,33 @@ public partial class MainWindow
         return Encoding.UTF8.GetString(data);
     }
 
-    void ShowDependenciesFor(string content, string entryPath)
+    void ShowDependenciesForResult(DependencyResult result)
     {
         if (_dependenciesWindow != null)
         {
-            _dependenciesWindow.LoadDependencies(content, entryPath, _fileIndex, _soundsetIndex, _stringTableLanguage);
+            _dependenciesWindow.LoadDependenciesFromResult(result);
+            _dependenciesWindow.Focus();
+            return;
+        }
+
+        _dependenciesWindow = new DependenciesWindow(this);
+        _dependenciesWindow.Closed += (_, _) => _dependenciesWindow = null;
+        _dependenciesWindow.Show(this);
+        _dependenciesWindow.LoadDependenciesFromResult(result);
+    }
+
+    async Task EnsureSoundsetIndexAsync()
+    {
+        if (_soundsetIndex == null && _fileIndex != null)
+            await RebuildSoundsetIndexAsync();
+    }
+
+    async void ShowDependenciesFor(string content, string entryPath, string? filterEntityName = null)
+    {
+        await EnsureSoundsetIndexAsync();
+        if (_dependenciesWindow != null)
+        {
+            _dependenciesWindow.LoadDependencies(content, entryPath, _fileIndex, _soundsetIndex, _stringTableLanguage, filterEntityName);
             _dependenciesWindow.Focus();
             return;
         }
@@ -125,14 +202,14 @@ public partial class MainWindow
         };
 
         _dependenciesWindow.Show(this);
-        _dependenciesWindow.LoadDependencies(content, entryPath, _fileIndex, _soundsetIndex, _stringTableLanguage);
+        _dependenciesWindow.LoadDependencies(content, entryPath, _fileIndex, _soundsetIndex, _stringTableLanguage, filterEntityName);
     }
 
     /// <summary>
     /// Builds the SoundsetIndex from all soundset files in the file index.
-    /// Called after RebuildFileIndex().
+    /// Loads and parses soundset files that aren't already cached.
     /// </summary>
-    void RebuildSoundsetIndex()
+    async Task RebuildSoundsetIndexAsync()
     {
         if (_fileIndex == null)
         {
@@ -145,24 +222,37 @@ public partial class MainWindow
 
         foreach (var fileName in soundsetFileNames)
         {
-            // Reuse cached parsed files from MainWindow.Sound.cs
+            // Try cache first, otherwise load and parse
             if (!_cachedSoundsetFiles.TryGetValue(fileName, out var definitions))
-                continue;
+            {
+                var fileEntries = _fileIndex.Find(fileName);
+                if (fileEntries.Count == 0) continue;
+
+                using var data = await ReadFromIndexEntryPooledAsync(fileEntries[0]);
+                if (data == null) continue;
+
+                using var decompressed = BarCompression.EnsureDecompressedPooled(data, out _);
+                var xmlText = GetTextContent(decompressed.Span, fileName);
+
+                try
+                {
+                    definitions = SoundsetParser.ParseSoundsetXml(xmlText);
+                    _cachedSoundsetFiles[fileName] = definitions;
+                }
+                catch { continue; }
+            }
 
             var culture = SoundsetIndex.ExtractCulture(fileName) ?? "unknown";
-            var fileEntries = _fileIndex.Find(fileName);
-            if (fileEntries.Count == 0) continue;
+            var entries = _fileIndex.Find(fileName);
+            if (entries.Count == 0) continue;
 
-            var soundsetFileEntry = fileEntries[0];
-
-            // Try to find the associated bank file
             FileIndexEntry? bankFile = null;
             var bankName = culture + ".bank";
             var bankEntries = _fileIndex.Find(bankName);
             if (bankEntries.Count > 0)
                 bankFile = bankEntries[0];
 
-            index.AddFromParsedFile(definitions, culture, soundsetFileEntry, bankFile);
+            index.AddFromParsedFile(definitions, culture, entries[0], bankFile);
         }
 
         _soundsetIndex = index;
