@@ -50,6 +50,13 @@ public partial class DependencyGraphWindow : SimpleWindow
     Point _dragStart;
     double _dragNodeStartX, _dragNodeStartY;
 
+    // Multi-select state
+    readonly HashSet<Border> _selectedNodes = new();
+    readonly Dictionary<Border, (double X, double Y)> _multiDragStartPositions = new();
+    bool _isRectSelecting;
+    Point _rectSelectStart;
+    Border? _selectionRect;
+
     // Graph state
     readonly List<Border> _nodeElements = [];
     readonly List<Line> _edgeElements = [];
@@ -144,6 +151,8 @@ public partial class DependencyGraphWindow : SimpleWindow
         _nodePositions.Clear();
         _visitedPaths.Clear();
         _expansionChildren.Clear();
+        _selectedNodes.Clear();
+        _multiDragStartPositions.Clear();
 
         WindowTitle = $"Dependency Graph \u2014 {_group.DisplayName}";
         OnPropertyChanged(nameof(WindowTitle));
@@ -625,6 +634,29 @@ public partial class DependencyGraphWindow : SimpleWindow
             e.Pointer.Capture(CanvasHost);
             e.Handled = true;
         }
+        else if (props.IsLeftButtonPressed && !_isDraggingNode)
+        {
+            // Left-click on empty canvas area starts rectangular selection
+            _isRectSelecting = true;
+            _rectSelectStart = e.GetPosition(GraphCanvas);
+
+            // Create selection rectangle visual
+            _selectionRect = new Border
+            {
+                Background = new SolidColorBrush(Color.Parse("#6f96bf"), 0.15),
+                BorderBrush = new SolidColorBrush(Color.Parse("#6f96bf"), 0.6),
+                BorderThickness = new Thickness(1),
+                IsHitTestVisible = false,
+                Width = 0,
+                Height = 0
+            };
+            Canvas.SetLeft(_selectionRect, _rectSelectStart.X);
+            Canvas.SetTop(_selectionRect, _rectSelectStart.Y);
+            GraphCanvas.Children.Add(_selectionRect);
+
+            e.Pointer.Capture(CanvasHost);
+            e.Handled = true;
+        }
     }
 
     void CanvasHost_PointerMoved(object? sender, PointerEventArgs e)
@@ -640,6 +672,20 @@ public partial class DependencyGraphWindow : SimpleWindow
             _graphTransform.Matrix *= Matrix.CreateTranslation(dx, dy);
             e.Handled = true;
         }
+        else if (_isRectSelecting && _selectionRect != null)
+        {
+            var pos = e.GetPosition(GraphCanvas);
+            var x = Math.Min(pos.X, _rectSelectStart.X);
+            var y = Math.Min(pos.Y, _rectSelectStart.Y);
+            var w = Math.Abs(pos.X - _rectSelectStart.X);
+            var h = Math.Abs(pos.Y - _rectSelectStart.Y);
+
+            Canvas.SetLeft(_selectionRect, x);
+            Canvas.SetTop(_selectionRect, y);
+            _selectionRect.Width = w;
+            _selectionRect.Height = h;
+            e.Handled = true;
+        }
     }
 
     void CanvasHost_PointerReleased(object? sender, PointerReleasedEventArgs e)
@@ -647,6 +693,40 @@ public partial class DependencyGraphWindow : SimpleWindow
         if (_isPanning)
         {
             _isPanning = false;
+            e.Pointer.Capture(null);
+            e.Handled = true;
+        }
+        else if (_isRectSelecting && _selectionRect != null)
+        {
+            _isRectSelecting = false;
+
+            var rectLeft = Canvas.GetLeft(_selectionRect);
+            var rectTop = Canvas.GetTop(_selectionRect);
+            var rectRight = rectLeft + _selectionRect.Width;
+            var rectBottom = rectTop + _selectionRect.Height;
+
+            // Remove selection rectangle visual
+            GraphCanvas.Children.Remove(_selectionRect);
+            _selectionRect = null;
+
+            // If rect is too small, treat as click on empty area = clear selection
+            if (rectRight - rectLeft < 5 && rectBottom - rectTop < 5)
+            {
+                ClearSelection();
+                e.Pointer.Capture(null);
+                e.Handled = true;
+                return;
+            }
+
+            // Find all nodes within the rectangle
+            ClearSelection();
+            foreach (var node in _nodeElements)
+            {
+                if (!_nodePositions.TryGetValue(node, out var pos)) continue;
+                if (pos.X >= rectLeft && pos.X <= rectRight && pos.Y >= rectTop && pos.Y <= rectBottom)
+                    SelectNode(node);
+            }
+
             e.Pointer.Capture(null);
             e.Handled = true;
         }
@@ -685,7 +765,7 @@ public partial class DependencyGraphWindow : SimpleWindow
 
     #endregion
 
-    #region Node Drag
+    #region Node Drag & Selection
 
     void SetupNodeDrag(Border node)
     {
@@ -700,11 +780,25 @@ public partial class DependencyGraphWindow : SimpleWindow
         var props = e.GetCurrentPoint(node).Properties;
         if (!props.IsLeftButtonPressed) return;
 
+        // Clicking a single node: if it's not selected, clear selection and drag just this node
+        // If it IS selected (part of multi-select), drag all selected nodes together
+        if (!_selectedNodes.Contains(node))
+            ClearSelection();
+
         _isDraggingNode = true;
         _draggedNode = node;
         _dragStart = e.GetPosition(GraphCanvas);
         _dragNodeStartX = Canvas.GetLeft(node);
         _dragNodeStartY = Canvas.GetTop(node);
+
+        // Store start positions for all selected nodes for multi-drag
+        _multiDragStartPositions.Clear();
+        foreach (var sel in _selectedNodes)
+        {
+            if (sel != node)
+                _multiDragStartPositions[sel] = (Canvas.GetLeft(sel), Canvas.GetTop(sel));
+        }
+
         e.Pointer.Capture(node);
         e.Handled = true;
     }
@@ -717,19 +811,25 @@ public partial class DependencyGraphWindow : SimpleWindow
         var dx = pos.X - _dragStart.X;
         var dy = pos.Y - _dragStart.Y;
 
-        var newLeft = _dragNodeStartX + dx;
-        var newTop = _dragNodeStartY + dy;
+        // Move the dragged node
+        MoveNodeBy(_draggedNode, _dragNodeStartX + dx, _dragNodeStartY + dy);
 
-        var size = _draggedNode.DesiredSize;
-        var newCenterX = newLeft + size.Width / 2;
-        var newCenterY = newTop + size.Height / 2;
-        UpdateEdgesForNode(_draggedNode, newCenterX, newCenterY);
-        _nodePositions[_draggedNode] = (newCenterX, newCenterY);
-
-        Canvas.SetLeft(_draggedNode, newLeft);
-        Canvas.SetTop(_draggedNode, newTop);
+        // Move all other selected nodes by the same delta
+        foreach (var (sel, startPos) in _multiDragStartPositions)
+            MoveNodeBy(sel, startPos.X + dx, startPos.Y + dy);
 
         e.Handled = true;
+    }
+
+    void MoveNodeBy(Border node, double newLeft, double newTop)
+    {
+        var size = node.DesiredSize;
+        var newCenterX = newLeft + size.Width / 2;
+        var newCenterY = newTop + size.Height / 2;
+        UpdateEdgesForNode(node, newCenterX, newCenterY);
+        _nodePositions[node] = (newCenterX, newCenterY);
+        Canvas.SetLeft(node, newLeft);
+        Canvas.SetTop(node, newTop);
     }
 
     void Node_PointerReleased(object? sender, PointerReleasedEventArgs e)
@@ -738,9 +838,57 @@ public partial class DependencyGraphWindow : SimpleWindow
         {
             _isDraggingNode = false;
             _draggedNode = null;
+            _multiDragStartPositions.Clear();
             e.Pointer.Capture(null);
             e.Handled = true;
         }
+    }
+
+    void SelectNode(Border node)
+    {
+        if (!_selectedNodes.Add(node)) return;
+        node.Opacity = 0.8;
+        node.BorderBrush = new SolidColorBrush(Color.Parse("#6f96bf"));
+    }
+
+    void DeselectNode(Border node)
+    {
+        if (!_selectedNodes.Remove(node)) return;
+        node.Opacity = 1.0;
+
+        // Restore original border brush
+        if (node.Tag is DependencyReference r)
+        {
+            var color = GetRefTypeColor(r.Type);
+            node.BorderBrush = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(1, 0, RelativeUnit.Relative),
+                GradientStops =
+                {
+                    new GradientStop(color, 0),
+                    new GradientStop(Color.Parse("#333333"), 0.15)
+                }
+            };
+        }
+        else if (node.Tag is FileIndexEntry)
+        {
+            // Match node — restore its subtle color border
+            var (matchColor, _) = GetMatchFileStyle(((FileIndexEntry)node.Tag).FileName);
+            node.BorderBrush = new SolidColorBrush(matchColor, 0.4);
+        }
+        else
+        {
+            // Center node
+            node.BorderBrush = new SolidColorBrush(CenterBorder);
+        }
+    }
+
+    void ClearSelection()
+    {
+        foreach (var node in _selectedNodes.ToList())
+            DeselectNode(node);
+        _selectedNodes.Clear();
     }
 
     #endregion
@@ -749,18 +897,37 @@ public partial class DependencyGraphWindow : SimpleWindow
 
     async void Node_DoubleTapped(object? sender, Avalonia.Input.TappedEventArgs e)
     {
+        // Don't navigate when double-tapping buttons (Hide/Show, Play, Preview, etc.)
+        if (IsInsideButton(e.Source as Control))
+            return;
+
         FileIndexEntry? entry = null;
+        DependencyReference? depRef = null;
 
         if (sender is Border border)
         {
             if (border.Tag is FileIndexEntry match)
                 entry = match;
             else if (border.Tag is DependencyReference reference && reference.Resolved.Count > 0)
+            {
                 entry = reference.Resolved[0];
+                depRef = reference;
+            }
         }
 
         if (entry != null)
+        {
             await NavigateToEntryAsync(entry);
+
+            // Highlight the reference value in the previewed document (matching DependenciesWindow behavior)
+            if (depRef != null && _mainWindow != null)
+            {
+                if (depRef.Type is DependencyRefType.StringKey or DependencyRefType.SoundsetName)
+                    await _mainWindow.HighlightTextInPreviewAsync(depRef.RawValue);
+                else if (depRef.Type == DependencyRefType.FilePath && depRef.SourceTag == "sound")
+                    await _mainWindow.HighlightTextInPreviewAsync(depRef.RawValue);
+            }
+        }
     }
 
     async void PreviewImage_Click(object? sender, RoutedEventArgs e)
@@ -786,6 +953,16 @@ public partial class DependencyGraphWindow : SimpleWindow
             }
         }
         catch { }
+    }
+
+    static bool IsInsideButton(Control? control)
+    {
+        while (control != null)
+        {
+            if (control is Button) return true;
+            control = control.Parent as Control;
+        }
+        return false;
     }
 
     static Border? FindParentBorder(Control control)

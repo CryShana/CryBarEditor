@@ -101,7 +101,7 @@
 										   Text="{Binding ReferenceCountText}" />
 
 								<!-- Graph button (only when ≤50 refs) -->
-								<Button DockPanel.Dock="Right" Padding="2"
+								<Button DockPanel.Dock="Right" Padding="4"
 										Background="#01000000" BorderThickness="0"
 										Click="ShowGraph_Click"
 										ToolTip.Tip="Show dependency graph"
@@ -109,19 +109,19 @@
 										Margin="4,0,0,0"
 										IsVisible="{Binding CanShowGraph}">
 									<micons:MaterialIcon Kind="VectorPolyline"
-														 Width="14" Height="14"
+														 Width="16" Height="16"
 														 Foreground="#6f96bf" />
 								</Button>
 
 								<!-- Navigate to group -->
-								<Button DockPanel.Dock="Right" Padding="2"
+								<Button DockPanel.Dock="Right" Padding="4"
 										Background="#01000000" BorderThickness="0"
 										Click="NavigateToGroup_Click"
 										ToolTip.Tip="Navigate to entity in source file"
 										Focusable="False" IsTabStop="False" Cursor="Hand"
 										Margin="4,0,0,0">
 									<micons:MaterialIcon Kind="SelectionEllipseArrowInside"
-														 Width="14" Height="14"
+														 Width="16" Height="16"
 														 Foreground="#6f96bf" />
 								</Button>
 
@@ -149,7 +149,7 @@
 								<DataTemplate x:DataType="cb:DependencyReference">
 									<DockPanel Margin="0,1">
 										<!-- Navigate button on right (hidden when unresolved) -->
-										<Button DockPanel.Dock="Right" Padding="2"
+										<Button DockPanel.Dock="Right" Padding="4"
 												Background="#01000000" BorderThickness="0"
 												Click="NavigateToRef_Click"
 												ToolTip.Tip="Navigate to file (click again to cycle matches)"
@@ -160,7 +160,7 @@
 											</Button.IsVisible>
 											<StackPanel Orientation="Horizontal">
 												<micons:MaterialIcon Kind="SelectionEllipseArrowInside"
-																	 Width="14" Height="14"
+																	 Width="16" Height="16"
 																	 Foreground="#6f96bf" />
 												<!-- Show match count badge when >1 resolved -->
 												<TextBlock Text="{Binding Resolved.Count}"
