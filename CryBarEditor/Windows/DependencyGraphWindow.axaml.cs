@@ -241,16 +241,7 @@ public partial class DependencyGraphWindow : SimpleWindow
 
         var grouped = refs.GroupBy(r => r.Type).OrderBy(g => g.Key).ToList();
 
-        const int RadialThreshold = 12;
-
-        if (refs.Count <= RadialThreshold)
-        {
-            LayoutRadial(centerNode, centerX, centerY, grouped, visibleMatchesMap, hasSubNodes);
-        }
-        else
-        {
-            LayoutColumnar(centerNode, centerX, centerY, grouped, visibleMatchesMap);
-        }
+        LayoutRadial(centerNode, centerX, centerY, grouped, visibleMatchesMap, hasSubNodes);
 
         ResetView();
     }
@@ -309,82 +300,6 @@ public partial class DependencyGraphWindow : SimpleWindow
             }
 
             currentAngle += arcSpan;
-        }
-    }
-
-    /// <summary>
-    /// Columnar grid layout for large graphs (>12 refs). Each type group becomes
-    /// a column radiating outward from center. Nodes stack vertically within columns
-    /// with spacing based on actual measured dimensions.
-    /// </summary>
-    void LayoutColumnar(Border centerNode, double centerX, double centerY,
-        List<IGrouping<DependencyRefType, DependencyReference>> grouped,
-        Dictionary<DependencyReference, List<FileIndexEntry>> visibleMatchesMap)
-    {
-        int groupCount = grouped.Count;
-        double angleStep = 2 * Math.PI / Math.Max(groupCount, 1);
-        double startAngle = -Math.PI / 2;
-
-        for (int g = 0; g < groupCount; g++)
-        {
-            var typeGroup = grouped[g];
-            var groupRefs = typeGroup.ToList();
-            double groupAngle = startAngle + g * angleStep;
-
-            // Direction vector for this column
-            double dirX = Math.Cos(groupAngle);
-            double dirY = Math.Sin(groupAngle);
-            // Perpendicular direction for stacking
-            double perpX = -dirY;
-            double perpY = dirX;
-
-            // Pre-create and measure all nodes in this column
-            var columnNodes = new List<(DependencyReference Ref, Border Node, Color Color, double Width, double Height)>();
-            foreach (var r in groupRefs)
-            {
-                var refColor = GetRefTypeColor(r.Type);
-                var refNode = CreateReferenceNode(r, refColor);
-                var size = MeasureNode(refNode);
-                columnNodes.Add((r, refNode, refColor, size.Width, size.Height));
-            }
-
-            // Compute column dimensions
-            double maxWidth = columnNodes.Max(n => n.Width);
-            double verticalSpacing = 8;
-            double totalHeight = columnNodes.Sum(n => n.Height + verticalSpacing) - verticalSpacing;
-
-            // Column distance from center — close enough to be readable
-            // Account for sub-nodes by using more distance when matches exist
-            bool columnHasSubNodes = groupRefs.Any(r => visibleMatchesMap[r].Count > 0);
-            double colDistance = 200 + (columnHasSubNodes ? maxWidth * 0.5 : 0);
-
-            // Column center point
-            double colCenterX = centerX + dirX * colDistance;
-            double colCenterY = centerY + dirY * colDistance;
-
-            // Stack nodes along the perpendicular direction, centered on column center
-            double stackOffset = -totalHeight / 2;
-
-            for (int i = 0; i < columnNodes.Count; i++)
-            {
-                var info = columnNodes[i];
-                double perpOffset = stackOffset + info.Height / 2;
-                double nx = colCenterX + perpX * perpOffset;
-                double ny = colCenterY + perpY * perpOffset;
-
-                PlaceNode(info.Node, nx, ny);
-
-                var edge = CreateEdge(centerX, centerY, nx, ny, info.Color, 1.5);
-                ConnectEdge(centerNode, edge);
-                ConnectEdge(info.Node, edge);
-
-                // Sub-nodes: place along the same outward direction from this node
-                var visibleMatches = visibleMatchesMap[info.Ref];
-                if (visibleMatches.Count > 0)
-                    LayoutMatchSubNodes(info.Node, visibleMatches, nx, ny, groupAngle);
-
-                stackOffset += info.Height + verticalSpacing;
-            }
         }
     }
 

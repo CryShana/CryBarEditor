@@ -363,6 +363,65 @@ public class DependencyFinderTests
     }
 
     [Fact]
+    public void HttpUrls_NotParsedAsPaths()
+    {
+        var content = """
+            <root xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                  xmlns:x="https://schemas.microsoft.com/winfx/2009/xaml">
+                <icon>resources\in_game\icon.png</icon>
+            </root>
+            """;
+
+        var result = DependencyFinder.FindDependencies(content, "test.xaml");
+
+        var paths = result.GetAllReferences().Where(r => r.Type == DependencyRefType.FilePath).ToList();
+        // Should only find the icon path, not the URI host/path fragments
+        Assert.Single(paths);
+        Assert.Contains("icon.png", paths[0].RawValue);
+    }
+
+    [Fact]
+    public void XmlTags_NotParsedAsSingleSegmentFiles()
+    {
+        var content = """
+            <Style>
+                <Setter.Value></Setter.Value>
+                <Grid.ColumnDefinitions></Grid.ColumnDefinitions>
+                <icon>handattack.tactics</icon>
+            </Style>
+            """;
+
+        var result = DependencyFinder.FindDependencies(content, "test.xaml");
+
+        var paths = result.GetAllReferences().Where(r => r.Type == DependencyRefType.FilePath).ToList();
+        // Should find handattack.tactics but NOT Setter.Value or Grid.ColumnDefinitions
+        Assert.Single(paths);
+        Assert.Equal("handattack.tactics", paths[0].RawValue);
+    }
+
+    [Fact]
+    public void XmlContent_SingleSegmentFilesStillMatchInsideTags()
+    {
+        // Ensure the <> lookbehind/lookahead doesn't break matches inside element content
+        var content = """
+            <root>
+                <reference>somefile.tactics</reference>
+                <item>config.dat</item>
+                <path attr="value.ext">another.material</path>
+            </root>
+            """;
+
+        var result = DependencyFinder.FindDependencies(content, "test.xml");
+
+        var paths = result.GetAllReferences().Where(r => r.Type == DependencyRefType.FilePath).ToList();
+        Assert.Equal(4, paths.Count);
+        Assert.Contains(paths, r => r.RawValue == "somefile.tactics");
+        Assert.Contains(paths, r => r.RawValue == "config.dat");
+        Assert.Contains(paths, r => r.RawValue == "value.ext");
+        Assert.Contains(paths, r => r.RawValue == "another.material");
+    }
+
+    [Fact]
     public void SelfExclusion_DoesNotMatchOwnPath()
     {
         var index = new FileIndex();

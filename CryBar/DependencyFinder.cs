@@ -28,7 +28,7 @@ public static partial class DependencyFinder
     /// Matches single-segment filenames with an alphabetic extension (e.g. "handattack.tactics").
     /// Lookbehind/lookahead exclude matches that are part of a larger path already caught by PathPattern.
     /// </summary>
-    [GeneratedRegex(@"(?<![\\\/\w])[A-Za-z][\w]*\.[A-Za-z][\w]+(?![\\\/\w])")]
+    [GeneratedRegex(@"(?<![\\\/\w<])[A-Za-z][\w]*\.[A-Za-z][\w]+(?![\\\/\w>])")]
     private static partial Regex SingleSegmentFilePattern();
 
     /// <summary>
@@ -303,7 +303,7 @@ public static partial class DependencyFinder
             foreach (Match m in PathPattern().Matches(content))
             {
                 var raw = m.Value;
-                if (raw.Contains("://")) continue; // filter URIs
+                if (m.Index >= 3 && content[m.Index - 3] == ':' && content[m.Index - 2] == '/' && content[m.Index - 1] == '/') continue; // skip paths after ://
                 if (!IsLikelyPath(raw)) continue; // filter base64 and garbage
 
                 var normalized = raw.Replace('/', '\\');
