@@ -100,10 +100,10 @@ public partial class DependencyGraphWindow : SimpleWindow
     static readonly Color CenterBorder = SelectionColor;
 
     static readonly Color TmmColor = Color.Parse("#8bc34a");
-    static readonly Color TmmDataColor = Color.Parse("#7cb342");
+    static readonly Color FbxImportColor = Color.Parse("#90a4ae");
+    static readonly Color TmmDataColor = FbxImportColor;
     static readonly Color TextureColor = Color.Parse("#ce93d8");
     static readonly Color MaterialColor = Color.Parse("#ffb74d");
-    static readonly Color FbxImportColor = Color.Parse("#90a4ae");
     static readonly Color XmlColor = Color.Parse("#d9d9d9");
     static readonly Color GenericColor = Color.Parse("#808080");
 
@@ -381,7 +381,7 @@ public partial class DependencyGraphWindow : SimpleWindow
         return r.Resolved;
     }
 
-    void LayoutMatchSubNodes(Border parentNode, List<FileIndexEntry> matches, double parentX, double parentY, double parentAngle, List<Control>? trackingList = null)
+    void LayoutMatchSubNodes(Border parentNode, List<FileIndexEntry> matches, double parentX, double parentY, double parentAngle, List<Control>? trackingList = null, HashSet<Border>? newNodeSet = null)
     {
         // Pre-create and measure all match nodes
         var matchNodes = new List<(FileIndexEntry Match, Border Node, Color Color, MaterialIconKind Icon, double Width)>();
@@ -409,6 +409,7 @@ public partial class DependencyGraphWindow : SimpleWindow
 
             PlaceNode(info.Node, sx, sy);
             trackingList?.Add(info.Node);
+            newNodeSet?.Add(info.Node);
 
             var subEdge = CreateEdge(parentX, parentY, sx, sy, info.Color, 1.0);
             ConnectEdge(parentNode, subEdge);
@@ -1829,20 +1830,41 @@ public partial class DependencyGraphWindow : SimpleWindow
         List<(DependencyReference Ref, Border Node, Color Color, Size Size)> nodes,
         List<Control> spawnedControls, HashSet<Border> newNodeSet)
     {
-        double maxWidth = nodes.Max(n => n.Size.Width);
-        double effectiveWidth = maxWidth + 30;
+        // Compute per-node effective widths accounting for subtree fan-out
+        var effectiveWidths = new double[nodes.Count];
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            double baseWidth = nodes[i].Size.Width + 30;
+            var matchCount = GetVisibleMatches(nodes[i].Ref).Count;
+            if (matchCount > 0)
+                baseWidth += matchCount * 60; // extra angular space for sub-node fan
+            effectiveWidths[i] = baseWidth;
+        }
 
-        double subCircumference = nodes.Count * effectiveWidth;
-        double subRadius = Math.Max(200, subCircumference / Math.PI);
+        double totalEffectiveWidth = effectiveWidths.Sum();
+        double subRadius = Math.Max(200, totalEffectiveWidth / Math.PI);
         double arcSpan = Math.Min(Math.PI * 0.8, nodes.Count * 0.15 + 0.3);
-        double startAngle = baseAngle - arcSpan / 2;
 
+        // Distribute angular space proportionally to each node's effective width
+        double cumulativeWidth = 0;
         for (int i = 0; i < nodes.Count; i++)
         {
             var info = nodes[i];
-            double angle = nodes.Count == 1
-                ? baseAngle
-                : startAngle + i * arcSpan / Math.Max(1, nodes.Count - 1);
+            double angle;
+            if (nodes.Count == 1)
+            {
+                angle = baseAngle;
+            }
+            else
+            {
+                // Place node at the center of its proportional angular slice
+                double sliceMid = cumulativeWidth + effectiveWidths[i] / 2;
+                double fraction = sliceMid / totalEffectiveWidth;
+                angle = baseAngle - arcSpan / 2 + fraction * arcSpan;
+            }
+
+            cumulativeWidth += effectiveWidths[i];
+
             double sx = parentPos.X + subRadius * Math.Cos(angle);
             double sy = parentPos.Y + subRadius * Math.Sin(angle);
 
@@ -1857,7 +1879,7 @@ public partial class DependencyGraphWindow : SimpleWindow
 
             var visibleMatches = GetVisibleMatches(info.Ref);
             if (visibleMatches.Count > 0)
-                LayoutMatchSubNodes(info.Node, visibleMatches, sx, sy, angle, spawnedControls);
+                LayoutMatchSubNodes(info.Node, visibleMatches, sx, sy, angle, spawnedControls, newNodeSet);
         }
     }
 
