@@ -21,6 +21,8 @@ public class Configuration
     public bool? ExportOpenInEditor { get; set; }
     public string? StringTableLanguage { get; set; }
     public List<QuickAccessEntry>? QuickAccessEntries { get; set; }
+    public bool? FilterOnlyOverriddenFiles { get; set; }
+    public bool? FilterOnlyOverriddenBarEntries { get; set; }
 }
 
 [JsonSourceGenerationOptions(DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]

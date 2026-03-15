@@ -41,6 +41,10 @@ public partial class MainWindow : SimpleWindow
     public bool _searchCaseSensitive = true;
     public bool _searchRegex = false;
 
+    // OVERRIDE FILTER
+    bool _filterOnlyOverriddenFiles;
+    bool _filterOnlyOverriddenBarEntries;
+
     // EDITOR SETTINGS
     string _editorCommand = "";
     string _stringTableLanguage = "";
@@ -71,6 +75,10 @@ public partial class MainWindow : SimpleWindow
         {
             FilesQuery = "";
         }
+        if (!RootFileEntries.Contains(entry))
+        {
+            FilterOnlyOverriddenFiles = false;
+        }
 
         return entry;
     }
@@ -90,6 +98,10 @@ public partial class MainWindow : SimpleWindow
         if (!BarEntries.Contains(entry))
         {
             EntryQuery = "";
+        }
+        if (!BarEntries.Contains(entry))
+        {
+            FilterOnlyOverriddenBarEntries = false;
         }
 
         return entry;
@@ -177,6 +189,19 @@ public partial class MainWindow : SimpleWindow
     public string BankQuery { get => _bankQuery; set { _bankQuery = value; OnSelfChanged(); RefreshBankEntries(); } }
     public string EntryQuery { get => _entryQuery; set { _entryQuery = value; OnSelfChanged(); RefreshBAREntries(); } }
     public string FilesQuery { get => _filesQuery; set { _filesQuery = value; OnSelfChanged(); RefreshFileEntries(); } }
+
+    public bool FilterOnlyOverriddenFiles
+    {
+        get => _filterOnlyOverriddenFiles;
+        set { if (_filterOnlyOverriddenFiles == value) return; _filterOnlyOverriddenFiles = value; OnSelfChanged(); RefreshFileEntries(); SaveConfiguration(); }
+    }
+
+    public bool FilterOnlyOverriddenBarEntries
+    {
+        get => _filterOnlyOverriddenBarEntries;
+        set { if (_filterOnlyOverriddenBarEntries == value) return; _filterOnlyOverriddenBarEntries = value; OnSelfChanged(); RefreshBAREntries(); SaveConfiguration(); }
+    }
+
     public string BarFileRootPath => _barFile == null ? "-" : _barFile.RootPath!;
     public string RootFileRootPath => string.IsNullOrEmpty(_rootDirectory) ? "-" : GetRootRelevantPath();
     public string PreviewedFileName { get => string.IsNullOrEmpty(_previewedFileName) ? "No file selected" : _previewedFileName; set { _previewedFileName = value; OnPropertyChanged(nameof(PreviewedFileName)); } }
@@ -624,6 +649,8 @@ public partial class MainWindow : SimpleWindow
             _editorCommand = config.EditorCommand ?? "";
             _stringTableLanguage = config.StringTableLanguage ?? "";
             _quickAccessEntries = config.QuickAccessEntries ?? new();
+            _filterOnlyOverriddenFiles = config.FilterOnlyOverriddenFiles ?? false;
+            _filterOnlyOverriddenBarEntries = config.FilterOnlyOverriddenBarEntries ?? false;
         }
         catch
         {
@@ -660,6 +687,8 @@ public partial class MainWindow : SimpleWindow
             _lastConfiguration.EditorCommand = _editorCommand;
             _lastConfiguration.StringTableLanguage = _stringTableLanguage;
             _lastConfiguration.QuickAccessEntries = _quickAccessEntries;
+            _lastConfiguration.FilterOnlyOverriddenFiles = _filterOnlyOverriddenFiles;
+            _lastConfiguration.FilterOnlyOverriddenBarEntries = _filterOnlyOverriddenBarEntries;
 
             File.WriteAllText(config_path, JsonSerializer.Serialize(_lastConfiguration, CryBarJsonContext.Default.Configuration));
         }

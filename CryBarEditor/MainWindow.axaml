@@ -43,6 +43,15 @@
 			<Setter Property="Padding" Value="8,5,26,5" />
 		</Style>
 
+		<!-- Override filter toggle -->
+		<Style Selector="ToggleButton.overrideFilter">
+			<Setter Property="Background" Value="Transparent" />
+			<Setter Property="BorderThickness" Value="0" />
+		</Style>
+		<Style Selector="ToggleButton.overrideFilter:checked">
+			<Setter Property="Background" Value="#4772b5" />
+		</Style>
+
 		<!-- TMM TabControl dark theme -->
 		<Style Selector="TabControl#_tmmTabControl">
 			<Setter Property="Background" Value="#1c1c1c" />
@@ -175,15 +184,23 @@
 								   TextTrimming="CharacterEllipsis" />
 					</DockPanel>
 
-					<Grid DockPanel.Dock="Top">
-						<TextBox Classes="clearable" Text="{Binding FilesQuery, Mode=TwoWay}" Watermark="Filter files" TextChanged="FilterTextBox_TextChanged" />
-						<Button Classes="filterClear" HorizontalAlignment="Right" VerticalAlignment="Center"
-								Focusable="False" IsTabStop="False" Click="FilterClear_Click"
-								IsVisible="False" Background="Transparent" BorderThickness="0"
-								Padding="2" Margin="0,0,4,0" Cursor="Hand">
-							<micons:MaterialIcon Kind="Close" Width="14" Height="14" Foreground="#808080" />
-						</Button>
-					</Grid>
+					<DockPanel DockPanel.Dock="Top">
+						<ToggleButton DockPanel.Dock="Right" Classes="overrideFilter" Margin="4,0,0,0"
+									  IsChecked="{Binding FilterOnlyOverriddenFiles, Mode=TwoWay}"
+									  ToolTip.Tip="Show only overridden entries"
+									  Padding="4" MinWidth="0" MinHeight="0" Cursor="Hand">
+							<micons:MaterialIcon Kind="FileExportOutline" Width="16" Height="16" />
+						</ToggleButton>
+						<Grid>
+							<TextBox Classes="clearable" Text="{Binding FilesQuery, Mode=TwoWay}" Watermark="Filter files" TextChanged="FilterTextBox_TextChanged" />
+							<Button Classes="filterClear" HorizontalAlignment="Right" VerticalAlignment="Center"
+									Focusable="False" IsTabStop="False" Click="FilterClear_Click"
+									IsVisible="False" Background="Transparent" BorderThickness="0"
+									Padding="2" Margin="0,0,4,0" Cursor="Hand">
+								<micons:MaterialIcon Kind="Close" Width="14" Height="14" Foreground="#808080" />
+							</Button>
+						</Grid>
+					</DockPanel>
 					<TextBlock DockPanel.Dock="Top" Margin="0,6,0,0">
 						<Run Text="Guessed Root: " FontWeight="Bold"/>
 						<Run Text="{Binding RootFileRootPath}"/>
@@ -240,7 +257,14 @@
 							<Button Content="{micons:MaterialIconExt Kind=ArchiveArrowUpOutline}" Padding="4" Click="LoadBAR_Click" Margin="0,0,6,6"/>
 							<Label DockPanel.Dock="Top" Content="{Binding LoadedBARFilePathOrRelative}" Foreground="Gray" Margin="0,2,0,0" />
 						</DockPanel>
-						<Grid DockPanel.Dock="Top">
+						<DockPanel DockPanel.Dock="Top">
+						<ToggleButton DockPanel.Dock="Right" Classes="overrideFilter" Margin="4,0,0,0"
+									  IsChecked="{Binding FilterOnlyOverriddenBarEntries, Mode=TwoWay}"
+									  ToolTip.Tip="Show only overridden entries"
+									  Padding="4" MinWidth="0" MinHeight="0" Cursor="Hand">
+							<micons:MaterialIcon Kind="FileExportOutline" Width="16" Height="16" />
+						</ToggleButton>
+						<Grid>
 							<TextBox Classes="clearable" Text="{Binding EntryQuery, Mode=TwoWay}" Watermark="Filter BAR entries" TextChanged="FilterTextBox_TextChanged" />
 							<Button Classes="filterClear" HorizontalAlignment="Right" VerticalAlignment="Center"
 									Focusable="False" IsTabStop="False" Click="FilterClear_Click"
@@ -249,6 +273,7 @@
 								<micons:MaterialIcon Kind="Close" Width="14" Height="14" Foreground="#808080" />
 							</Button>
 						</Grid>
+						</DockPanel>
 						<DockPanel DockPanel.Dock="Top" Margin="0,6,0,0">
 							<TextBlock DockPanel.Dock="Left" HorizontalAlignment="Left">
 								<Run Text="Root: " FontWeight="Bold"/>

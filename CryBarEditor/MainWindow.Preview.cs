@@ -696,6 +696,14 @@ public partial class MainWindow
             if (q.Length > 0 && !e.RelativePath.Contains(q, StringComparison.OrdinalIgnoreCase))
                 continue;
 
+            // filter by override status
+            if (_filterOnlyOverriddenBarEntries)
+            {
+                var fullRel = GetBARFullRelativePath(e);
+                if (!IsFileOverriden(fullRel) && !IsFileAdditiveModded(fullRel))
+                    continue;
+            }
+
             yield return e;
         }
     }
@@ -708,6 +716,14 @@ public partial class MainWindow
             // filter by query
             if (q.Length > 0 && !e.RelativePath.Contains(q, StringComparison.OrdinalIgnoreCase))
                 continue;
+
+            // filter by override status
+            if (_filterOnlyOverriddenFiles)
+            {
+                var fullRel = GetRootFullRelativePath(e);
+                if (!IsFileOverriden(fullRel) && !IsFileAdditiveModded(fullRel))
+                    continue;
+            }
 
             yield return e;
         }
