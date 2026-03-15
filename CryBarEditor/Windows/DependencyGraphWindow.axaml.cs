@@ -582,7 +582,7 @@ public partial class DependencyGraphWindow : SimpleWindow
 
         var border = new Border
         {
-            Background = new SolidColorBrush(Color.Parse("#141414")),
+            Background = new SolidColorBrush(Color.Parse("#1e1e1e")),
             BorderBrush = new SolidColorBrush(Color.Parse("#333333")),
             BorderThickness = new Thickness(2, 1, 1, 1),
             CornerRadius = new CornerRadius(4),
@@ -661,7 +661,7 @@ public partial class DependencyGraphWindow : SimpleWindow
 
         var border = new Border
         {
-            Background = new SolidColorBrush(Color.Parse("#141414")),
+            Background = new SolidColorBrush(Color.Parse("#1a1a1a")),
             BorderBrush = new SolidColorBrush(color, 0.4),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(3),
@@ -715,7 +715,7 @@ public partial class DependencyGraphWindow : SimpleWindow
             Stroke = new SolidColorBrush(color, 0.4),
             StrokeThickness = thickness
         };
-        GraphCanvas.Children.Add(line);
+        GraphCanvas.Children.Insert(0, line);
         _edgeElements.Add(line);
         return line;
     }
@@ -1730,18 +1730,8 @@ public partial class DependencyGraphWindow : SimpleWindow
                 expansionNodes.Add((r, subNode, refColor, MeasureNode(subNode)));
             }
 
-            const int ExpansionRadialThreshold = 12;
-
-            if (allRefs.Count <= ExpansionRadialThreshold)
-            {
-                LayoutExpansionRadial(parentNode, parentPos, baseAngle, expansionNodes,
-                    spawnedControls, newNodeSet);
-            }
-            else
-            {
-                LayoutExpansionColumnar(parentNode, parentPos, baseAngle, expansionNodes,
-                    spawnedControls, newNodeSet);
-            }
+            LayoutExpansionRadial(parentNode, parentPos, baseAngle, expansionNodes,
+                spawnedControls, newNodeSet);
 
             _expansionChildren[parentNode] = spawnedControls;
             _expandedRefCount += spawnedControls.Count(c => c is Border);
