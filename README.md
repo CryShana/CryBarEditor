@@ -14,6 +14,7 @@ The purpose of this tool is to enable fast and easy modding of Age of Mythology 
 - **Read BAR archives**
 - **Read FMOD banks** (play, view and export FMOD events)
 - **Preview 3D TMM models** (export to OBJ or glTF with or without materials)
+- **Dependency Finder and Graph** (easily find what other files are references in a file)
 - Pick a **Root directory** (usually `\games` folder) for fast switching between BAR and other files
 - Pick an **Export root directory** for fast exporting either from BAR or from Root directory
 - Supports following formats:
@@ -73,6 +74,8 @@ If you are writing XS scripts, you can also checkout my personal reference I wro
 ![CryBarEditor_2](https://assets.cryshana.me/g18ndgdKDzLQ.png)
 ### Previewing DDT image and (old searching)
 ![CryBarEditor_3](https://assets.cryshana.me/okCtQiWGpAlx.png)
+### Dependency graph
+![CryBarEditor_Graph](https://assets.cryshana.me/o7iWnajI60fA.avif)
 ### Exporting selected files
 ![CryBarEditor_4](https://assets.cryshana.me/pOaZBwQHtRsN.png)
 ### Creating DDT from selected image
