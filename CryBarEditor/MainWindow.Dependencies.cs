@@ -4,8 +4,6 @@ using CryBarEditor.Classes;
 
 using System;
 using System.IO;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace CryBarEditor;
@@ -23,15 +21,12 @@ public partial class MainWindow
         if (IsContextFromBAR(list))
         {
             if (SelectedBarEntry == null || _barStream == null) return;
-            _ = ShowDependenciesForBarEntry(SelectedBarEntry);
+            _ = ShowDependenciesAsync(SelectedBarEntry);
         }
         else
         {
             if (SelectedRootFileEntry == null) return;
-            if (SelectedRootFileEntry.RelativePath.EndsWith(".bank", StringComparison.OrdinalIgnoreCase))
-                _ = ShowDependenciesForBankFile(SelectedRootFileEntry);
-            else
-                _ = ShowDependenciesForRootFile(SelectedRootFileEntry);
+            _ = ShowDependenciesAsync(SelectedRootFileEntry);
         }
     }
 
@@ -55,36 +50,42 @@ public partial class MainWindow
             return;
         }
 
-        using var data = await ReadFromIndexEntryPooledAsync(sourceEntry[0]);
-        if (data == null)
+        try
         {
-            _ = ShowError("Could not read soundset file content.");
-            return;
-        }
+            using var data = await ReadFromIndexEntryPooledAsync(sourceEntry[0]);
+            if (data == null)
+            {
+                _ = ShowError("Could not read soundset file content.");
+                return;
+            }
 
-        using var decompressed = BarCompression.EnsureDecompressedPooled(data, out _);
-        var content = GetTextContent(decompressed.Span, resolution.SourceFile);
-        ShowDependenciesFor(content, resolution.SourceFile, filterEntityName: resolution.SoundsetName);
+            await EnsureSoundsetIndexAsync();
+            var result = await DependencyFinder.FindDependenciesForFileAsync(
+                resolution.SourceFile, data, _fileIndex, _soundsetIndex,
+                _stringTableLanguage, ReadFromIndexEntryPooledAsync,
+                filterEntityName: resolution.SoundsetName);
+            ShowDependenciesForResult(result, displayName: resolution.SoundsetName);
+        }
+        catch (Exception ex)
+        {
+            _ = ShowError($"Failed to analyze dependencies:\n{ex.Message}");
+        }
     }
 
-    async Task ShowDependenciesForBarEntry(BarFileEntry entry)
+    async Task ShowDependenciesAsync(BarFileEntry entry)
     {
         if (_barStream == null) return;
 
         try
         {
             using var rawData = await entry.ReadDataRawPooledAsync(_barStream);
-            using var data = BarCompression.EnsureDecompressedPooled(rawData, out _);
             var entryPath = GetBARFullRelativePath(entry);
 
-            if (entry.RelativePath.EndsWith(".tmm", StringComparison.OrdinalIgnoreCase))
-            {
-                ShowDependenciesForResult(DependencyFinder.FindDependenciesForTmm(entryPath, _fileIndex));
-                return;
-            }
-
-            var content = GetTextContent(data.Span, entry.RelativePath);
-            ShowDependenciesFor(content, entryPath);
+            await EnsureSoundsetIndexAsync();
+            var result = await DependencyFinder.FindDependenciesForFileAsync(
+                entryPath, rawData, _fileIndex, _soundsetIndex,
+                _stringTableLanguage, ReadFromIndexEntryPooledAsync);
+            ShowDependenciesForResult(result);
         }
         catch (Exception ex)
         {
@@ -92,43 +93,7 @@ public partial class MainWindow
         }
     }
 
-    /// <summary>
-    /// Handles "Show dependencies" for a .bank root file by finding and reading
-    /// the associated soundset file (e.g. greek.bank → soundsets_greek.soundset.XMB).
-    /// </summary>
-    async Task ShowDependenciesForBankFile(RootFileEntry entry)
-    {
-        // Extract culture from bank filename: "greek.bank" → "greek"
-        var bankName = Path.GetFileNameWithoutExtension(entry.RelativePath);
-        var soundsetFileName = $"soundsets_{bankName}.soundset.XMB";
-
-        var soundsetEntries = _fileIndex?.Find(soundsetFileName);
-        if (soundsetEntries == null || soundsetEntries.Count == 0)
-        {
-            _ = ShowError($"Could not find associated soundset file: {soundsetFileName}");
-            return;
-        }
-
-        try
-        {
-            using var data = await ReadFromIndexEntryPooledAsync(soundsetEntries[0]);
-            if (data == null)
-            {
-                _ = ShowError($"Could not read soundset file: {soundsetFileName}");
-                return;
-            }
-
-            using var decompressed = BarCompression.EnsureDecompressedPooled(data, out _);
-            var content = GetTextContent(decompressed.Span, soundsetFileName);
-            ShowDependenciesFor(content, soundsetFileName);
-        }
-        catch (Exception ex)
-        {
-            _ = ShowError($"Failed to read soundset file for dependency analysis:\n{ex.Message}");
-        }
-    }
-
-    async Task ShowDependenciesForRootFile(RootFileEntry entry)
+    async Task ShowDependenciesAsync(RootFileEntry entry)
     {
         if (!Directory.Exists(_rootDirectory)) return;
 
@@ -136,17 +101,13 @@ public partial class MainWindow
         {
             var path = Path.Combine(_rootDirectory, entry.RelativePath);
             using var rawData = await PooledBuffer.FromFile(path);
-            using var data = BarCompression.EnsureDecompressedPooled(rawData, out _);
             var entryPath = GetRootFullRelativePath(entry);
 
-            if (entry.RelativePath.EndsWith(".tmm", StringComparison.OrdinalIgnoreCase))
-            {
-                ShowDependenciesForResult(DependencyFinder.FindDependenciesForTmm(entryPath, _fileIndex));
-                return;
-            }
-
-            var content = GetTextContent(data.Span, entry.RelativePath);
-            ShowDependenciesFor(content, entryPath);
+            await EnsureSoundsetIndexAsync();
+            var result = await DependencyFinder.FindDependenciesForFileAsync(
+                entryPath, rawData, _fileIndex, _soundsetIndex,
+                _stringTableLanguage, ReadFromIndexEntryPooledAsync);
+            ShowDependenciesForResult(result);
         }
         catch (Exception ex)
         {
@@ -154,21 +115,13 @@ public partial class MainWindow
         }
     }
 
-    /// <summary>
-    /// Converts decompressed file data to text, handling XMB-to-XML conversion when needed.
-    /// </summary>
-    static string GetTextContent(ReadOnlySpan<byte> data, string filePath)
-    {
-        if (Path.GetExtension(filePath).Equals(".xmb", StringComparison.OrdinalIgnoreCase))
-            return ConversionHelper.ConvertXmbToXmlText(data) ?? Encoding.UTF8.GetString(data);
-        return Encoding.UTF8.GetString(data);
-    }
 
-    void ShowDependenciesForResult(DependencyResult result)
+
+    void ShowDependenciesForResult(DependencyResult result, string? displayName = null)
     {
         if (_dependenciesWindow != null)
         {
-            _dependenciesWindow.LoadDependenciesFromResult(result);
+            _dependenciesWindow.LoadDependenciesFromResult(result, displayName, _fileIndex);
             _dependenciesWindow.Focus();
             return;
         }
@@ -176,33 +129,13 @@ public partial class MainWindow
         _dependenciesWindow = new DependenciesWindow(this);
         _dependenciesWindow.Closed += (_, _) => _dependenciesWindow = null;
         _dependenciesWindow.Show(this);
-        _dependenciesWindow.LoadDependenciesFromResult(result);
+        _dependenciesWindow.LoadDependenciesFromResult(result, displayName, _fileIndex);
     }
 
     async Task EnsureSoundsetIndexAsync()
     {
         if (_soundsetIndex == null && _fileIndex != null)
             await RebuildSoundsetIndexAsync();
-    }
-
-    async void ShowDependenciesFor(string content, string entryPath, string? filterEntityName = null)
-    {
-        await EnsureSoundsetIndexAsync();
-        if (_dependenciesWindow != null)
-        {
-            _dependenciesWindow.LoadDependencies(content, entryPath, _fileIndex, _soundsetIndex, _stringTableLanguage, filterEntityName);
-            _dependenciesWindow.Focus();
-            return;
-        }
-
-        _dependenciesWindow = new DependenciesWindow(this);
-        _dependenciesWindow.Closed += (_, _) =>
-        {
-            _dependenciesWindow = null;
-        };
-
-        _dependenciesWindow.Show(this);
-        _dependenciesWindow.LoadDependencies(content, entryPath, _fileIndex, _soundsetIndex, _stringTableLanguage, filterEntityName);
     }
 
     /// <summary>
@@ -222,17 +155,17 @@ public partial class MainWindow
 
         foreach (var fileName in soundsetFileNames)
         {
+            var fileEntries = _fileIndex.Find(fileName);
+            if (fileEntries.Count == 0) continue;
+
             // Try cache first, otherwise load and parse
             if (!_cachedSoundsetFiles.TryGetValue(fileName, out var definitions))
             {
-                var fileEntries = _fileIndex.Find(fileName);
-                if (fileEntries.Count == 0) continue;
-
                 using var data = await ReadFromIndexEntryPooledAsync(fileEntries[0]);
                 if (data == null) continue;
 
                 using var decompressed = BarCompression.EnsureDecompressedPooled(data, out _);
-                var xmlText = GetTextContent(decompressed.Span, fileName);
+                var xmlText = ConversionHelper.GetTextContent(decompressed.Span, fileName);
 
                 try
                 {
@@ -243,8 +176,6 @@ public partial class MainWindow
             }
 
             var culture = SoundsetIndex.ExtractCulture(fileName) ?? "unknown";
-            var entries = _fileIndex.Find(fileName);
-            if (entries.Count == 0) continue;
 
             FileIndexEntry? bankFile = null;
             var bankName = culture + ".bank";
@@ -252,7 +183,7 @@ public partial class MainWindow
             if (bankEntries.Count > 0)
                 bankFile = bankEntries[0];
 
-            index.AddFromParsedFile(definitions, culture, entries[0], bankFile);
+            index.AddFromParsedFile(definitions, culture, fileEntries[0], bankFile);
         }
 
         _soundsetIndex = index;

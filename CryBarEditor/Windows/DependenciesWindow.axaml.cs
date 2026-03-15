@@ -1,14 +1,12 @@
 using Avalonia.Controls;
 using Avalonia.Data.Converters;
 using Avalonia.Interactivity;
-using Avalonia.Threading;
 
 using CryBar;
 using CryBarEditor.Classes;
 
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -70,45 +68,11 @@ public partial class DependenciesWindow : SimpleWindow
             Height = owner.Height;
     }
 
-    public void LoadDependencies(string content, string entryPath, FileIndex? fileIndex, SoundsetIndex? soundsetIndex, string? stringTableLanguage = null, string? filterEntityName = null)
-    {
-        _currentEntryPath = entryPath;
-        _currentFileIndex = fileIndex;
-        var displayName = filterEntityName ?? Path.GetFileName(entryPath);
-        WindowTitle = $"Dependencies \u2014 {displayName}";
-        OnPropertyChanged(nameof(WindowTitle));
-        Title = WindowTitle;
-
-        IsLoading = true;
-        _allGroups.Clear();
-        FilteredGroups.Clear();
-        _resolvedNavigationIndex.Clear();
-        OnPropertyChanged(nameof(StatusText));
-
-        Task.Run(() =>
-        {
-            var result = DependencyFinder.FindDependencies(content, entryPath, fileIndex, soundsetIndex, stringTableLanguage, filterEntityName);
-            var items = result.Groups.Select(g => new DependencyGroupItem(g)).ToList();
-
-            Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                _allGroups.Clear();
-                _allGroups.AddRange(items);
-                _totalRefs = _allGroups.Sum(g => g.ReferenceCount);
-                RefreshFiltered();
-                IsLoading = false;
-                OnPropertyChanged(nameof(StatusText));
-            });
-        });
-    }
-
-    /// <summary>
-    /// Loads a pre-computed DependencyResult (e.g. from TMM parsing).
-    /// </summary>
-    public void LoadDependenciesFromResult(DependencyResult result)
+    public void LoadDependenciesFromResult(DependencyResult result, string? displayName = null, FileIndex? fileIndex = null)
     {
         _currentEntryPath = result.EntryPath;
-        WindowTitle = $"Dependencies \u2014 {Path.GetFileName(result.EntryPath)}";
+        _currentFileIndex = fileIndex;
+        WindowTitle = $"Dependencies \u2014 {displayName ?? Path.GetFileName(result.EntryPath)}";
         OnPropertyChanged(nameof(WindowTitle));
         Title = WindowTitle;
 

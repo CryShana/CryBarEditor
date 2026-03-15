@@ -114,6 +114,81 @@ public class FileIndexTests
         Assert.Single(results);
     }
 
+    [Fact]
+    public void Find_Material_DoesNotMatchTmmOrFbximport()
+    {
+        var index = new FileIndex();
+        index.Add(MakeEntry(@"intermediate\modelcache\armory_a_age2.tmm"));
+        index.Add(MakeEntry(@"intermediate\modelcache\armory_a_age2.tmm.data"));
+        index.Add(MakeEntry(@"game\art\armory_a_age2.material.XMB"));
+        index.Add(MakeEntry(@"game\art\armory_a_age2.fbximport"));
+
+        // Searching for ".material" must NOT return ".tmm" or ".fbximport"
+        var results = index.Find("armory_a_age2.material");
+        Assert.Single(results);
+        Assert.Equal("armory_a_age2.material.XMB", results[0].FileName);
+    }
+
+    [Fact]
+    public void Find_MaterialXmb_ExactMatch()
+    {
+        var index = new FileIndex();
+        index.Add(MakeEntry(@"intermediate\modelcache\armory_a_age2.tmm"));
+        index.Add(MakeEntry(@"game\art\armory_a_age2.material.XMB"));
+
+        var results = index.Find("armory_a_age2.material.XMB");
+        Assert.Single(results);
+        Assert.Equal("armory_a_age2.material.XMB", results[0].FileName);
+    }
+
+    [Fact]
+    public void Find_ExtensionlessQuery_MatchesKnownExtensions()
+    {
+        var index = new FileIndex();
+        index.Add(MakeEntry(@"game\art\armory_a_age2.tmm"));
+        index.Add(MakeEntry(@"game\art\armory_a_age2.ddt"));
+
+        // Extensionless query matches files with known extensions (.tmm, .ddt)
+        var results = index.Find("armory_a_age2");
+        Assert.Equal(2, results.Count);
+    }
+
+    [Fact]
+    public void Find_ExtensionlessQuery_FallsBackToPrefix()
+    {
+        var index = new FileIndex();
+        index.Add(MakeEntry(@"game\art\armory_a_age2.fbximport"));
+        index.Add(MakeEntry(@"game\art\armory_a_age2.composite"));
+
+        // No known ext matches → fallback to prefix matching
+        var results = index.Find("armory_a_age2");
+        Assert.Equal(2, results.Count);
+    }
+
+    [Fact]
+    public void Find_CompoundExtension_DoesNotMatchDifferentFile()
+    {
+        var index = new FileIndex();
+        index.Add(MakeEntry(@"game\art\armory_a_age2.tmm"));
+        index.Add(MakeEntry(@"game\art\armory_a_age2.fbximport"));
+
+        // Query with specific compound extension should not match other files with same stem
+        var results = index.Find("armory_a_age2.tmm.material");
+        Assert.Empty(results); // no .tmm.material or .tmm.material.XMB exists
+    }
+
+    [Fact]
+    public void Find_KnownExtStripping_MatchesFileWithoutXmb()
+    {
+        var index = new FileIndex();
+        index.Add(MakeEntry(@"game\data\proto.xml"));
+
+        // Query with .xmb should find entry without .xmb (known extension stripping)
+        var results = index.Find("proto.xml.xmb");
+        Assert.Single(results);
+        Assert.Equal("proto.xml", results[0].FileName);
+    }
+
     // --- FindByPartialPath tests ---
 
     [Fact]

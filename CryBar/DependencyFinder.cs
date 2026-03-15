@@ -1,3 +1,6 @@
+using CryBar.Classes;
+
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 
@@ -508,8 +511,10 @@ public static partial class DependencyFinder
             dataRef.Resolved.AddRange(index.Find(dataFileName));
         refs.Add(dataRef);
 
-        // Companion material file: {name}.tmm.material or {name}.tmm.material.XMB
-        var matFileName = tmmFileName + ".material";
+        // Companion material file: {stem}.material.XMB or {stem}.material
+        // Note: the .tmm extension is stripped — "armory_a_age2.tmm" → "armory_a_age2.material.XMB"
+        var tmmStem = Path.GetFileNameWithoutExtension(tmmFileName);
+        var matFileName = tmmStem + ".material";
         var matRef = new DependencyReference
         {
             RawValue = matFileName,
@@ -530,6 +535,72 @@ public static partial class DependencyFinder
             EntryPath = entryPath,
             Groups = [new DependencyGroup { References = refs }],
         };
+    }
+
+    /// <summary>
+    /// Unified entry point: determines file type, reads/decompresses data, and returns dependencies.
+    /// Handles .tmm (companion files), .bank (redirects to soundset), and text-based files (XML/JSON/etc).
+    /// </summary>
+    /// <param name="entryPath">Full relative path of the file being analyzed.</param>
+    /// <param name="fileData">Raw (possibly compressed) file data.</param>
+    /// <param name="index">File index for resolving references.</param>
+    /// <param name="soundsetIndex">Soundset index for resolving soundset names.</param>
+    /// <param name="stringTableLanguage">Preferred language for string table resolution.</param>
+    /// <param name="readFileAsync">Delegate to read a file from a FileIndexEntry (for bank→soundset redirect). Caller must dispose the returned buffer.</param>
+    /// <param name="filterEntityName">When set, only return the group matching this entity name.</param>
+    public static async ValueTask<DependencyResult> FindDependenciesForFileAsync(
+        string entryPath,
+        PooledBuffer fileData,
+        FileIndex? index,
+        SoundsetIndex? soundsetIndex = null,
+        string? stringTableLanguage = null,
+        Func<FileIndexEntry, ValueTask<PooledBuffer?>>? readFileAsync = null,
+        string? filterEntityName = null)
+    {
+        var ext = Path.GetExtension(entryPath);
+
+        // TMM: companion files only
+        if (ext.Equals(".tmm", StringComparison.OrdinalIgnoreCase))
+            return FindDependenciesForTmm(entryPath, index);
+
+        // Bank: redirect to associated soundset file
+        if (ext.Equals(".bank", StringComparison.OrdinalIgnoreCase))
+            return await FindDependenciesForBankAsync(entryPath, index, soundsetIndex, stringTableLanguage, readFileAsync);
+
+        // Text-based: decompress and parse
+        using var decompressed = BarCompression.EnsureDecompressedPooled(fileData, out _);
+        var content = ConversionHelper.GetTextContent(decompressed.Span, entryPath);
+        return FindDependencies(content, entryPath, index, soundsetIndex, stringTableLanguage, filterEntityName);
+    }
+
+    /// <summary>
+    /// Handles .bank files by finding and reading the associated soundset file.
+    /// E.g. "greek.bank" → reads "soundsets_greek.soundset.XMB" and parses its dependencies.
+    /// </summary>
+    static async ValueTask<DependencyResult> FindDependenciesForBankAsync(
+        string entryPath,
+        FileIndex? index,
+        SoundsetIndex? soundsetIndex,
+        string? stringTableLanguage,
+        Func<FileIndexEntry, ValueTask<PooledBuffer?>>? readFileAsync)
+    {
+        if (index == null || readFileAsync == null)
+            return new DependencyResult { EntryPath = entryPath, Groups = [] };
+
+        var bankName = Path.GetFileNameWithoutExtension(entryPath);
+        var soundsetFileName = $"soundsets_{bankName}.soundset.XMB";
+
+        var soundsetEntries = index.Find(soundsetFileName);
+        if (soundsetEntries.Count == 0)
+            return new DependencyResult { EntryPath = entryPath, Groups = [] };
+
+        using var data = await readFileAsync(soundsetEntries[0]);
+        if (data == null)
+            return new DependencyResult { EntryPath = entryPath, Groups = [] };
+
+        using var decompressed = BarCompression.EnsureDecompressedPooled(data, out _);
+        var content = ConversionHelper.GetTextContent(decompressed.Span, soundsetFileName);
+        return FindDependencies(content, soundsetFileName, index, soundsetIndex, stringTableLanguage);
     }
 
     static void ResolveSoundsetName(DependencyReference reference, SoundsetIndex soundsetIndex)
