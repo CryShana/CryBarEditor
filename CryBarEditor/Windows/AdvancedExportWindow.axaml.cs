@@ -148,15 +148,11 @@ public partial class AdvancedExportWindow : SimpleWindow
         FileSummary = $"{files.Count} file(s) selected: {string.Join(", ", extGroups)}";
 
         // Detect compressed and convertible files
-        int convertibleCount = files.Count(f => ConversionHelper.IsConvertibleExtension(
-            Path.GetExtension(f.RelativePath)));
+        int convertibleCount = files.Count(f => ConversionHelper.IsConvertibleExtension(Path.GetExtension(f.RelativePath)));
 
-        _compressedConvertibleCount = files.Count(f => f.IsCompressed &&
-            ConversionHelper.IsConvertibleExtension(Path.GetExtension(f.RelativePath)));
-        _compressedNonConvertibleCount = files.Count(f => f.IsCompressed &&
-            !ConversionHelper.IsConvertibleExtension(Path.GetExtension(f.RelativePath)));
-        _hasTmmFiles = files.Any(f => Path.GetExtension(f.RelativePath)
-            .Equals(".tmm", StringComparison.OrdinalIgnoreCase));
+        _compressedConvertibleCount = files.Count(f => f.IsCompressed && ConversionHelper.IsConvertibleExtension(Path.GetExtension(f.RelativePath)));
+        _compressedNonConvertibleCount = files.Count(f => f.IsCompressed && !ConversionHelper.IsConvertibleExtension(Path.GetExtension(f.RelativePath)));
+        _hasTmmFiles = files.Any(f => Path.GetExtension(f.RelativePath).Equals(".tmm", StringComparison.OrdinalIgnoreCase));
 
         int compressedCount = _compressedConvertibleCount + _compressedNonConvertibleCount;
         if (compressedCount > 0)
@@ -167,15 +163,23 @@ public partial class AdvancedExportWindow : SimpleWindow
 
         // Build recommendation
         if (convertibleCount > 0 && convertibleCount == files.Count)
-            Recommendation = "All selected files are convertible - 'Convert' is recommended.";
+        {
+            Recommendation = "All files are convertible - 'Convert' is recommended.";
+            DoConvert = true;
+            DoCopy = false;
+        }
         else if (convertibleCount > 0)
-            Recommendation = $"{convertibleCount} file(s) can be converted. Use 'Copy + Convert' to get both versions.";
+        {
+            Recommendation = $"{convertibleCount} file(s) can be converted - 'Convert' is recommended";
+            DoConvert = true;
+            DoCopy = false;
+        }
         else
-            Recommendation = "No convertible files in selection - 'Copy' is the best option.";
-
-        // Set sensible defaults (by default only one is selected)
-        DoConvert = convertibleCount > 0;
-        DoCopy = !DoConvert;
+        {
+            Recommendation = "No convertible files - 'Copy' is recommended.";
+            DoConvert = false;
+            DoCopy = true;
+        }
 
         // Check for overwrites
         if (!isDirectExport && Directory.Exists(exportRootDirectory))
@@ -230,8 +234,8 @@ public partial class AdvancedExportWindow : SimpleWindow
         OnPropertyChanged(nameof(OverrideNameOpacity));
 
         // Restore saved export settings
-        if (savedConfig?.ExportDoCopy is bool c) DoCopy = c;
-        if (savedConfig?.ExportDoConvert is bool cv) DoConvert = cv;
+        //if (savedConfig?.ExportDoCopy is bool c) DoCopy = c;
+        //if (savedConfig?.ExportDoConvert is bool cv) DoConvert = cv;
         if (savedConfig?.ExportDoDecompress is bool d) DoDecompress = d;
         if (savedConfig?.ExportDoExportMaterials is bool m) DoExportMaterials = m;
         if (savedConfig?.ExportTmmToGltf is bool g) DoTmmToGltf = g;
