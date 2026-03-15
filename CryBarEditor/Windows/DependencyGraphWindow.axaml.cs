@@ -62,7 +62,7 @@ public partial class DependencyGraphWindow : SimpleWindow
     // Graph state
     readonly List<Border> _nodeElements = [];
     readonly HashSet<Border> _nodeElementsSet = new();
-    readonly List<Line> _edgeElements = [];
+    readonly HashSet<Line> _edgeElements = new();
     readonly Dictionary<Border, List<Line>> _nodeEdges = new();
     readonly Dictionary<Border, (double X, double Y)> _nodePositions = new();
     readonly HashSet<string> _visitedPaths = new();
@@ -81,7 +81,7 @@ public partial class DependencyGraphWindow : SimpleWindow
     Action? _animCompleteCallback;
 
     // Bitmaps created for previews (disposed on graph rebuild/close)
-    readonly List<Bitmap> _previewBitmaps = [];
+    readonly HashSet<Bitmap> _previewBitmaps = new();
     // Tracks active preview controls per node (for toggle)
     readonly Dictionary<Border, (Control Preview, Bitmap? Bitmap)> _activeNodePreviews = new();
 
@@ -95,9 +95,9 @@ public partial class DependencyGraphWindow : SimpleWindow
     // Colors
     static readonly Color FilePathColor = Color.Parse("#d9d9d9");
     static readonly Color StringKeyColor = Color.Parse("#c4a96a");
-    static readonly Color SoundsetColor = Color.Parse("#6f96bf");
+    static readonly Color SoundsetColor = SelectionColor;
     static readonly Color CenterBg = Color.Parse("#2b3c57");
-    static readonly Color CenterBorder = Color.Parse("#6f96bf");
+    static readonly Color CenterBorder = SelectionColor;
 
     static readonly Color TmmColor = Color.Parse("#8bc34a");
     static readonly Color TmmDataColor = Color.Parse("#7cb342");
@@ -107,7 +107,10 @@ public partial class DependencyGraphWindow : SimpleWindow
     static readonly Color XmlColor = Color.Parse("#d9d9d9");
     static readonly Color GenericColor = Color.Parse("#808080");
 
-    const double NodeWidth = 220;
+    static readonly Color NodeBgColor = Color.Parse("#1e1e1e");
+    static readonly Color MatchNodeBgColor = Color.Parse("#1a1a1a");
+    static readonly Color BorderDarkColor = Color.Parse("#333333");
+    static readonly Color SelectionColor = Color.Parse("#6f96bf");
 
     int _baseRefCount;
     int _expandedRefCount;
@@ -138,7 +141,7 @@ public partial class DependencyGraphWindow : SimpleWindow
         CanvasHost.AddHandler(PointerWheelChangedEvent, CanvasHost_PointerWheelChanged, RoutingStrategies.Tunnel);
     }
 
-    public static void ShowForGroup(DependencyGroupItem group, FileIndex? fileIndex, MainWindow owner, Window ownerWindow)
+    public static void ShowForGroup(DependencyGroupItem group, FileIndex? fileIndex, MainWindow owner)
     {
         if (_instance != null)
         {
@@ -425,7 +428,7 @@ public partial class DependencyGraphWindow : SimpleWindow
             stack.Children.Add(new TextBlock
             {
                 Text = entityType,
-                Foreground = new SolidColorBrush(Color.Parse("#808080")),
+                Foreground = new SolidColorBrush(GenericColor),
                 FontSize = 10,
                 HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center
             });
@@ -499,7 +502,7 @@ public partial class DependencyGraphWindow : SimpleWindow
                 resolvedLine.Children.Add(new TextBlock
                 {
                     Text = resolvedName,
-                    Foreground = new SolidColorBrush(Color.Parse("#808080")),
+                    Foreground = new SolidColorBrush(GenericColor),
                     FontSize = 9,
                     MaxWidth = 180,
                     TextTrimming = TextTrimming.CharacterEllipsis
@@ -516,7 +519,7 @@ public partial class DependencyGraphWindow : SimpleWindow
             var translationBlock = new TextBlock
             {
                 Text = "...",
-                Foreground = new SolidColorBrush(Color.Parse("#808080")),
+                Foreground = new SolidColorBrush(GenericColor),
                 FontSize = 9,
                 FontStyle = FontStyle.Italic,
                 MaxWidth = 200,
@@ -585,8 +588,8 @@ public partial class DependencyGraphWindow : SimpleWindow
 
         var border = new Border
         {
-            Background = new SolidColorBrush(Color.Parse("#1e1e1e")),
-            BorderBrush = new SolidColorBrush(Color.Parse("#333333")),
+            Background = new SolidColorBrush(NodeBgColor),
+            BorderBrush = new SolidColorBrush(BorderDarkColor),
             BorderThickness = new Thickness(2, 1, 1, 1),
             CornerRadius = new CornerRadius(4),
             Padding = new Thickness(6, 4),
@@ -602,7 +605,7 @@ public partial class DependencyGraphWindow : SimpleWindow
             GradientStops =
             {
                 new GradientStop(color, 0),
-                new GradientStop(Color.Parse("#333333"), 0.15)
+                new GradientStop(BorderDarkColor, 0.15)
             }
         };
 
@@ -664,7 +667,7 @@ public partial class DependencyGraphWindow : SimpleWindow
 
         var border = new Border
         {
-            Background = new SolidColorBrush(Color.Parse("#1a1a1a")),
+            Background = new SolidColorBrush(MatchNodeBgColor),
             BorderBrush = new SolidColorBrush(color, 0.4),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(3),
@@ -1068,8 +1071,8 @@ public partial class DependencyGraphWindow : SimpleWindow
             // Create selection rectangle visual
             _selectionRect = new Border
             {
-                Background = new SolidColorBrush(Color.Parse("#6f96bf"), 0.15),
-                BorderBrush = new SolidColorBrush(Color.Parse("#6f96bf"), 0.6),
+                Background = new SolidColorBrush(SelectionColor, 0.15),
+                BorderBrush = new SolidColorBrush(SelectionColor, 0.6),
                 BorderThickness = new Thickness(1),
                 IsHitTestVisible = false,
                 Width = 0,
@@ -1274,15 +1277,18 @@ public partial class DependencyGraphWindow : SimpleWindow
     {
         if (!_selectedNodes.Add(node)) return;
         node.Opacity = 0.8;
-        node.BorderBrush = new SolidColorBrush(Color.Parse("#6f96bf"));
+        node.BorderBrush = new SolidColorBrush(SelectionColor);
     }
 
     void DeselectNode(Border node)
     {
         if (!_selectedNodes.Remove(node)) return;
         node.Opacity = 1.0;
+        RestoreNodeBrush(node);
+    }
 
-        // Restore original border brush
+    static void RestoreNodeBrush(Border node)
+    {
         if (node.Tag is DependencyReference r)
         {
             var color = GetRefTypeColor(r.Type);
@@ -1293,27 +1299,28 @@ public partial class DependencyGraphWindow : SimpleWindow
                 GradientStops =
                 {
                     new GradientStop(color, 0),
-                    new GradientStop(Color.Parse("#333333"), 0.15)
+                    new GradientStop(BorderDarkColor, 0.15)
                 }
             };
         }
-        else if (node.Tag is FileIndexEntry)
+        else if (node.Tag is FileIndexEntry fie)
         {
-            // Match node — restore its subtle color border
-            var (matchColor, _) = GetMatchFileStyle(((FileIndexEntry)node.Tag).FileName);
+            var (matchColor, _) = GetMatchFileStyle(fie.FileName);
             node.BorderBrush = new SolidColorBrush(matchColor, 0.4);
         }
         else
         {
-            // Center node
             node.BorderBrush = new SolidColorBrush(CenterBorder);
         }
     }
 
     void ClearSelection()
     {
-        foreach (var node in _selectedNodes.ToList())
-            DeselectNode(node);
+        foreach (var node in _selectedNodes)
+        {
+            node.Opacity = 1.0;
+            RestoreNodeBrush(node);
+        }
         _selectedNodes.Clear();
     }
 
@@ -1645,7 +1652,7 @@ public partial class DependencyGraphWindow : SimpleWindow
                 {
                     using var data = await _mainWindow.ReadFromIndexEntryPooledAsync(bankEntry);
                     if (data == null) return;
-                    await File.WriteAllBytesAsync(bankDiskPath, data.Span.ToArray());
+                    using (var fs = File.Create(bankDiskPath)) await fs.WriteAsync(data.Memory);
                 }
 
                 // Also extract Master.bank and Master.strings.bank if not already present
@@ -1661,7 +1668,7 @@ public partial class DependencyGraphWindow : SimpleWindow
                         {
                             using var masterData = await _mainWindow.ReadFromIndexEntryPooledAsync(masterEntries[0]);
                             if (masterData != null)
-                                await File.WriteAllBytesAsync(masterPath, masterData.Span.ToArray());
+                                using (var fs = File.Create(masterPath)) await fs.WriteAsync(masterData.Memory);
                         }
                     }
                 }
@@ -1854,71 +1861,6 @@ public partial class DependencyGraphWindow : SimpleWindow
         }
     }
 
-    /// <summary>
-    /// Columnar layout for large expansions (>12 refs). Groups by type, stacks in columns
-    /// radiating outward from the parent node.
-    /// </summary>
-    void LayoutExpansionColumnar(Border parentNode, (double X, double Y) parentPos, double baseAngle,
-        List<(DependencyReference Ref, Border Node, Color Color, Size Size)> nodes,
-        List<Control> spawnedControls, HashSet<Border> newNodeSet)
-    {
-        var grouped = nodes.GroupBy(n => n.Ref.Type).OrderBy(g => g.Key).ToList();
-        int groupCount = grouped.Count;
-
-        // Fan columns around the base angle
-        double totalFanAngle = Math.Min(Math.PI * 0.8, groupCount * 0.5 + 0.3);
-        double fanStart = baseAngle - totalFanAngle / 2;
-
-        for (int g = 0; g < groupCount; g++)
-        {
-            var typeGroup = grouped[g].ToList();
-            double groupAngle = groupCount == 1
-                ? baseAngle
-                : fanStart + g * totalFanAngle / Math.Max(1, groupCount - 1);
-
-            double dirX = Math.Cos(groupAngle);
-            double dirY = Math.Sin(groupAngle);
-            double perpX = -dirY;
-            double perpY = dirX;
-
-            // Compute column dimensions from measured sizes
-            double maxWidth = typeGroup.Max(n => n.Size.Width);
-            double verticalSpacing = 8;
-            double totalHeight = typeGroup.Sum(n => n.Size.Height + verticalSpacing) - verticalSpacing;
-
-            bool hasSubNodes = typeGroup.Any(n => GetVisibleMatches(n.Ref).Count > 0);
-            double colDistance = 200 + (hasSubNodes ? maxWidth * 0.5 : 0);
-
-            double colCenterX = parentPos.X + dirX * colDistance;
-            double colCenterY = parentPos.Y + dirY * colDistance;
-
-            double stackOffset = -totalHeight / 2;
-
-            for (int i = 0; i < typeGroup.Count; i++)
-            {
-                var info = typeGroup[i];
-                double perpOffset = stackOffset + info.Size.Height / 2;
-                double nx = colCenterX + perpX * perpOffset;
-                double ny = colCenterY + perpY * perpOffset;
-
-                PlaceNode(info.Node, nx, ny);
-                spawnedControls.Add(info.Node);
-                newNodeSet.Add(info.Node);
-
-                var edge = CreateEdge(parentPos.X, parentPos.Y, nx, ny, info.Color, 1.0);
-                ConnectEdge(parentNode, edge);
-                ConnectEdge(info.Node, edge);
-                spawnedControls.Add(edge);
-
-                var visibleMatches = GetVisibleMatches(info.Ref);
-                if (visibleMatches.Count > 0)
-                    LayoutMatchSubNodes(info.Node, visibleMatches, nx, ny, groupAngle, spawnedControls);
-
-                stackOffset += info.Size.Height + verticalSpacing;
-            }
-        }
-    }
-
     void CollapseChildren(Border parentNode, List<Control> children)
     {
         // Recursively collapse any sub-expansions first
@@ -1938,11 +1880,18 @@ public partial class DependencyGraphWindow : SimpleWindow
 
             if (child is Border node)
             {
+                // Detach event handlers to prevent leaks
+                node.DoubleTapped -= Node_DoubleTapped;
+                node.PointerPressed -= Node_PointerPressed;
+                node.PointerMoved -= Node_PointerMoved;
+                node.PointerReleased -= Node_PointerReleased;
+
                 _nodeElements.Remove(node);
                 _nodeElementsSet.Remove(node);
                 _nodePositions.Remove(node);
                 _animStartPositions.Remove(node);
                 _animTargetPositions.Remove(node);
+                _activeNodePreviews.Remove(node);
                 if (_nodeEdges.Remove(node, out var nodeEdgeList))
                 {
                     // Clean edge references from connected nodes

@@ -224,7 +224,7 @@ public partial class DependenciesWindow : SimpleWindow
         var group = (sender as Button)?.DataContext as DependencyGroupItem;
         if (group == null || !group.CanShowGraph) return;
 
-        DependencyGraphWindow.ShowForGroup(group, _currentFileIndex, _owner, this);
+        DependencyGraphWindow.ShowForGroup(group, _currentFileIndex, _owner);
     }
 
     async Task NavigateToIndexEntry(FileIndexEntry entry)
