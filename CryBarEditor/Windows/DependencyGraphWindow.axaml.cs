@@ -780,7 +780,8 @@ public partial class DependencyGraphWindow : SimpleWindow
     {
         if (node.Tag is FileIndexEntry fie)
             return fie.FullRelativePath;
-        if (node.Tag is DependencyReference r && r.Resolved.Count == 1)
+        if (node.Tag is DependencyReference r && r.Resolved.Count == 1
+            && r.Type != DependencyRefType.StringKey)
             return r.Resolved[0].FullRelativePath;
         return null;
     }
