@@ -2,6 +2,8 @@ name: Build Release
 
 on:
   workflow_dispatch:
+  release:
+    types: [created]
 
 jobs:
   build:
@@ -47,3 +49,9 @@ jobs:
         with:
           name: CryBarEditor-${{ steps.version.outputs.VERSION }}
           path: CryBarEditor-${{ steps.version.outputs.VERSION }}.zip
+
+      - name: Attach to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" "CryBarEditor-${{ steps.version.outputs.VERSION }}.zip" --clobber
