@@ -281,4 +281,104 @@ public class FileIndexTests
         var results = index.FindByPartialPath("hoplite");
         Assert.Empty(results);
     }
+
+    // --- Root directory scenario tests ---
+
+    [Fact]
+    public void Scenario_GameRoot_MaterialsFound()
+    {
+        var index = new FileIndex();
+
+        // All BARs are indexed when root = game\
+        index.Add(MakeEntry(@"intermediate\modelcache\armory_a_age2.tmm", "modelcache.bar"));
+        index.Add(MakeEntry(@"intermediate\modelcache\armory_a_age2.tmm.data", "modelcache_data.bar"));
+        index.Add(MakeEntry(@"game\art\armory_a_age2.material.XMB", "art.bar"));
+        index.Add(MakeEntry(@"game\art\textures\armory_a_age2_basecolor.ddt", "art_tex.bar"));
+
+        // Material resolution succeeds
+        var materialResults = index.Find("armory_a_age2.material.XMB");
+        Assert.Single(materialResults);
+        var textureResults = index.Find("armory_a_age2_basecolor.ddt");
+        Assert.Single(textureResults);
+    }
+
+    [Fact]
+    public void Scenario_SubdirectoryRoot_MaterialsMissing()
+    {
+        var index = new FileIndex();
+
+        // Only modelcache entries exist (art BARs were never scanned)
+        index.Add(MakeEntry(@"intermediate\modelcache\armory_a_age2.tmm", "modelcache.bar"));
+        index.Add(MakeEntry(@"intermediate\modelcache\armory_a_age2.tmm.data", "modelcache_data.bar"));
+
+        // Material resolution FAILS — proves the bug
+        var materialResults = index.Find("armory_a_age2.material.XMB");
+        Assert.Empty(materialResults);
+        var textureResults = index.Find("armory_a_age2_basecolor.ddt");
+        Assert.Empty(textureResults);
+    }
+
+    [Fact]
+    public void Scenario_SubdirectoryRoot_WithSupplemental_MaterialsFound()
+    {
+        var index = new FileIndex();
+
+        // Modelcache entries (from normal scan)
+        index.Add(MakeEntry(@"intermediate\modelcache\armory_a_age2.tmm", "modelcache.bar"));
+        index.Add(MakeEntry(@"intermediate\modelcache\armory_a_age2.tmm.data", "modelcache_data.bar"));
+        // Supplemental entries (from parent dir BAR scan)
+        index.Add(MakeEntry(@"game\art\armory_a_age2.material.XMB", @"C:\game\art\ArtGreek.bar"));
+        index.Add(MakeEntry(@"game\art\textures\armory_a_age2_basecolor.ddt", @"C:\game\art\ArtTextures.bar"));
+
+        // Now material resolution succeeds
+        var materialResults = index.Find("armory_a_age2.material.XMB");
+        Assert.Single(materialResults);
+        var textureResults = index.Find("armory_a_age2_basecolor.ddt");
+        Assert.Single(textureResults);
+    }
+
+    [Fact]
+    public void Scenario_ParentRoot_MaterialsFound()
+    {
+        var index = new FileIndex();
+
+        // When root is parent of game, root files include game\ in their relative path
+        // BAR entries still use bar.RootPath (e.g., "game", "intermediate")
+        index.Add(MakeEntry(@"intermediate\modelcache\armory_a_age2.tmm", "modelcache.bar"));
+        index.Add(MakeEntry(@"intermediate\modelcache\armory_a_age2.tmm.data", "modelcache_data.bar"));
+        index.Add(MakeEntry(@"game\art\armory_a_age2.material.XMB", "art.bar"));
+        index.Add(MakeEntry(@"game\art\textures\armory_a_age2_basecolor.ddt", "art_tex.bar"));
+
+        // Works identically to scenario 1
+        var materialResults = index.Find("armory_a_age2.material.XMB");
+        Assert.Single(materialResults);
+        var textureResults = index.Find("armory_a_age2_basecolor.ddt");
+        Assert.Single(textureResults);
+    }
+
+    [Fact]
+    public void Scenario_SubdirectoryRoot_CompanionDataInSameBar()
+    {
+        var index = new FileIndex();
+
+        index.Add(MakeEntry(@"intermediate\modelcache\armory_a_age2.tmm", "modelcache.bar"));
+        index.Add(MakeEntry(@"intermediate\modelcache\armory_a_age2.tmm.data", "modelcache.bar"));
+
+        // Companion data can be found by filename
+        var dataResults = index.Find("armory_a_age2.tmm.data");
+        Assert.Single(dataResults);
+    }
+
+    [Fact]
+    public void Scenario_SubdirectoryRoot_FindByPartialPath_MaterialMissing()
+    {
+        var index = new FileIndex();
+
+        // Only modelcache entries
+        index.Add(MakeEntry(@"intermediate\modelcache\armory_a_age2.tmm", "modelcache.bar"));
+
+        // FindByPartialPath for a path that references art content
+        var results = index.FindByPartialPath(@"art\armory_a_age2.material");
+        Assert.Empty(results);
+    }
 }

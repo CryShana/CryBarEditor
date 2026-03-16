@@ -316,36 +316,12 @@ public partial class MainWindow
             .Select(f => Path.Combine(_rootDirectory, f.RelativePath))
             .ToList();
 
-        Parallel.ForEach(barFiles, barFilePath =>
-        {
-            try
-            {
-                using var stream = File.OpenRead(barFilePath);
-                var bar = new BarFile(stream);
-                if (!bar.Load(out _)) return;
+        FileIndexBuilder.IndexBarFiles(index, barFiles);
 
-                var barRootPath = bar.RootPath;
-                var entries = bar.Entries;
-                if (entries == null) return;
-
-                foreach (var entry in entries)
-                {
-                    var fullRelPath = string.IsNullOrEmpty(barRootPath)
-                        ? entry.RelativePath
-                        : Path.Combine(barRootPath, entry.RelativePath);
-
-                    index.Add(new FileIndexEntry
-                    {
-                        FullRelativePath = fullRelPath,
-                        FileName = entry.Name,
-                        Source = FileIndexSource.BarEntry,
-                        BarFilePath = barFilePath,
-                        EntryRelativePath = entry.RelativePath,
-                    });
-                }
-            }
-            catch { /* skip unreadable BAR files */ }
-        });
+        // Supplemental BAR scanning: when root is a subdirectory, find BARs in parent dirs
+        var supplementalBars = FileIndexBuilder.FindSupplementalBarFiles(_rootDirectory);
+        if (supplementalBars.Count > 0)
+            FileIndexBuilder.IndexBarFiles(index, supplementalBars);
 
         _fileIndex = index;
         ClearSoundCaches();

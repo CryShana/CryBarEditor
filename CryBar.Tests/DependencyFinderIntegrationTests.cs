@@ -16,14 +16,13 @@ public class DependencyFinderIntegrationTests
     static bool GameInstalled => Directory.Exists(GamePath);
 
     /// <summary>
-    /// Builds a FileIndex from all BAR files in the game directory (mirrors MainWindow.Loading.cs logic).
+    /// Builds a FileIndex from all BAR files in the game directory.
     /// </summary>
     static FileIndex BuildFullIndex()
     {
         var index = new FileIndex();
-        var barFiles = Directory.GetFiles(GamePath, "*.bar", SearchOption.AllDirectories);
 
-        // Also add loose root files
+        // Add loose root files
         foreach (var file in Directory.GetFiles(GamePath, "*.*", SearchOption.AllDirectories))
         {
             if (file.EndsWith(".bar", StringComparison.OrdinalIgnoreCase)) continue;
@@ -36,32 +35,8 @@ public class DependencyFinderIntegrationTests
             });
         }
 
-        Parallel.ForEach(barFiles, barFilePath =>
-        {
-            try
-            {
-                using var stream = File.OpenRead(barFilePath);
-                var bar = new BarFile(stream);
-                if (!bar.Load(out _)) return;
-
-                foreach (var entry in bar.Entries!)
-                {
-                    var fullRelPath = string.IsNullOrEmpty(bar.RootPath)
-                        ? entry.RelativePath
-                        : Path.Combine(bar.RootPath, entry.RelativePath);
-
-                    index.Add(new FileIndexEntry
-                    {
-                        FullRelativePath = fullRelPath,
-                        FileName = entry.Name,
-                        Source = FileIndexSource.BarEntry,
-                        BarFilePath = barFilePath,
-                        EntryRelativePath = entry.RelativePath,
-                    });
-                }
-            }
-            catch { }
-        });
+        var barFiles = Directory.GetFiles(GamePath, "*.bar", SearchOption.AllDirectories);
+        FileIndexBuilder.IndexBarFiles(index, barFiles);
 
         return index;
     }
