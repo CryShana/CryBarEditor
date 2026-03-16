@@ -2,8 +2,6 @@ name: Build Release
 
 on:
   workflow_dispatch:
-  release:
-    types: [created]
 
 jobs:
   build:
@@ -50,8 +48,19 @@ jobs:
           name: CryBarEditor-${{ steps.version.outputs.VERSION }}
           path: CryBarEditor/out/
 
-      - name: Attach to release
-        if: github.event_name == 'release'
+      - name: Find draft release and attach zip
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" "CryBarEditor-${{ steps.version.outputs.VERSION }}.zip" --clobber
+        run: |
+          DRAFT_TAG=$(gh release list --json tagName,isDraft --jq '.[] | select(.isDraft) | .tagName' --limit 1)
+          if [ -z "$DRAFT_TAG" ]; then
+            echo "No draft release found, skipping upload"
+            exit 0
+          fi
+          ASSETS=$(gh release view "$DRAFT_TAG" --json assets --jq '.assets | length')
+          if [ "$ASSETS" -gt 0 ]; then
+            echo "Draft release $DRAFT_TAG already has $ASSETS attachment(s), skipping upload"
+            exit 0
+          fi
+          echo "Attaching to draft release: $DRAFT_TAG"
+          gh release upload "$DRAFT_TAG" "CryBarEditor-${{ steps.version.outputs.VERSION }}.zip"
