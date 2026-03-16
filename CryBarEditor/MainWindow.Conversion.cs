@@ -217,7 +217,13 @@ public partial class MainWindow
             using var decompressed = BarCompression.EnsureDecompressedPooled(data, out var type);
             using (var f = File.Create(out_file)) f.Write(decompressed.Span);
 
-            _ = ShowSuccess("Decompression completed, new file:\n" + Path.GetFileName(out_file));
+            var typeName = type switch
+            {
+                CompressionType.Alz4 => "Alz4",
+                CompressionType.L33t => "L33t",
+                _ => "None (file was not compressed)"
+            };
+            _ = ShowSuccess($"Decompression completed ({typeName}), new file:\n" + Path.GetFileName(out_file));
         }
         catch (Exception ex)
         {

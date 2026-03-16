@@ -91,7 +91,6 @@ public static class BarCompression
 
     #region L33T
     // NOTE: L33t compression seems to be used by .mythscn files only (that I found so far)
-    // TODO: Current L33t decompression/compression implementation not supported by AOMR (need to investigate)
 
     public static byte[]? DecompressL33t(Span<byte> data)
     {
@@ -130,8 +129,7 @@ public static class BarCompression
             throw new InvalidDataException("Size is invalid: " + size_uncompressed);
         }
 
-        offset += 2; // skip deflate spec
-
+        // offset = 8, pointing at the zlib stream (header + deflate + adler32)
         if (offset >= data.Length)
         {
             return -1;
@@ -140,17 +138,19 @@ public static class BarCompression
         fixed (byte* d = data.Slice(offset))
         {
             using var memory = new UnmanagedMemoryStream(d, data.Length - offset);
-            using var deflate = new DeflateStream(memory, CompressionMode.Decompress);
-            deflate.ReadExactly(output_data.Slice(0, size_uncompressed));
+            using var zlib = new ZLibStream(memory, CompressionMode.Decompress);
+            zlib.ReadExactly(output_data.Slice(0, size_uncompressed));
         }
 
         return size_uncompressed;
     }  
     public static Memory<byte> CompressL33t(Span<byte> data)
     {
-        const int HEADER_SIZE = 4 + 4 + 2;
+        const int HEADER_SIZE = 4 + 4;
 
-        var compressed = new byte[HEADER_SIZE + data.Length];
+        // conservative upper bound for zlib output (well above theoretical worst case)
+        var maxCompressedSize = data.Length + data.Length / 100 + 64;
+        var compressed = new byte[HEADER_SIZE + maxCompressedSize];
         var cspan = compressed.AsSpan();
         var offset = 0;
 
@@ -162,16 +162,13 @@ public static class BarCompression
 
         // size uncompressed
         BinaryPrimitives.WriteInt32LittleEndian(cspan.Slice(offset), data.Length); offset += 4;
-        
-        // deflate spec
-        cspan[offset++] = 120;
-        cspan[offset++] = 156;
 
+        // ZLibStream writes zlib header + deflate data + adler32 checksum
         var memory = new ActualMemoryStream(compressed.AsMemory(offset));
-        using (var deflate = new DeflateStream(memory, CompressionLevel.Optimal))
-            deflate.Write(data);
+        using (var zlib = new ZLibStream(memory, CompressionLevel.Optimal))
+            zlib.Write(data);
 
-        return compressed.AsMemory(0, offset + (int)memory.Position);  
+        return compressed.AsMemory(0, offset + (int)memory.Position);
     }
     #endregion
 

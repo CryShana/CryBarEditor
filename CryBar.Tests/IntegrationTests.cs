@@ -984,4 +984,179 @@ public class IntegrationTests
     // extract FMOD loading into the library layer.
 
     #endregion
+
+    #region Compression Roundtrip - Standalone Files
+
+    [SkippableFact]
+    public void L33t_Roundtrip_StandaloneFiles()
+    {
+        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+
+        // Find standalone files that might be L33t compressed (e.g. *.mythscn)
+        var l33tFiles = new HashSet<string>();
+        foreach (var ext in new[] { "*.mythscn", "*.blob" })
+        {
+            foreach (var f in Directory.GetFiles(GamePath, ext, SearchOption.AllDirectories))
+                l33tFiles.Add(f);
+        }
+
+        // Also scan all files in campaign dirs for L33t magic
+        var campaignDir = Path.Combine(GamePath, "campaign");
+        if (Directory.Exists(campaignDir))
+        {
+            foreach (var file in Directory.GetFiles(campaignDir, "*", SearchOption.AllDirectories))
+            {
+                if (l33tFiles.Contains(file)) continue;
+                var header = new byte[4];
+                using var fs = File.OpenRead(file);
+                if (fs.Read(header) == 4 && ((Span<byte>)header).IsL33t())
+                    l33tFiles.Add(file);
+            }
+        }
+
+        Skip.If(l33tFiles.Count == 0, "No L33t-compressed standalone files found");
+
+        var failures = new List<string>();
+        var tested = 0;
+        foreach (var filePath in l33tFiles)
+        {
+            var raw = File.ReadAllBytes(filePath);
+            if (!((Span<byte>)raw).IsL33t()) continue;
+
+            tested++;
+            var decompressed = BarCompression.DecompressL33t(raw);
+            if (decompressed == null)
+            {
+                failures.Add($"{Path.GetFileName(filePath)}: decompression returned null");
+                continue;
+            }
+
+            // Roundtrip: recompress then decompress again
+            var recompressed = BarCompression.CompressL33t(decompressed);
+            Assert.True(recompressed.Span.IsL33t(), $"{Path.GetFileName(filePath)}: recompressed data missing L33t header");
+
+            var roundtripped = BarCompression.DecompressL33t(recompressed.Span);
+            if (roundtripped == null)
+            {
+                failures.Add($"{Path.GetFileName(filePath)}: roundtrip decompression returned null");
+                continue;
+            }
+
+            if (!decompressed.AsSpan().SequenceEqual(roundtripped))
+                failures.Add($"{Path.GetFileName(filePath)}: roundtrip data mismatch (original={decompressed.Length}, roundtripped={roundtripped.Length})");
+        }
+
+        Assert.True(failures.Count == 0,
+            $"{failures.Count}/{tested} L33t standalone file roundtrips failed:\n{string.Join("\n", failures.Take(20))}");
+        Assert.True(tested > 0, "Found L33t files but none had L33t magic bytes");
+    }
+
+    #endregion
+
+    #region Compression Roundtrip - BAR Entries
+
+    [SkippableFact]
+    public void L33t_Roundtrip_BarEntries()
+    {
+        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+
+        var barFiles = FindBarFiles();
+        Skip.If(barFiles.Length == 0, "No .bar files found");
+
+        var failures = new List<string>();
+        var tested = 0;
+
+        foreach (var barPath in barFiles)
+        {
+            using var stream = File.OpenRead(barPath);
+            var bar = new BarFile(stream);
+            if (!bar.Load(out _) || bar.Entries == null) continue;
+
+            foreach (var entry in bar.Entries)
+            {
+                var raw = entry.ReadDataRaw(stream);
+                if (!((Span<byte>)raw).IsL33t()) continue;
+
+                tested++;
+                var decompressed = BarCompression.DecompressL33t(raw);
+                if (decompressed == null)
+                {
+                    failures.Add($"{Path.GetFileName(barPath)}:{entry.Name}: decompression returned null");
+                    continue;
+                }
+
+                var recompressed = BarCompression.CompressL33t(decompressed);
+                var roundtripped = BarCompression.DecompressL33t(recompressed.Span);
+                if (roundtripped == null)
+                {
+                    failures.Add($"{Path.GetFileName(barPath)}:{entry.Name}: roundtrip decompression returned null");
+                    continue;
+                }
+
+                if (!decompressed.AsSpan().SequenceEqual(roundtripped))
+                    failures.Add($"{Path.GetFileName(barPath)}:{entry.Name}: roundtrip data mismatch");
+            }
+        }
+
+        // L33t entries might not exist in BAR files — that's ok, just report
+        Skip.If(tested == 0, "No L33t-compressed entries found in any BAR files");
+
+        Assert.True(failures.Count == 0,
+            $"{failures.Count}/{tested} L33t BAR entry roundtrips failed:\n{string.Join("\n", failures.Take(20))}");
+    }
+
+    [SkippableFact]
+    public void Alz4_Roundtrip_BarEntries()
+    {
+        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+
+        var barFiles = FindBarFiles();
+        Skip.If(barFiles.Length == 0, "No .bar files found");
+
+        var failures = new List<string>();
+        var tested = 0;
+        var maxToTest = 50; // cap to avoid very long test runs
+
+        foreach (var barPath in barFiles)
+        {
+            if (tested >= maxToTest) break;
+
+            using var stream = File.OpenRead(barPath);
+            var bar = new BarFile(stream);
+            if (!bar.Load(out _) || bar.Entries == null) continue;
+
+            foreach (var entry in bar.Entries)
+            {
+                if (tested >= maxToTest) break;
+
+                var raw = entry.ReadDataRaw(stream);
+                if (!((Span<byte>)raw).IsAlz4()) continue;
+
+                tested++;
+                var decompressed = BarCompression.DecompressAlz4(raw);
+                if (decompressed == null)
+                {
+                    failures.Add($"{Path.GetFileName(barPath)}:{entry.Name}: decompression returned null");
+                    continue;
+                }
+
+                var recompressed = BarCompression.CompressAlz4(decompressed);
+                var roundtripped = BarCompression.DecompressAlz4(recompressed.Span);
+                if (roundtripped == null)
+                {
+                    failures.Add($"{Path.GetFileName(barPath)}:{entry.Name}: roundtrip decompression returned null");
+                    continue;
+                }
+
+                if (!decompressed.AsSpan().SequenceEqual(roundtripped))
+                    failures.Add($"{Path.GetFileName(barPath)}:{entry.Name}: roundtrip data mismatch");
+            }
+        }
+
+        Skip.If(tested == 0, "No Alz4-compressed entries found in any BAR files");
+        Assert.True(failures.Count == 0,
+            $"{failures.Count}/{tested} Alz4 BAR entry roundtrips failed:\n{string.Join("\n", failures.Take(20))}");
+    }
+
+    #endregion
 }

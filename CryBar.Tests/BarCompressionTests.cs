@@ -90,7 +90,7 @@ public class BarCompressionTests
 
     #region L33t Tests
 
-    [Fact(Skip = "L33t compression roundtrip is a known issue - see BarCompression.cs TODO")]
+    [Fact]
     public void L33t_Roundtrip_SmallData()
     {
         byte[] original = "Hello, World! This is test data for L33t compression."u8.ToArray();
@@ -102,7 +102,7 @@ public class BarCompressionTests
         Assert.Equal(original, decompressed);
     }
 
-    [Fact(Skip = "L33t compression roundtrip is a known issue - see BarCompression.cs TODO")]
+    [Fact]
     public void L33t_Roundtrip_LargerData()
     {
         var original = new byte[4096];
@@ -116,7 +116,7 @@ public class BarCompressionTests
         Assert.Equal(original, decompressed);
     }
 
-    [Fact(Skip = "L33t compression roundtrip is a known issue - see BarCompression.cs TODO")]
+    [Fact]
     public void L33t_Roundtrip_WithSpanOverload()
     {
         byte[] original = new byte[512];
@@ -198,7 +198,7 @@ public class BarCompressionTests
         Assert.Equal(original, result.ToArray());
     }
 
-    [Fact(Skip = "L33t compression roundtrip is a known issue - see BarCompression.cs TODO")]
+    [Fact]
     public void EnsureDecompressed_L33tData_DecompressesCorrectly()
     {
         byte[] original = "Test data for EnsureDecompressed with L33t"u8.ToArray();
