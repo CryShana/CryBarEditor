@@ -30,6 +30,7 @@ public partial class SearchWindow : SimpleWindow
     string _exclusionFilter = "";
     bool _isRegex = false;
     bool _isCaseSensitive = true;
+    bool _isFilesOnly = false;
     bool _searching = false;
     CancellationTokenSource? _csc;
 
@@ -43,6 +44,7 @@ public partial class SearchWindow : SimpleWindow
     public string ExclusionFilter { get => _exclusionFilter; set { _exclusionFilter = value; _ = RebuildExclusionRegex(); OnSelfChanged(); } }
     public bool IsRegex { get => _isRegex; set { _isRegex = value; OnSelfChanged(); } }
     public bool IsCaseSensitive { get => _isCaseSensitive; set { _isCaseSensitive = value; OnSelfChanged(); } }
+    public bool IsFilesOnly { get => _isFilesOnly; set { _isFilesOnly = value; OnSelfChanged(); } }
     public ObservableCollectionExtended<SearchResult> SearchResults { get; } = new();
 
     private Regex? _fileExclusionRegex;
@@ -84,6 +86,7 @@ public partial class SearchWindow : SimpleWindow
         ExclusionFilter = _owner._searchExclusionFilter;
         IsCaseSensitive = _owner._searchCaseSensitive;
         IsRegex = _owner._searchRegex;
+        IsFilesOnly = _owner._searchFilesOnly;
     }
 
     protected override void OnLoaded(RoutedEventArgs e)
@@ -167,11 +170,13 @@ public partial class SearchWindow : SimpleWindow
         if (_owner != null &&
             (_owner._searchExclusionFilter != _exclusionFilter ||
              _owner._searchCaseSensitive != _isCaseSensitive ||
-             _owner._searchRegex != _isRegex))
+             _owner._searchRegex != _isRegex ||
+             _owner._searchFilesOnly != _isFilesOnly))
         {
             _owner._searchExclusionFilter = _exclusionFilter;
             _owner._searchCaseSensitive = _isCaseSensitive;
             _owner._searchRegex = _isRegex;
+            _owner._searchFilesOnly = _isFilesOnly;
             _owner.SaveConfiguration();
         }
     }
@@ -200,6 +205,7 @@ public partial class SearchWindow : SimpleWindow
         _csc = new();
         var token = _csc.Token;
         var query = Query;
+        var filesOnly = IsFilesOnly;
         CurrentlySearching = true;
         SearchResults.Clear();
 
@@ -328,9 +334,12 @@ public partial class SearchWindow : SimpleWindow
                                 await channel.Writer.WriteAsync(result, token).ConfigureAwait(false);
                             }
 
-                            if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
-                            var ddata = bar_entry.ReadDataDecompressed(_barFileStream);
-                            await SearchData(ddata, file, bar_entry.RelativePath, channel.Writer, searcher, token).ConfigureAwait(false);
+                            if (!filesOnly)
+                            {
+                                if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
+                                var ddata = bar_entry.ReadDataDecompressed(_barFileStream);
+                                await SearchData(ddata, file, bar_entry.RelativePath, channel.Writer, searcher, token).ConfigureAwait(false);
+                            }
                         }
                         current_items.TryRemove(filename, out _);
                     }
@@ -391,13 +400,16 @@ public partial class SearchWindow : SimpleWindow
                                             await channel.Writer.WriteAsync(result, token).ConfigureAwait(false);
                                         }
 
-                                        if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
-                                        var ddata = bar_entry.ReadDataDecompressed(stream);
-                                        await SearchData(ddata, file, bar_entry.RelativePath, channel.Writer, searcher, token).ConfigureAwait(false);
+                                        if (!filesOnly)
+                                        {
+                                            if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
+                                            var ddata = bar_entry.ReadDataDecompressed(stream);
+                                            await SearchData(ddata, file, bar_entry.RelativePath, channel.Writer, searcher, token).ConfigureAwait(false);
+                                        }
                                     }
                                 }
                             }
-                            else
+                            else if (!filesOnly)
                             {
                                 if (new FileInfo(file).Length > MAX_FILE_SIZE) return;
 

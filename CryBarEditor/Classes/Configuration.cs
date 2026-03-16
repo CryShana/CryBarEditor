@@ -12,6 +12,7 @@ public class Configuration
     public string? SearchExclusionFilter { get; set; }
     public bool? SearchCaseSensitive { get; set; }
     public bool? SearchUseRegex { get; set; }
+    public bool? SearchFilesOnly { get; set; }
     public bool? ExportDoCopy { get; set; }
     public bool? ExportDoConvert { get; set; }
     public bool? ExportDoDecompress { get; set; }

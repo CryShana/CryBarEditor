@@ -13,6 +13,7 @@ using SixLabors.ImageSharp;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -317,6 +318,28 @@ public partial class MainWindow
                         ext = ".txt";
                         text = $"TMM Data file ({data_size:N0} bytes)\nCompanion .tmm not found in BAR - cannot decode without vertex/index counts.";
                         PreviewedFileNote = "TMM Data (no companion)";
+                    }
+                }
+                else if (ext == ".zip")
+                {
+                    HideTmmPreview();
+                    await SetImagePreview(null);
+
+                    try
+                    {
+                        var mem = data.Memory;
+                        text = await Task.Run(() =>
+                        {
+                            using var zipStream = new MemoryStream(mem.Span.ToArray());
+                            using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
+                            return BuildZipHierarchyText(archive);
+                        });
+                        ext = ".txt";
+                    }
+                    catch (InvalidDataException)
+                    {
+                        text = "Preview failed: not a valid ZIP archive";
+                        ext = ".txt";
                     }
                 }
                 else
@@ -739,6 +762,84 @@ public partial class MainWindow
                 continue;
 
             yield return e;
+        }
+    }
+    #endregion
+
+    #region ZIP hierarchy
+    static string BuildZipHierarchyText(ZipArchive archive)
+    {
+        // Build tree from entry paths
+        var root = new SortedDictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        int fileCount = 0, dirCount = 0;
+
+        foreach (var entry in archive.Entries)
+        {
+            var fullName = entry.FullName.Replace('\\', '/');
+            var parts = fullName.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            var current = root;
+
+            for (int i = 0; i < parts.Length; i++)
+            {
+                bool isLast = i == parts.Length - 1;
+                bool isDir = isLast && fullName.EndsWith('/');
+
+                if (isLast && !isDir)
+                {
+                    // File leaf — store size
+                    current[parts[i]] = entry.Length;
+                    fileCount++;
+                }
+                else
+                {
+                    // Directory node
+                    var dirKey = parts[i] + "/";
+                    if (!current.TryGetValue(dirKey, out var child) || child is not SortedDictionary<string, object?>)
+                    {
+                        var newDir = new SortedDictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+                        current[dirKey] = newDir;
+                        dirCount++;
+                        current = newDir;
+                    }
+                    else
+                    {
+                        current = (SortedDictionary<string, object?>)child;
+                    }
+                }
+            }
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"Archive: {fileCount + dirCount} entries ({dirCount} folders, {fileCount} files)");
+        sb.AppendLine();
+        RenderTree(sb, root, "");
+        return sb.ToString();
+    }
+
+    static void RenderTree(StringBuilder sb, SortedDictionary<string, object?> node, string prefix)
+    {
+        // Sort: directories first, then files, both alphabetically
+        var entries = node.OrderBy(kv => kv.Value is SortedDictionary<string, object?> ? 0 : 1)
+                         .ThenBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
+                         .ToList();
+
+        for (int i = 0; i < entries.Count; i++)
+        {
+            var (name, value) = entries[i];
+            bool isLast = i == entries.Count - 1;
+            var connector = isLast ? "└── " : "├── ";
+            var childPrefix = isLast ? "    " : "│   ";
+
+            if (value is SortedDictionary<string, object?> children)
+            {
+                sb.AppendLine($"{prefix}{connector}{name}");
+                RenderTree(sb, children, prefix + childPrefix);
+            }
+            else
+            {
+                var size = (long)(value ?? 0);
+                sb.AppendLine($"{prefix}{connector}{name} ({size:N0} bytes)");
+            }
         }
     }
     #endregion

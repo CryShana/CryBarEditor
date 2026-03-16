@@ -40,6 +40,7 @@ public partial class MainWindow : SimpleWindow
     public string _searchExclusionFilter = "";
     public bool _searchCaseSensitive = true;
     public bool _searchRegex = false;
+    public bool _searchFilesOnly = false;
 
     // OVERRIDE FILTER
     bool _filterOnlyOverriddenFiles;
@@ -646,6 +647,7 @@ public partial class MainWindow : SimpleWindow
             _searchExclusionFilter = config.SearchExclusionFilter ?? "";
             _searchCaseSensitive = config.SearchCaseSensitive ?? true;
             _searchRegex = config.SearchUseRegex ?? false;
+            _searchFilesOnly = config.SearchFilesOnly ?? false;
             _editorCommand = config.EditorCommand ?? "";
             _stringTableLanguage = config.StringTableLanguage ?? "";
             _quickAccessEntries = config.QuickAccessEntries ?? new();
@@ -684,6 +686,7 @@ public partial class MainWindow : SimpleWindow
             _lastConfiguration.SearchExclusionFilter = _searchExclusionFilter;
             _lastConfiguration.SearchCaseSensitive = _searchCaseSensitive;
             _lastConfiguration.SearchUseRegex = _searchRegex;
+            _lastConfiguration.SearchFilesOnly = _searchFilesOnly;
             _lastConfiguration.EditorCommand = _editorCommand;
             _lastConfiguration.StringTableLanguage = _stringTableLanguage;
             _lastConfiguration.QuickAccessEntries = _quickAccessEntries;

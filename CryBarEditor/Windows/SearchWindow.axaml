@@ -68,6 +68,15 @@
 				</Button.Styles>
 			</Button>
 			<ToggleButton
+				x:Name="btnFilesOnly"
+				Margin="5,0,0,0"
+				DockPanel.Dock="Right"
+				IsChecked="{Binding IsFilesOnly, Mode=TwoWay}"
+				IsEnabled="{Binding !CurrentlySearching}"
+				ToolTip.Tip="Files Only (search names/paths only, skip content)">
+				<micons:MaterialIcon Width="16" Height="16" Kind="FileOutline" />
+			</ToggleButton>
+			<ToggleButton
 				x:Name="btnRegex"
 				Margin="5,0,0,0"
 				DockPanel.Dock="Right"
