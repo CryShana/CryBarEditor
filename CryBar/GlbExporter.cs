@@ -169,12 +169,18 @@ public static class GlbExporter
             imageOffsets, imageLengths,
             totalBinLength);
 
-        // Compute min/max for positions (needed for glTF POSITION accessor)
-        ComputePositionBounds(vertices, out var posMin, out var posMax);
+        // Compute per-group min/max for positions (required by glTF for all POSITION accessors)
+        var groupBounds = new (float[] min, float[] max)[meshGroups.Length];
+        for (int g = 0; g < meshGroups.Length; g++)
+        {
+            var mg = meshGroups[g];
+            ComputePositionBounds(vertices, (int)mg.VertexStart, (int)mg.VertexCount,
+                out groupBounds[g].min, out groupBounds[g].max);
+        }
 
         // Build JSON chunk first to know its size
         var jsonBytes = BuildJson(tmm, meshGroups, bones, attachments, hasSkin, hasMaterials, materials,
-            vertexCount, layout, posMin, posMax);
+            vertexCount, layout, groupBounds);
 
         int jsonPadded = Align4(jsonBytes.Length);
 
@@ -280,8 +286,10 @@ public static class GlbExporter
             BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), tangent.y); offset += 4;
             BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), -tangent.z); offset += 4;
 
-            // w = handedness sign: 0 -> +1.0, 1 -> -1.0
-            float w = handedness == 0 ? 1.0f : -1.0f;
+            // Z-negate (LH→RH) flips the TBN determinant, so tangent.w is inverted:
+            //   hand=0 (det=+1 in game) → det=-1 in glTF → w = -1
+            //   hand=1 (det=-1 in game) → det=+1 in glTF → w = +1
+            float w = handedness == 0 ? -1.0f : 1.0f;
             BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), w); offset += 4;
         }
     }
@@ -386,7 +394,7 @@ public static class GlbExporter
         TmmFile tmm, TmmMeshGroup[] meshGroups, TmmBone[] bones, TmmAttachment[] attachments,
         bool hasSkin, bool hasMaterials, IReadOnlyList<GlbMaterial>? materials,
         int vertexCount, in BufferLayout bl,
-        float[] posMin, float[] posMax)
+        (float[] min, float[] max)[] groupBounds)
     {
         using var ms = new MemoryStream();
         using var w = new Utf8JsonWriter(ms, new JsonWriterOptions { Indented = false });
@@ -556,8 +564,8 @@ public static class GlbExporter
             int iStart = (int)mg.IndexStart;
             int iCount = (int)mg.IndexCount;
 
-            // POSITION accessor
-            WriteAccessor(w, bvPositions, vStart * 12, vCount, 5126, "VEC3", posMin, posMax, g == 0); // only first group gets global min/max
+            // POSITION accessor (min/max required by glTF spec for all POSITION accessors)
+            WriteAccessor(w, bvPositions, vStart * 12, vCount, 5126, "VEC3", groupBounds[g].min, groupBounds[g].max, true);
             accessorIndex++;
 
             // NORMAL accessor
@@ -825,12 +833,13 @@ public static class GlbExporter
 
     static int Align4(int value) => (value + 3) & ~3;
 
-    static void ComputePositionBounds(TmmVertex[] vertices, out float[] min, out float[] max)
+    static void ComputePositionBounds(TmmVertex[] vertices, int start, int count, out float[] min, out float[] max)
     {
         min = [float.MaxValue, float.MaxValue, float.MaxValue];
         max = [float.MinValue, float.MinValue, float.MinValue];
 
-        for (int i = 0; i < vertices.Length; i++)
+        int end = start + count;
+        for (int i = start; i < end; i++)
         {
             float px = (float)vertices[i].PosX;
             float py = (float)vertices[i].PosY;
