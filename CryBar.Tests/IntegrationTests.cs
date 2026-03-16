@@ -846,25 +846,21 @@ public class IntegrationTests
         Assert.True(tma.FrameCount > 0, "Should have at least one frame");
         Assert.True(tma.Duration > 0, "Duration should be positive");
 
-        // Full body: verify bones and tracks were populated if the body parsed correctly
-        if (tma.Bones != null)
+        // Full body: bones and tracks must be populated
+        Assert.NotNull(tma.Bones);
+        Assert.Equal((int)tma.NumBones, tma.Bones.Length);
+        foreach (var bone in tma.Bones)
         {
-            Assert.True(tma.Bones.Length == tma.NumBones, "Bones array length should match NumBones");
-            foreach (var bone in tma.Bones)
-            {
-                Assert.False(string.IsNullOrEmpty(bone.Name), "Bone name should not be empty");
-                Assert.True(bone.LocalTransform.Length == 16, "LocalTransform should be 4×4 = 16 floats");
-            }
+            Assert.False(string.IsNullOrEmpty(bone.Name), "Bone name should not be empty");
+            Assert.Equal(16, bone.LocalTransform.Length);
         }
 
-        if (tma.Tracks != null)
+        Assert.NotNull(tma.Tracks);
+        Assert.Equal((int)tma.NumTracks, tma.Tracks.Length);
+        foreach (var track in tma.Tracks)
         {
-            Assert.True(tma.Tracks.Length == tma.NumTracks, "Tracks array length should match NumTracks");
-            foreach (var track in tma.Tracks)
-            {
-                Assert.False(string.IsNullOrEmpty(track.Name), "Track name should not be empty");
-                Assert.True(track.KeyframeCount >= 0, "KeyframeCount should be non-negative");
-            }
+            Assert.False(string.IsNullOrEmpty(track.Name), "Track name should not be empty");
+            Assert.True(track.KeyframeCount >= 0, "KeyframeCount should be non-negative");
         }
 
         // GetSummary should not throw
@@ -916,23 +912,54 @@ public class IntegrationTests
             Assert.Equal(16, bone.InverseBindPose.Length);
         }
 
-        // Track and controller parsing is best-effort - keyframe data size formulas are not
-        // fully verified against all real files (Raw + Quat64 encoding size may be incorrect).
-        if (tma.Tracks != null)
+        Assert.NotNull(tma.Tracks);
+        Assert.Equal((int)tma.NumTracks, tma.Tracks.Length);
+        foreach (var track in tma.Tracks)
         {
-            Assert.Equal((int)tma.NumTracks, tma.Tracks.Length);
-            foreach (var track in tma.Tracks)
-            {
-                Assert.False(string.IsNullOrEmpty(track.Name), "Track name should not be empty");
-                Assert.True(track.KeyframeCount >= 0);
-            }
+            Assert.False(string.IsNullOrEmpty(track.Name), "Track name should not be empty");
+            Assert.True(track.KeyframeCount >= 0);
         }
 
         var summary = tma.GetSummary();
         Assert.Contains("Version: 12", summary);
         Assert.Contains($"Bones ({tma.Bones.Length})", summary);
-        if (tma.Tracks != null)
-            Assert.Contains($"Animation Tracks ({tma.Tracks.Length})", summary);
+        Assert.Contains($"Animation Tracks ({tma.Tracks.Length})", summary);
+    }
+
+    [SkippableFact]
+    public void TmaFile_AllEntriesParseFully()
+    {
+        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+
+        var barPath = Path.Combine(GamePath, @"modelcache\ArtModelCacheAnimationData.bar");
+        Skip.IfNot(File.Exists(barPath), "Animation BAR not found");
+
+        using var stream = File.OpenRead(barPath);
+        var bar = new BarFile(stream);
+        bar.Load(out _);
+
+        var tmaEntries = bar.Entries!
+            .Where(e => e.Name.EndsWith(".tma", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        Assert.True(tmaEntries.Count > 0, "Should find .tma entries in animation BAR");
+
+        var failures = new List<string>();
+        foreach (var entry in tmaEntries)
+        {
+            var raw = BarCompression.EnsureDecompressed(entry.ReadDataRaw(stream), out _);
+            var tma = new TmaFile(raw);
+
+            if (!tma.Parsed)
+                failures.Add($"{entry.Name}: header parse failed");
+            else if (tma.Tracks == null && tma.NumTracks > 0)
+                failures.Add($"{entry.Name}: tracks failed (NumTracks={tma.NumTracks})");
+            else if (tma.Controllers == null && tma.NumControllers > 0)
+                failures.Add($"{entry.Name}: controllers failed (NumControllers={tma.NumControllers})");
+        }
+
+        Assert.True(failures.Count == 0,
+            $"{failures.Count}/{tmaEntries.Count} TMA files failed:\n{string.Join("\n", failures.Take(20))}");
     }
 
     #endregion

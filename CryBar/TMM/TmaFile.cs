@@ -5,17 +5,22 @@ namespace CryBar.TMM;
 /// <summary>
 /// Parses .tma animation files (Age of Mythology: Retold, version 12).
 ///
-/// Header layout (60 bytes):
-///   [0]  u32  Signature "BTMA"
-///   [4]  u32  Version (12)
-///   [8]  u32  TrackCount
-///   [12] u32  FrameCount
-///   [16] f32  Duration
-///   [20] 8×f32  Root-bone bounding box (min xyz w, max xyz w)
-///   [52] u32  BoneCount
-///   [56] u32  ControllerCount
+/// Header layout:
+///   [0]  u32    Signature "BTMA"
+///   [4]  u32    Version (12)
+///   [+]  optional "DP" import metadata block
+///   [+]  u32    TrackCount
+///   [+]  u32    FrameCount (resample frame count)
+///   [+]  f32    Duration (seconds)
+///   [+]  6×f32  Root-bone bounding box (min XYZ, max XYZ)
+///   [+]  u32    BoneCount
+///   [+]  u32    ControllerCount
+///
 /// Followed by: Bones × BoneCount, Tracks × TrackCount,
 ///              Controllers × ControllerCount, Error section.
+///
+/// Track encoding blocks: Constant = 16 bytes inline (__m128);
+/// Raw/Quat32/Quat64 = 4-byte size prefix (uint32) followed by data.
 /// </summary>
 public class TmaFile
 {
@@ -155,11 +160,8 @@ public class TmaFile
         Bones = bones;
 
         // ── Animation Tracks ────────────────────────────────────────────────
-        // NOTE: Track keyframe data skipping is not fully verified against real game files.
-        // The data size formulas (TranslationDataBytes/RotationDataBytes) may be incorrect -
-        // testing shows misalignment after track 1 in some files, suggesting that
-        // Raw encoding may include frame-index arrays or other prefix data not in the docs.
-        // Bones are parsed correctly; track/controller/error sections may silently fail.
+        // Non-Constant encoding blocks are prefixed with a 4-byte data-size (uint32).
+        // Constant encoding stores an __m128 (16 bytes) directly with no prefix.
         if (NumTracks > MaxTracks) return false;
         var tracks = new TmaTrack[NumTracks];
         for (int i = 0; i < NumTracks; i++)
@@ -176,13 +178,10 @@ public class TmaFile
             if (!TryReadInt32(data, ref offset, out var keyframeCount)) return false;
             if (keyframeCount < 0 || keyframeCount > MaxKeyframes) return false;
 
-            var tBytes = EncodingDataBytes(translationEncoding, keyframeCount, 3);
-            var rBytes = EncodingDataBytes(rotationEncoding, keyframeCount, 4);
-            var sBytes = EncodingDataBytes(scaleEncoding, keyframeCount, 3);
-
-            // Skip the raw keyframe data blobs
-            if (offset + tBytes + rBytes + sBytes > data.Length) return false;
-            offset += tBytes + rBytes + sBytes;
+            // Each encoding block: Constant = 16 bytes inline; others = 4-byte size prefix + data
+            if (!TryReadEncodingBlock(data, ref offset, translationEncoding, out var tBytes)) return false;
+            if (!TryReadEncodingBlock(data, ref offset, rotationEncoding, out var rBytes)) return false;
+            if (!TryReadEncodingBlock(data, ref offset, scaleEncoding, out var sBytes)) return false;
 
             tracks[i] = new TmaTrack
             {
@@ -291,8 +290,13 @@ public class TmaFile
         var sb = new StringBuilder();
         sb.AppendLine($"TMA Animation File");
         sb.AppendLine($"Signature: 0x{Signature:X8} (BTMA)");
-        sb.AppendLine($"Version: {Version}");
-        sb.AppendLine($"Duration: {Duration:F3}  |  Frames: {FrameCount}");
+        sb.AppendLine($"Version: {Version}  |  File size: {FileSize:N0} bytes");
+        sb.AppendLine($"Duration: {Duration:F3}s  |  Frames: {FrameCount}");
+        if (RootBBoxMin.Length > 0 && RootBBoxMax.Length > 0)
+        {
+            sb.AppendLine($"Root BBox: ({RootBBoxMin[0]:F2}, {RootBBoxMin[1]:F2}, {RootBBoxMin[2]:F2})" +
+                          $" .. ({RootBBoxMax[0]:F2}, {RootBBoxMax[1]:F2}, {RootBBoxMax[2]:F2})");
+        }
         sb.AppendLine();
 
         // Bones
@@ -314,8 +318,10 @@ public class TmaFile
             sb.AppendLine($"Animation Tracks ({Tracks.Length}):");
             foreach (var t in Tracks)
             {
-                sb.AppendLine($"  {t.Name}  [{t.KeyframeCount} keyframes]  " +
-                              $"T:{t.TranslationEncoding} R:{t.RotationEncoding} S:{t.ScaleEncoding}");
+                var totalBytes = t.TranslationDataBytes + t.RotationDataBytes + t.ScaleDataBytes;
+                sb.AppendLine($"  {t.Name}  [{t.KeyframeCount} kf]  " +
+                              $"T:{t.TranslationEncoding} R:{t.RotationEncoding} S:{t.ScaleEncoding}  " +
+                              $"({totalBytes:N0}B)");
             }
             sb.AppendLine();
         }
@@ -330,11 +336,13 @@ public class TmaFile
                 {
                     case TmaVisibilityController v:
                         sb.AppendLine($"  Visibility  attach={v.AttachPointName}  " +
-                                      $"range=[{v.Start:F3},{v.End:F3}]  invert={v.InvertLogic}");
+                                      $"range=[{v.Start:F3},{v.End:F3}]  " +
+                                      $"ease=[{v.EaseIn:F3},{v.EaseOut:F3}]  invert={v.InvertLogic}");
                         break;
                     case TmaFootprintController f:
                         sb.AppendLine($"  Footprint  attach={f.AttachPointName}  " +
-                                      $"spawnTime={f.SpawnTime:F3}  right={f.IsRightSide}");
+                                      $"name={f.FootprintName}  id={f.FootprintId}  " +
+                                      $"spawnTime={f.SpawnTime:F3}  right={f.IsRightSide}  invertY={f.InvertTextureY}");
                         break;
                     default:
                         sb.AppendLine($"  Unknown (type {c.Type})");
@@ -357,17 +365,30 @@ public class TmaFile
         return sb.ToString();
     }
 
-    // ── Encoding size helpers ─────────────────────────────────────────────────
+    // ── Encoding block helpers ───────────────────────────────────────────────
 
-    /// <summary>Bytes used by a keyframe data block with the given component count (3 for translation/scale, 4 for rotation).</summary>
-    static int EncodingDataBytes(TmaEncoding enc, int keyframeCount, int componentCount) => enc switch
+    /// <summary>
+    /// Reads one encoding data block. Constant = 16 bytes inline (__m128).
+    /// All other encodings are prefixed with a uint32 byte-count, then that many bytes of data.
+    /// </summary>
+    static bool TryReadEncodingBlock(ReadOnlySpan<byte> data, ref int offset, TmaEncoding enc, out int dataBytes)
     {
-        TmaEncoding.Constant => 16,
-        TmaEncoding.Raw      => keyframeCount * componentCount * 4,
-        TmaEncoding.Quat32   => keyframeCount * 4,
-        TmaEncoding.Quat64   => keyframeCount * 8,
-        _                    => 0,
-    };
+        dataBytes = 0;
+        if (enc == TmaEncoding.Constant)
+        {
+            dataBytes = 16;
+            if (offset + 16 > data.Length) return false;
+            offset += 16;
+            return true;
+        }
+
+        // Non-constant: read 4-byte size prefix, then skip the data
+        if (!TryReadInt32(data, ref offset, out var blockSize)) return false;
+        if (blockSize < 0 || offset + blockSize > data.Length) return false;
+        dataBytes = blockSize;
+        offset += blockSize;
+        return true;
+    }
 
     // ── Low-level read helpers (delegated to shared TmmReadHelpers) ──────────
 
