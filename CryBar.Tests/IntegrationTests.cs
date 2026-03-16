@@ -704,6 +704,76 @@ public class IntegrationTests
         Assert.Contains("usemtl ", objText); // material assignments
     }
 
+    [SkippableFact]
+    public void GlbExport_SPC_ShadeSpc_HasAttachmentNodes()
+    {
+        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+
+        // Load .tmm from ArtModelCacheMeta.bar
+        var (bar, tmmEntry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "shade_spc.tmm");
+        var tmmRaw = BarCompression.EnsureDecompressed(tmmEntry.ReadDataRaw(stream), out _);
+        var tmm = new TmmFile(tmmRaw);
+        Assert.True(tmm.Parsed, "shade_spc.tmm should parse");
+        stream.Dispose();
+
+        // Verify the model has attachments (the VFX dummy bones users reported missing)
+        Assert.NotNull(tmm.Attachments);
+        Assert.True(tmm.Attachments.Length > 0, "shade_spc should have attachments (VFX attach points)");
+        Assert.True(tmm.Bones!.Length > 0, "shade_spc should have bones");
+
+        // Load .tmm.data from ArtModelCacheModelData.bar
+        var (bar2, dataEntry, stream2) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheModelData.bar", "shade_spc.tmm.data");
+        var dataRaw = BarCompression.EnsureDecompressed(dataEntry.ReadDataRaw(stream2), out _);
+        stream2.Dispose();
+
+        var dataFile = new TmmDataFile(dataRaw, tmm.NumVertices, tmm.NumTriangleVerts, tmm.NumBones > 0);
+        Assert.True(dataFile.Parsed, "shade_spc.tmm.data should parse");
+
+        // Export to GLB
+        var glb = GlbExporter.ExportGlb(tmm, dataFile);
+        Assert.NotNull(glb);
+        Assert.True(glb.Length > 100, "GLB should have meaningful size");
+
+        // Parse the GLB JSON and verify attachment nodes exist
+        var json = GlbExporterTests.ExtractJson(glb);
+
+        var nodes = json.GetProperty("nodes");
+        // Node 0 = mesh, nodes 1..N = bones, nodes N+1.. = attachments
+        int expectedNodes = 1 + tmm.Bones.Length + tmm.Attachments.Length;
+        Assert.Equal(expectedNodes, nodes.GetArrayLength());
+
+        // Verify attachment nodes have names matching the parsed attachments
+        int attachmentNodeStart = 1 + tmm.Bones.Length;
+        for (int i = 0; i < tmm.Attachments.Length; i++)
+        {
+            var node = nodes[attachmentNodeStart + i];
+            Assert.Equal(tmm.Attachments[i].Name, node.GetProperty("name").GetString());
+            Assert.True(node.TryGetProperty("matrix", out var mat), $"Attachment node '{tmm.Attachments[i].Name}' should have a matrix");
+            Assert.Equal(16, mat.GetArrayLength());
+        }
+
+        // Verify at least one attachment is a child of a bone node
+        bool foundBoneParentedAttachment = false;
+        for (int b = 0; b < tmm.Bones.Length; b++)
+        {
+            var boneNode = nodes[1 + b];
+            if (boneNode.TryGetProperty("children", out var children))
+            {
+                for (int c = 0; c < children.GetArrayLength(); c++)
+                {
+                    int childIdx = children[c].GetInt32();
+                    if (childIdx >= attachmentNodeStart)
+                    {
+                        foundBoneParentedAttachment = true;
+                        break;
+                    }
+                }
+            }
+            if (foundBoneParentedAttachment) break;
+        }
+        Assert.True(foundBoneParentedAttachment, "At least one attachment should be parented to a bone");
+    }
+
     #endregion
 
     #region TMA - Animation File Exploration

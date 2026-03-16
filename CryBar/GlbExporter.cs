@@ -84,6 +84,7 @@ public static class GlbExporter
         var indices = dataFile.Indices;
         var meshGroups = tmm.MeshGroups!;
         var bones = tmm.Bones!;
+        var attachments = tmm.Attachments!;
 
         if (vertices.Length == 0 || indices.Length == 0)
             return null;
@@ -172,7 +173,7 @@ public static class GlbExporter
         ComputePositionBounds(vertices, out var posMin, out var posMax);
 
         // Build JSON chunk first to know its size
-        var jsonBytes = BuildJson(tmm, meshGroups, bones, hasSkin, hasMaterials, materials,
+        var jsonBytes = BuildJson(tmm, meshGroups, bones, attachments, hasSkin, hasMaterials, materials,
             vertexCount, layout, posMin, posMax);
 
         int jsonPadded = Align4(jsonBytes.Length);
@@ -382,7 +383,7 @@ public static class GlbExporter
     #region JSON Builder
 
     static byte[] BuildJson(
-        TmmFile tmm, TmmMeshGroup[] meshGroups, TmmBone[] bones,
+        TmmFile tmm, TmmMeshGroup[] meshGroups, TmmBone[] bones, TmmAttachment[] attachments,
         bool hasSkin, bool hasMaterials, IReadOnlyList<GlbMaterial>? materials,
         int vertexCount, in BufferLayout bl,
         float[] posMin, float[] posMax)
@@ -413,7 +414,9 @@ public static class GlbExporter
         // --- Build nodes ---
         // Node 0 = mesh node
         // Nodes 1..N = bone nodes (if any)
-        int boneNodeStart = 1; // bone nodes start at index 1
+        // Nodes N+1..N+A = attachment nodes (empty nodes parented to bones)
+        int boneNodeStart = 1;
+        int attachmentNodeStart = boneNodeStart + bones.Length;
 
         w.WriteStartArray("nodes");
 
@@ -421,22 +424,30 @@ public static class GlbExporter
         w.WriteStartObject();
         w.WriteNumber("mesh", 0);
         if (hasSkin)
-        {
             w.WriteNumber("skin", 0);
-            // Root bone indices as children of mesh node
-            var rootBoneIndices = new List<int>();
+
+        // Children of mesh node: root bones + orphan attachments
+        var meshNodeChildren = new List<int>();
+        if (hasSkin)
+        {
             for (int i = 0; i < bones.Length; i++)
             {
                 if (bones[i].ParentId < 0)
-                    rootBoneIndices.Add(boneNodeStart + i);
+                    meshNodeChildren.Add(boneNodeStart + i);
             }
-            if (rootBoneIndices.Count > 0)
-            {
-                w.WriteStartArray("children");
-                foreach (var idx in rootBoneIndices)
-                    w.WriteNumberValue(idx);
-                w.WriteEndArray();
-            }
+        }
+        // Attachments without a valid bone parent are children of the mesh node
+        for (int i = 0; i < attachments.Length; i++)
+        {
+            if (!hasSkin || attachments[i].ParentBoneId < 0 || attachments[i].ParentBoneId >= bones.Length)
+                meshNodeChildren.Add(attachmentNodeStart + i);
+        }
+        if (meshNodeChildren.Count > 0)
+        {
+            w.WriteStartArray("children");
+            foreach (var idx in meshNodeChildren)
+                w.WriteNumberValue(idx);
+            w.WriteEndArray();
         }
         w.WriteEndObject();
 
@@ -447,23 +458,19 @@ public static class GlbExporter
             w.WriteString("name", bones[i].Name);
 
             // Parent space matrix with Z-negation
-            var psm = bones[i].ParentSpaceMatrix;
-            w.WriteStartArray("matrix");
-            for (int j = 0; j < 16; j++)
-            {
-                float val = psm[j];
-                if (Array.IndexOf(ZNegateIndices, j) >= 0)
-                    val = -val;
-                w.WriteNumberValue(val);
-            }
-            w.WriteEndArray();
+            WriteZNegatedMatrixJson(w, bones[i].ParentSpaceMatrix);
 
-            // Children
+            // Children: child bones + attachments parented to this bone
             var childIndices = new List<int>();
             for (int c = 0; c < bones.Length; c++)
             {
                 if (bones[c].ParentId == i)
                     childIndices.Add(boneNodeStart + c);
+            }
+            for (int a = 0; a < attachments.Length; a++)
+            {
+                if (attachments[a].ParentBoneId == i)
+                    childIndices.Add(attachmentNodeStart + a);
             }
             if (childIndices.Count > 0)
             {
@@ -472,6 +479,18 @@ public static class GlbExporter
                     w.WriteNumberValue(idx);
                 w.WriteEndArray();
             }
+
+            w.WriteEndObject();
+        }
+
+        // Attachment nodes (Empty objects for VFX/particle attach points)
+        for (int i = 0; i < attachments.Length; i++)
+        {
+            w.WriteStartObject();
+            w.WriteString("name", attachments[i].Name);
+
+            // Convert row-major 3×4 attachment transform to column-major 4×4 for glTF
+            WriteZNegatedMatrixJson(w, RowMajor3x4ToColumnMajor4x4(attachments[i].TransformMatrix1));
 
             w.WriteEndObject();
         }
@@ -771,6 +790,38 @@ public static class GlbExporter
     #endregion
 
     #region Helpers
+
+    /// <summary>
+    /// Writes a column-major 4×4 matrix as a glTF "matrix" JSON array,
+    /// negating the Z-axis components for LH→RH conversion.
+    /// </summary>
+    static void WriteZNegatedMatrixJson(Utf8JsonWriter w, float[] matrix)
+    {
+        w.WriteStartArray("matrix");
+        for (int j = 0; j < 16; j++)
+        {
+            float val = matrix[j];
+            if (Array.IndexOf(ZNegateIndices, j) >= 0)
+                val = -val;
+            w.WriteNumberValue(val);
+        }
+        w.WriteEndArray();
+    }
+
+    /// <summary>
+    /// Converts a 12-float row-major 3×4 matrix (3 rows of 4 values, as used by
+    /// attachment and main transforms) to a 16-float column-major 4×4 matrix for glTF.
+    /// The implicit 4th row [0, 0, 0, 1] is appended.
+    /// </summary>
+    static float[] RowMajor3x4ToColumnMajor4x4(float[] tm)
+    {
+        return [
+            tm[0], tm[4], tm[8],  0,
+            tm[1], tm[5], tm[9],  0,
+            tm[2], tm[6], tm[10], 0,
+            tm[3], tm[7], tm[11], 1
+        ];
+    }
 
     static int Align4(int value) => (value + 3) & ~3;
 

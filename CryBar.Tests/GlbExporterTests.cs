@@ -187,6 +187,51 @@ public class GlbExporterTests
         Assert.True(attrs.TryGetProperty("WEIGHTS_0", out _));
     }
 
+    [Fact]
+    public void ExportGlb_WithAttachments_HasAttachmentNodes()
+    {
+        var tmmBytes = CreateSyntheticTmm(
+            numMeshGroups: 1,
+            materials: ["default_mat"],
+            submodels: ["default"],
+            numBones: 2,
+            numAttachments: 2,
+            numVertices: 3,
+            numTriangleVerts: 3);
+
+        var tmm = new TmmFile(tmmBytes);
+        Assert.True(tmm.Parsed);
+        Assert.Equal(2, tmm.Attachments!.Length);
+
+        var dataBytes = CreateSyntheticData(numVertices: 3, numTriangleVerts: 3, hasSkinning: true);
+        var dataFile = new TmmDataFile(dataBytes, 3, 3, true);
+        Assert.True(dataFile.Parsed);
+
+        var glb = GlbExporter.ExportGlb(tmm, dataFile)!;
+        Assert.NotNull(glb);
+        var json = ExtractJson(glb);
+
+        var nodes = json.GetProperty("nodes");
+        // Node 0 = mesh, nodes 1-2 = bones, nodes 3-4 = attachments
+        Assert.Equal(5, nodes.GetArrayLength());
+
+        // Attachment nodes should have names and matrices
+        Assert.Equal("attach_0", nodes[3].GetProperty("name").GetString());
+        Assert.Equal("attach_1", nodes[4].GetProperty("name").GetString());
+        Assert.True(nodes[3].TryGetProperty("matrix", out var mat));
+        Assert.Equal(16, mat.GetArrayLength());
+
+        // Bone 0 should have attach_0 as child (node index 3)
+        var bone0Children = nodes[1].GetProperty("children");
+        bool hasAttachChild = false;
+        for (int i = 0; i < bone0Children.GetArrayLength(); i++)
+        {
+            if (bone0Children[i].GetInt32() == 3)
+                hasAttachChild = true;
+        }
+        Assert.True(hasAttachChild, "Bone 0 should have attachment 0 as child");
+    }
+
     #endregion
 
     #region Material Tests
@@ -617,7 +662,7 @@ public class GlbExporterTests
         return ~crc;
     }
 
-    static JsonElement ExtractJson(byte[] glb)
+    internal static JsonElement ExtractJson(byte[] glb)
     {
         uint jsonChunkLength = BinaryPrimitives.ReadUInt32LittleEndian(glb.AsSpan(12, 4));
         var jsonBytes = glb.AsSpan(20, (int)jsonChunkLength);

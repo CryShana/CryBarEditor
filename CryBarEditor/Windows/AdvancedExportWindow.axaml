@@ -101,7 +101,7 @@
 					  IsVisible="{Binding ShowTmmToGltfOption}">
 				<StackPanel>
 					<TextBlock Text="TMM &#x2192; glTF instead of OBJ" VerticalAlignment="Center" />
-					<TextBlock Text="Single .glb file with materials, tangents, skeleton data"
+					<TextBlock Text="Single .glb file with materials, tangents, skeleton data, attachments"
 							   Foreground="Gray" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
 				</StackPanel>
 			</CheckBox>
