@@ -1,0 +1,49 @@
+name: Build Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          dotnet-quality: 'preview'
+
+      - name: Run tests
+        run: dotnet test --verbosity normal
+
+      - name: Publish CryBarEditor
+        working-directory: CryBarEditor
+        run: dotnet publish -c Release -o out
+
+      - name: Parse version from csproj
+        id: version
+        shell: pwsh
+        run: |
+          [xml]$csproj = Get-Content CryBarEditor/CryBarEditor.csproj
+          $version = $csproj.Project.PropertyGroup[0].AssemblyVersion
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Clean build output
+        shell: pwsh
+        run: |
+          Remove-Item CryBarEditor/out/*.pdb -ErrorAction SilentlyContinue
+          Remove-Item CryBarEditor/out/*.json -ErrorAction SilentlyContinue
+
+      - name: Zip release
+        shell: pwsh
+        run: |
+          Compress-Archive -Path CryBarEditor/out/* -DestinationPath "CryBarEditor-${{ steps.version.outputs.VERSION }}.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CryBarEditor-${{ steps.version.outputs.VERSION }}
+          path: CryBarEditor-${{ steps.version.outputs.VERSION }}.zip

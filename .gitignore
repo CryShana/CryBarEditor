@@ -4,6 +4,8 @@ out
 
 # ignore all hidden folders, manually add exceptions below
 .*
+!.githooks
+!.github
 
 # to keep own MD notes local. If needed, manually add exceptions below
 *.md
