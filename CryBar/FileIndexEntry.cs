@@ -9,4 +9,5 @@ public class FileIndexEntry
     public required FileIndexSource Source { get; init; }
     public string? BarFilePath { get; init; }               // disk path to .bar (null for root files)
     public string? EntryRelativePath { get; init; }         // path within BAR archive
+    public bool IsExternal { get; init; }                   // true for entries from supplemental BAR scanning
 }

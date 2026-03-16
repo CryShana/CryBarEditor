@@ -381,4 +381,113 @@ public class FileIndexTests
         var results = index.FindByPartialPath(@"art\armory_a_age2.material");
         Assert.Empty(results);
     }
+
+    // --- IsExternal property tests ---
+
+    [Fact]
+    public void IsExternal_DefaultsFalse()
+    {
+        var entry = MakeEntry(@"game\art\test.ddt");
+        Assert.False(entry.IsExternal);
+    }
+
+    [Fact]
+    public void IsExternal_CanBeSetTrue()
+    {
+        var entry = new FileIndexEntry
+        {
+            FullRelativePath = @"game\art\test.ddt",
+            FileName = "test.ddt",
+            Source = FileIndexSource.BarEntry,
+            IsExternal = true,
+        };
+        Assert.True(entry.IsExternal);
+    }
+
+    // --- DependencyReference computed property tests ---
+
+    [Fact]
+    public void DependencyReference_AllResolvedExternal()
+    {
+        var reference = new DependencyReference
+        {
+            RawValue = "test.material.XMB",
+            Type = DependencyRefType.FilePath,
+        };
+        reference.Resolved.Add(new FileIndexEntry
+        {
+            FullRelativePath = @"game\art\test.material.XMB",
+            FileName = "test.material.XMB",
+            Source = FileIndexSource.BarEntry,
+            BarFilePath = @"C:\other\Art.bar",
+            IsExternal = true,
+        });
+        Assert.True(reference.AllResolvedExternal);
+        Assert.True(reference.AnyResolvedExternal);
+        Assert.NotNull(reference.ExternalTooltip);
+        Assert.Contains(@"C:\other\Art.bar", reference.ExternalTooltip);
+    }
+
+    [Fact]
+    public void DependencyReference_MixedExternalAndLocal()
+    {
+        var reference = new DependencyReference
+        {
+            RawValue = "test.material.XMB",
+            Type = DependencyRefType.FilePath,
+        };
+        reference.Resolved.Add(new FileIndexEntry
+        {
+            FullRelativePath = @"game\art\test.material.XMB",
+            FileName = "test.material.XMB",
+            Source = FileIndexSource.BarEntry,
+            BarFilePath = @"C:\game\Art.bar",
+            IsExternal = false,
+        });
+        reference.Resolved.Add(new FileIndexEntry
+        {
+            FullRelativePath = @"game\art\test.material.XMB",
+            FileName = "test.material.XMB",
+            Source = FileIndexSource.BarEntry,
+            BarFilePath = @"C:\other\Art.bar",
+            IsExternal = true,
+        });
+        Assert.False(reference.AllResolvedExternal);
+        Assert.True(reference.AnyResolvedExternal);
+        Assert.NotNull(reference.ExternalTooltip);
+    }
+
+    [Fact]
+    public void DependencyReference_NoResolvedEntries_NotExternal()
+    {
+        var reference = new DependencyReference
+        {
+            RawValue = "missing.ddt",
+            Type = DependencyRefType.FilePath,
+        };
+        Assert.False(reference.AllResolvedExternal);
+        Assert.False(reference.AnyResolvedExternal);
+        Assert.Null(reference.ExternalTooltip);
+    }
+
+    [Fact]
+    public void DependencyReference_AllLocal_NotExternal()
+    {
+        var reference = new DependencyReference
+        {
+            RawValue = "test.ddt",
+            Type = DependencyRefType.FilePath,
+        };
+        reference.Resolved.Add(new FileIndexEntry
+        {
+            FullRelativePath = @"game\art\test.ddt",
+            FileName = "test.ddt",
+            Source = FileIndexSource.BarEntry,
+            BarFilePath = @"C:\game\Art.bar",
+            IsExternal = false,
+        });
+        Assert.False(reference.AllResolvedExternal);
+        Assert.False(reference.AnyResolvedExternal);
+        Assert.Null(reference.ExternalTooltip);
+    }
 }

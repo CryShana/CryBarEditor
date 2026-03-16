@@ -23,6 +23,17 @@ public class DependencyReference
 
     /// <summary>Matched files from the FileIndex. Empty if unresolved or index not provided.</summary>
     public List<FileIndexEntry> Resolved { get; init; } = [];
+
+    /// <summary>True if all resolved entries are external (or none resolved).</summary>
+    public bool AllResolvedExternal => Resolved.Count > 0 && Resolved.All(e => e.IsExternal);
+
+    /// <summary>True if any resolved entry is external.</summary>
+    public bool AnyResolvedExternal => Resolved.Any(e => e.IsExternal);
+
+    /// <summary>Tooltip text listing external BAR file paths.</summary>
+    public string? ExternalTooltip => AnyResolvedExternal
+        ? "External: " + string.Join(", ", Resolved.Where(e => e.IsExternal).Select(e => e.BarFilePath ?? e.FullRelativePath).Distinct())
+        : null;
 }
 
 /// <summary>

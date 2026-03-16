@@ -118,6 +118,7 @@ public partial class DependencyGraphWindow : SimpleWindow
     static readonly Color NodeBgColor = Color.Parse("#1e1e1e");
     static readonly Color MatchNodeBgColor = Color.Parse("#1a1a1a");
     static readonly Color BorderDarkColor = Color.Parse("#333333");
+    static readonly Color ExternalIndicatorColor = Color.Parse("#b0b0b0");
 
     int _baseRefCount;
     int _expandedRefCount;
@@ -417,7 +418,11 @@ public partial class DependencyGraphWindow : SimpleWindow
             Foreground = new SolidColorBrush(color)
         });
 
+        if (reference.AnyResolvedExternal)
+            stack.Children.Add(CreateExternalIndicatorIcon());
+
         var contentStack = new StackPanel { Spacing = 1 };
+        stack.Children.Add(contentStack);
 
         // Value text — trim from left to keep filename visible
         var displayText = reference.RawValue;
@@ -521,8 +526,6 @@ public partial class DependencyGraphWindow : SimpleWindow
                 stack.Children.Add(previewBtn);
         }
 
-        stack.Children.Insert(1, contentStack);
-
         var border = new Border
         {
             Background = new SolidColorBrush(NodeBgColor),
@@ -531,7 +534,7 @@ public partial class DependencyGraphWindow : SimpleWindow
             CornerRadius = new CornerRadius(4),
             Padding = new Thickness(6, 4),
             Child = stack,
-            Cursor = new Cursor(StandardCursorType.Hand),
+            Cursor = reference.AllResolvedExternal ? null : new Cursor(StandardCursorType.Hand),
             Tag = reference
         };
 
@@ -546,7 +549,7 @@ public partial class DependencyGraphWindow : SimpleWindow
             }
         };
 
-        ToolTip.SetTip(border, reference.RawValue);
+        ToolTip.SetTip(border, reference.ExternalTooltip ?? reference.RawValue);
         border.DoubleTapped += Node_DoubleTapped;
         SetupNodeDrag(border);
 
@@ -563,6 +566,9 @@ public partial class DependencyGraphWindow : SimpleWindow
             Width = 12, Height = 12,
             Foreground = new SolidColorBrush(color)
         });
+
+        if (match.IsExternal)
+            stack.Children.Add(CreateExternalIndicatorIcon());
 
         var fileName = IOPath.GetFileName(match.FileName);
         if (fileName.Length > 35)
@@ -610,16 +616,27 @@ public partial class DependencyGraphWindow : SimpleWindow
             CornerRadius = new CornerRadius(3),
             Padding = new Thickness(4, 3),
             Child = stack,
-            Cursor = new Cursor(StandardCursorType.Hand),
+            Cursor = match.IsExternal ? null : new Cursor(StandardCursorType.Hand),
             Tag = match
         };
 
-        ToolTip.SetTip(border, match.FullRelativePath);
+        var matchTooltip = match.IsExternal
+            ? $"{match.FullRelativePath} (external — {match.BarFilePath})"
+            : match.FullRelativePath;
+        ToolTip.SetTip(border, matchTooltip);
         border.DoubleTapped += Node_DoubleTapped;
         SetupNodeDrag(border);
 
         return border;
     }
+
+    static MaterialIcon CreateExternalIndicatorIcon() => new()
+    {
+        Kind = MaterialIconKind.OpenInNew,
+        Width = 10, Height = 10,
+        Foreground = new SolidColorBrush(ExternalIndicatorColor),
+        VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
+    };
 
     Button? CreatePreviewButton(FileIndexEntry entry)
     {
@@ -1377,15 +1394,24 @@ public partial class DependencyGraphWindow : SimpleWindow
 
         if (entry != null)
         {
-            await NavigateToEntryAsync(entry);
-
-            // Highlight the reference value in the previewed document (matching DependenciesWindow behavior)
-            if (depRef != null && _mainWindow != null)
+            // Skip external entries — try to find a non-external match
+            if (entry.IsExternal && depRef != null)
             {
-                if (depRef.Type is DependencyRefType.StringKey or DependencyRefType.SoundsetName)
-                    await _mainWindow.HighlightTextInPreviewAsync(depRef.RawValue);
-                else if (depRef.Type == DependencyRefType.FilePath && depRef.SourceTag == "sound")
-                    await _mainWindow.HighlightTextInPreviewAsync(depRef.RawValue);
+                entry = depRef.Resolved.FirstOrDefault(e => !e.IsExternal);
+            }
+
+            if (entry != null && !entry.IsExternal)
+            {
+                await NavigateToEntryAsync(entry);
+
+                // Highlight the reference value in the previewed document (matching DependenciesWindow behavior)
+                if (depRef != null && _mainWindow != null)
+                {
+                    if (depRef.Type is DependencyRefType.StringKey or DependencyRefType.SoundsetName)
+                        await _mainWindow.HighlightTextInPreviewAsync(depRef.RawValue);
+                    else if (depRef.Type == DependencyRefType.FilePath && depRef.SourceTag == "sound")
+                        await _mainWindow.HighlightTextInPreviewAsync(depRef.RawValue);
+                }
             }
         }
     }

@@ -147,7 +147,15 @@ public partial class DependenciesWindow : SimpleWindow
             _resolvedNavigationIndex.TryGetValue(reference, out var idx);
             if (idx >= reference.Resolved.Count) idx = 0;
 
+            // Skip external entries
             var entry = reference.Resolved[idx];
+            var startIdx = idx;
+            while (entry.IsExternal)
+            {
+                idx = (idx + 1) % reference.Resolved.Count;
+                if (idx == startIdx) return; // all external, nothing to navigate to
+                entry = reference.Resolved[idx];
+            }
 
             // SoundsetName → bank file: navigate to the FMOD event instead
             if (reference.Type == DependencyRefType.SoundsetName &&

@@ -96,7 +96,7 @@ public static class FileIndexBuilder
     /// Opens each BAR file, loads it, and adds all entries to the given index.
     /// Uses Parallel.ForEach for performance. Unreadable BAR files are silently skipped.
     /// </summary>
-    public static void IndexBarFiles(FileIndex index, IReadOnlyList<string> barFilePaths)
+    public static void IndexBarFiles(FileIndex index, IReadOnlyList<string> barFilePaths, bool isExternal = false)
     {
         Parallel.ForEach(barFilePaths, barFilePath =>
         {
@@ -123,6 +123,7 @@ public static class FileIndexBuilder
                         Source = FileIndexSource.BarEntry,
                         BarFilePath = barFilePath,
                         EntryRelativePath = entry.RelativePath,
+                        IsExternal = isExternal,
                     });
                 }
             }

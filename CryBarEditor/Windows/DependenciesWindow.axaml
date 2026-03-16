@@ -148,13 +148,14 @@
 							<ListBox.ItemTemplate>
 								<DataTemplate x:DataType="cb:DependencyReference">
 									<DockPanel Margin="0,1">
-										<!-- Navigate button on right (hidden when unresolved) -->
+										<!-- Navigate button on right (hidden when unresolved, disabled when all external) -->
 										<Button DockPanel.Dock="Right" Padding="4"
 												Background="#01000000" BorderThickness="0"
 												Click="NavigateToRef_Click"
 												ToolTip.Tip="Navigate to file (click again to cycle matches)"
 												Focusable="False" IsTabStop="False" Cursor="Hand"
-												Margin="4,0,0,0">
+												Margin="4,0,0,0"
+												IsEnabled="{Binding AllResolvedExternal, Converter={x:Static BoolConverters.Not}}">
 											<Button.IsVisible>
 												<Binding Path="Resolved.Count" Converter="{x:Static ce:DependenciesWindow.GreaterThan0Converter}" />
 											</Button.IsVisible>
@@ -189,6 +190,18 @@
 															  ToolTip.Tip="Unresolved — not found in file index">
 											<micons:MaterialIcon.IsVisible>
 												<Binding Path="Resolved.Count" Converter="{x:Static ce:DependenciesWindow.EqualsZeroConverter}" />
+											</micons:MaterialIcon.IsVisible>
+										</micons:MaterialIcon>
+
+										<!-- External dependency indicator -->
+										<micons:MaterialIcon DockPanel.Dock="Left"
+															  Kind="OpenInNew"
+															  Width="12" Height="12" Margin="0,0,3,0"
+															  Foreground="#b0b0b0"
+															  VerticalAlignment="Center"
+															  ToolTip.Tip="{Binding ExternalTooltip}">
+											<micons:MaterialIcon.IsVisible>
+												<Binding Path="AnyResolvedExternal" />
 											</micons:MaterialIcon.IsVisible>
 										</micons:MaterialIcon>
 

@@ -321,7 +321,7 @@ public partial class MainWindow
         // Supplemental BAR scanning: when root is a subdirectory, find BARs in parent dirs
         var supplementalBars = FileIndexBuilder.FindSupplementalBarFiles(_rootDirectory);
         if (supplementalBars.Count > 0)
-            FileIndexBuilder.IndexBarFiles(index, supplementalBars);
+            FileIndexBuilder.IndexBarFiles(index, supplementalBars, isExternal: true);
 
         _fileIndex = index;
         ClearSoundCaches();
