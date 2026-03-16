@@ -3,6 +3,9 @@ name: Build Release
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -53,7 +56,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          DRAFT_TAG=$(gh release list --json tagName,isDraft --jq '.[] | select(.isDraft) | .tagName' --limit 1)
+          DRAFT_TAG=$(gh release list --json tagName,isDraft --jq '[.[] | select(.isDraft) | .tagName] | first')
           if [ -z "$DRAFT_TAG" ]; then
             echo "No draft release found, skipping upload"
             exit 0
