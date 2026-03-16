@@ -49,6 +49,7 @@ jobs:
           path: CryBarEditor/out/
 
       - name: Find draft release and attach zip
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
