@@ -165,6 +165,55 @@ public partial class MainWindow
         }
     }
 
+    async void MenuItem_ConvertScenarioToXML(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var file = await PickFile(sender, "Convert Scenario to XML", [new("AoM Scenario") { Patterns = ["*.mythscn"] }]);
+        if (file == null) return;
+
+        var out_file = PickOutFile(file, new_extension: ".xml", overwrite: true);
+        try
+        {
+            using var data = await PooledBuffer.FromFile(file);
+            using var decompressed = BarCompression.EnsureDecompressedPooled(data, out _);
+
+            var scenario = new ScenarioFile(decompressed.Memory);
+            if (!scenario.Parsed) throw new InvalidDataException("Failed to parse scenario file");
+
+            var xml = scenario.ToXml();
+            await File.WriteAllTextAsync(out_file, xml);
+
+            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file));
+        }
+        catch (Exception ex)
+        {
+            _ = ShowError("Failed to convert scenario to XML:\n" + ex.Message);
+        }
+    }
+
+    async void MenuItem_ConvertXMLtoScenario(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var file = await PickFile(sender, "Convert XML to Scenario", [new("XML file") { Patterns = ["*.xml"] }]);
+        if (file == null) return;
+
+        var out_file = PickOutFile(file, new_extension: ".mythscn", overwrite: true);
+        try
+        {
+            var xml = await File.ReadAllTextAsync(file);
+            var scenario = ScenarioFile.FromXml(xml);
+            if (!scenario.Parsed) throw new InvalidDataException("Failed to parse scenario XML");
+
+            var bytes = scenario.ToBytes();
+            var compressed = BarCompression.CompressL33t(bytes);
+            using (var f = File.Create(out_file)) f.Write(compressed.Span);
+
+            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file));
+        }
+        catch (Exception ex)
+        {
+            _ = ShowError("Failed to convert XML to scenario:\n" + ex.Message);
+        }
+    }
+
     async void MenuItem_CompressAlz4(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         var file = await PickFile(sender, "Compress using Alz4");

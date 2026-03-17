@@ -320,6 +320,24 @@ public partial class MainWindow
                         PreviewedFileNote = "TMM Data (no companion)";
                     }
                 }
+                else if (ext == ".mythscn")
+                {
+                    HideTmmPreview();
+                    await SetImagePreview(null);
+
+                    var scenario = new ScenarioFile(data.Memory);
+                    if (scenario.Parsed)
+                    {
+                        PreviewedFileNote = "(AoM Scenario)";
+                        text = scenario.GetSummary();
+                        ext = ".txt";
+                    }
+                    else
+                    {
+                        text = "Failed to parse scenario file";
+                        ext = ".txt";
+                    }
+                }
                 else if (ext == ".zip")
                 {
                     HideTmmPreview();

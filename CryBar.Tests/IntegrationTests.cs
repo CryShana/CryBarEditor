@@ -1193,4 +1193,172 @@ public class IntegrationTests
     }
 
     #endregion
+
+    #region ScenarioFile Tests
+
+    static string[] FindScenarioFiles()
+    {
+        var dirs = new List<string>();
+
+        // Campaign directory (game install)
+        var campaignDir = Path.Combine(GamePath, "campaign");
+        if (Directory.Exists(campaignDir))
+            dirs.Add(campaignDir);
+
+        // User scenario directories (Steam userdata or AoM Retold saves)
+        var userGamesDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Games", "Age of Mythology Retold");
+        if (Directory.Exists(userGamesDir))
+        {
+            foreach (var steamIdDir in Directory.GetDirectories(userGamesDir))
+            {
+                var scenarioDir = Path.Combine(steamIdDir, "scenario");
+                if (Directory.Exists(scenarioDir))
+                    dirs.Add(scenarioDir);
+            }
+        }
+
+        var files = new List<string>();
+        foreach (var dir in dirs)
+            files.AddRange(Directory.GetFiles(dir, "*.mythscn", SearchOption.AllDirectories));
+        return files.ToArray();
+    }
+
+    [SkippableFact]
+    public void ScenarioFile_Parse_AllTestFiles()
+    {
+        var allFiles = FindScenarioFiles();
+        Skip.If(allFiles.Length == 0, "No .mythscn files found");
+
+        foreach (var filePath in allFiles)
+        {
+            var fileName = Path.GetFileName(filePath);
+
+            var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath));
+            Assert.NotNull(decompressed);
+
+            var scenario = new ScenarioFile(decompressed);
+            Assert.True(scenario.Parsed, $"{fileName}: failed to parse");
+            Assert.NotNull(scenario.Sections);
+            Assert.True(scenario.Sections.Length >= 15, $"{fileName}: expected at least 15 sections, got {scenario.Sections.Length}");
+
+            Assert.NotNull(scenario.FindSection("FH"));
+            Assert.NotNull(scenario.FindSection("J1"));
+            Assert.NotNull(scenario.FindSection("CT"));
+            Assert.NotNull(scenario.FindSection("CM"));
+
+            var j1 = scenario.GetJ1();
+            Assert.NotNull(j1);
+            Assert.True(j1.Parsed, $"{fileName}: J1 failed to parse");
+            Assert.True(j1.Sections!.Count >= 50, $"{fileName}: J1 expected at least 50 sub-sections, got {j1.Sections.Count}");
+
+            Assert.NotNull(j1.FindSection("TN"));
+            Assert.NotNull(j1.FindSection("PL"));
+            Assert.NotNull(j1.FindSection("Z1"));
+        }
+    }
+
+    [SkippableFact]
+    public void ScenarioFile_Roundtrip_BytePerfect()
+    {
+        var allFiles = FindScenarioFiles();
+        Skip.If(allFiles.Length == 0, "No .mythscn files found");
+        var failures = new List<string>();
+
+        foreach (var filePath in allFiles)
+        {
+            var fileName = Path.GetFileName(filePath);
+            var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath))!;
+            var scenario = new ScenarioFile(decompressed);
+            Assert.True(scenario.Parsed, $"{fileName}: parse failed");
+
+            var roundtripped = scenario.ToBytes();
+
+            if (!decompressed.AsSpan().SequenceEqual(roundtripped))
+            {
+                var minLen = Math.Min(decompressed.Length, roundtripped.Length);
+                int firstDiff = -1;
+                for (int i = 0; i < minLen; i++)
+                    if (decompressed[i] != roundtripped[i]) { firstDiff = i; break; }
+                failures.Add($"{fileName}: size orig={decompressed.Length} rt={roundtripped.Length}, first diff at {firstDiff}");
+            }
+        }
+
+        Assert.True(failures.Count == 0, $"Roundtrip failures:\n{string.Join("\n", failures)}");
+    }
+
+    [SkippableFact]
+    public void ScenarioFile_J1_Roundtrip()
+    {
+        var allFiles = FindScenarioFiles();
+        Skip.If(allFiles.Length == 0, "No .mythscn files found");
+
+        foreach (var filePath in allFiles)
+        {
+            var fileName = Path.GetFileName(filePath);
+            var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath))!;
+            var scenario = new ScenarioFile(decompressed);
+            Assert.True(scenario.Parsed);
+
+            var j1Section = scenario.FindSection("J1")!;
+            var j1 = new ScenarioJ1(j1Section.Data);
+            Assert.True(j1.Parsed);
+
+            var roundtripped = j1.ToBytes();
+            Assert.True(j1Section.Data.AsSpan().SequenceEqual(roundtripped),
+                $"{fileName}: J1 roundtrip mismatch (orig={j1Section.Data.Length}, rt={roundtripped.Length})");
+        }
+    }
+
+    [SkippableFact]
+    public void ScenarioFile_XmlRoundtrip_BytePerfect()
+    {
+        var allFiles = FindScenarioFiles();
+        Skip.If(allFiles.Length == 0, "No .mythscn files found");
+        var failures = new List<string>();
+
+        foreach (var filePath in allFiles)
+        {
+            var fileName = Path.GetFileName(filePath);
+            var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath))!;
+            var scenario = new ScenarioFile(decompressed);
+            Assert.True(scenario.Parsed, $"{fileName}: parse failed");
+
+            var xml = scenario.ToXml();
+            Assert.True(xml.Length > 100, $"{fileName}: XML too short");
+
+            var fromXml = ScenarioFile.FromXml(xml);
+            Assert.True(fromXml.Parsed, $"{fileName}: FromXml parse failed");
+
+            var roundtripped = fromXml.ToBytes();
+
+            if (!decompressed.AsSpan().SequenceEqual(roundtripped))
+            {
+                var minLen = Math.Min(decompressed.Length, roundtripped.Length);
+                int firstDiff = -1;
+                for (int i = 0; i < minLen; i++)
+                    if (decompressed[i] != roundtripped[i]) { firstDiff = i; break; }
+                failures.Add($"{fileName}: size orig={decompressed.Length} rt={roundtripped.Length}, first diff at {firstDiff}");
+            }
+        }
+
+        Assert.True(failures.Count == 0, $"XML roundtrip failures:\n{string.Join("\n", failures)}");
+    }
+
+    [SkippableFact]
+    public void ScenarioFile_GetSummary()
+    {
+        var allFiles = FindScenarioFiles();
+        Skip.If(allFiles.Length == 0, "No .mythscn files found");
+
+        var filePath = allFiles[0];
+        var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath))!;
+        var scenario = new ScenarioFile(decompressed);
+        Assert.True(scenario.Parsed);
+
+        var summary = scenario.GetSummary();
+        Assert.Contains("AoM Scenario", summary);
+        Assert.Contains("Entities:", summary);
+    }
+
+    #endregion
 }

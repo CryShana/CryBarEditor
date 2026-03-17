@@ -150,6 +150,9 @@
 					<MenuItem Header="Image to DDT" Click="MenuItem_ConvertToDDT" />
 					<MenuItem Header="TMM to OBJ" Click="MenuItem_ConvertTMMtoOBJ" />
 					<MenuItem Header="TMM to glTF" Click="MenuItem_ConvertTMMtoGLTF" />
+					<Separator />
+					<MenuItem Header="Scenario to XML" Click="MenuItem_ConvertScenarioToXML" />
+					<MenuItem Header="XML to Scenario" Click="MenuItem_ConvertXMLtoScenario" />
 				</MenuItem>
 				<MenuItem Header="Compress">
 					<MenuItem Header="Alz4" Click="MenuItem_CompressAlz4" />
