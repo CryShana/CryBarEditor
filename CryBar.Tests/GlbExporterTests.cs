@@ -635,7 +635,7 @@ public class GlbExporterTests
         var crcData = new byte[typeBytes.Length + data.Length];
         typeBytes.CopyTo(crcData, 0);
         data.CopyTo(crcData, typeBytes.Length);
-        uint crc = Crc32(crcData);
+        uint crc = BarCompression.ComputeCrc32(crcData);
         w.Write(BinaryPrimitives.ReverseEndianness((int)crc));
     }
 
@@ -650,17 +650,7 @@ public class GlbExporterTests
         return (b << 16) | a;
     }
 
-    static uint Crc32(byte[] data)
-    {
-        uint crc = 0xFFFFFFFF;
-        foreach (var b in data)
-        {
-            crc ^= b;
-            for (int i = 0; i < 8; i++)
-                crc = (crc >> 1) ^ (0xEDB88320 * (crc & 1));
-        }
-        return ~crc;
-    }
+
 
     internal static JsonElement ExtractJson(byte[] glb)
     {

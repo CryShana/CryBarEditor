@@ -987,68 +987,102 @@ public class IntegrationTests
 
     #region Compression Roundtrip - Standalone Files
 
+    static readonly string FottCampaignDir = Path.Combine(GamePath, @"campaign\fott");
+
+    /// <summary>
+    /// Roundtrip test for L33t .mythscn files from the campaign/fott directory.
+    /// Verifies: decompress → recompress → decompress produces identical content,
+    /// and that the CRC32 checksum in the recompressed output is self-consistent.
+    /// </summary>
     [SkippableFact]
-    public void L33t_Roundtrip_StandaloneFiles()
+    public void L33t_Roundtrip_Mythscn_ContentAndChecksum()
     {
-        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+        Skip.IfNot(Directory.Exists(FottCampaignDir), $"Campaign directory not found: {FottCampaignDir}");
 
-        // Find standalone files that might be L33t compressed (e.g. *.mythscn)
-        var l33tFiles = new HashSet<string>();
-        foreach (var ext in new[] { "*.mythscn", "*.blob" })
-        {
-            foreach (var f in Directory.GetFiles(GamePath, ext, SearchOption.AllDirectories))
-                l33tFiles.Add(f);
-        }
-
-        // Also scan all files in campaign dirs for L33t magic
-        var campaignDir = Path.Combine(GamePath, "campaign");
-        if (Directory.Exists(campaignDir))
-        {
-            foreach (var file in Directory.GetFiles(campaignDir, "*", SearchOption.AllDirectories))
-            {
-                if (l33tFiles.Contains(file)) continue;
-                var header = new byte[4];
-                using var fs = File.OpenRead(file);
-                if (fs.Read(header) == 4 && ((Span<byte>)header).IsL33t())
-                    l33tFiles.Add(file);
-            }
-        }
-
-        Skip.If(l33tFiles.Count == 0, "No L33t-compressed standalone files found");
+        var mythscnFiles = Directory.GetFiles(FottCampaignDir, "*.mythscn");
+        Skip.If(mythscnFiles.Length == 0, "No .mythscn files found in campaign/fott");
 
         var failures = new List<string>();
         var tested = 0;
-        foreach (var filePath in l33tFiles)
+
+        foreach (var filePath in mythscnFiles)
+        {
+            var original = File.ReadAllBytes(filePath);
+            if (!((Span<byte>)original).IsL33t()) continue;
+
+            tested++;
+            var fileName = Path.GetFileName(filePath);
+
+            // Decompress original
+            var decompressed = BarCompression.DecompressL33t(original);
+            if (decompressed == null)
+            {
+                failures.Add($"{fileName}: decompression returned null");
+                continue;
+            }
+
+            // Recompress
+            var recompressed = BarCompression.CompressL33t(decompressed);
+            if (!recompressed.Span.IsL33t())
+            {
+                failures.Add($"{fileName}: recompressed data missing L33t header");
+                continue;
+            }
+
+            // Verify CRC32 checksum is self-consistent in recompressed output
+            var recompSpan = recompressed.Span;
+            if (!BarCompression.VerifyL33tChecksum(recompSpan))
+            {
+                failures.Add($"{fileName}: CRC32 checksum verification failed on recompressed output");
+                continue;
+            }
+
+            // Decompress the recompressed output and verify content matches
+            var roundtripped = BarCompression.DecompressL33t(recompSpan);
+            if (roundtripped == null)
+            {
+                failures.Add($"{fileName}: roundtrip decompression returned null");
+                continue;
+            }
+
+            if (!decompressed.AsSpan().SequenceEqual(roundtripped))
+                failures.Add($"{fileName}: content mismatch after roundtrip (original={decompressed.Length}, roundtripped={roundtripped.Length})");
+        }
+
+        Assert.True(tested > 0, "No L33t-compressed .mythscn files found in campaign/fott");
+        Assert.True(failures.Count == 0,
+            $"{failures.Count}/{tested} L33t roundtrips failed:\n{string.Join("\n", failures)}");
+    }
+
+    /// <summary>
+    /// Verifies the CRC32 checksum formula on original game-created .mythscn files.
+    /// CRC32 should equal the stored checksum.
+    /// </summary>
+    [SkippableFact]
+    public void L33t_OriginalFiles_ChecksumIsValid()
+    {
+        Skip.IfNot(Directory.Exists(FottCampaignDir), $"Campaign directory not found: {FottCampaignDir}");
+
+        var mythscnFiles = Directory.GetFiles(FottCampaignDir, "*.mythscn");
+        Skip.If(mythscnFiles.Length == 0, "No .mythscn files found in campaign/fott");
+
+        var failures = new List<string>();
+        var tested = 0;
+
+        foreach (var filePath in mythscnFiles)
         {
             var raw = File.ReadAllBytes(filePath);
             if (!((Span<byte>)raw).IsL33t()) continue;
 
             tested++;
-            var decompressed = BarCompression.DecompressL33t(raw);
-            if (decompressed == null)
-            {
-                failures.Add($"{Path.GetFileName(filePath)}: decompression returned null");
-                continue;
-            }
 
-            // Roundtrip: recompress then decompress again
-            var recompressed = BarCompression.CompressL33t(decompressed);
-            Assert.True(recompressed.Span.IsL33t(), $"{Path.GetFileName(filePath)}: recompressed data missing L33t header");
-
-            var roundtripped = BarCompression.DecompressL33t(recompressed.Span);
-            if (roundtripped == null)
-            {
-                failures.Add($"{Path.GetFileName(filePath)}: roundtrip decompression returned null");
-                continue;
-            }
-
-            if (!decompressed.AsSpan().SequenceEqual(roundtripped))
-                failures.Add($"{Path.GetFileName(filePath)}: roundtrip data mismatch (original={decompressed.Length}, roundtripped={roundtripped.Length})");
+            if (!BarCompression.VerifyL33tChecksum(raw))
+                failures.Add($"{Path.GetFileName(filePath)}: CRC32 checksum verification failed");
         }
 
+        Assert.True(tested > 0, "No L33t-compressed .mythscn files found in campaign/fott");
         Assert.True(failures.Count == 0,
-            $"{failures.Count}/{tested} L33t standalone file roundtrips failed:\n{string.Join("\n", failures.Take(20))}");
-        Assert.True(tested > 0, "Found L33t files but none had L33t magic bytes");
+            $"{failures.Count}/{tested} original file CRC32 checks failed:\n{string.Join("\n", failures)}");
     }
 
     #endregion

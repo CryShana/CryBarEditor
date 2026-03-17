@@ -90,7 +90,18 @@ public static class BarCompression
     #endregion
 
     #region L33T
-    // NOTE: L33t compression seems to be used by .mythscn files only (that I found so far)
+    // L33t compression is used by .mythscn scenario files.
+    //
+    // Format: [l33t 4B] [uncompressedSize LE 4B] [zlib header 2B] [deflate data] [CRC32 checksum LE 4B]
+    //
+    // The last 4 bytes occupy the same position as zlib's Adler32, but the game replaces
+    // it with a CRC32 (standard polynomial 0xEDB88320) of the entire file contents with
+    // the checksum field zeroed out, stored as a little-endian uint32.
+    //
+    // The game validates this CRC32 on load — if it doesn't match, the scenario is rejected.
+    // Because the trailing bytes are not a valid Adler32, decompression must use raw
+    // DeflateStream (skipping the 2-byte zlib header and 4-byte trailer) instead of
+    // ZLibStream, which would fail Adler32 validation.
 
     public static byte[]? DecompressL33t(Span<byte> data)
     {
@@ -129,17 +140,22 @@ public static class BarCompression
             throw new InvalidDataException("Size is invalid: " + size_uncompressed);
         }
 
-        // offset = 8, pointing at the zlib stream (header + deflate + adler32)
+        // offset = 8, pointing at the zlib stream (header + deflate + checksum)
         if (offset >= data.Length)
         {
             return -1;
         }
 
-        fixed (byte* d = data.Slice(offset))
+        // Skip 2-byte zlib header, use raw DeflateStream to avoid Adler32 validation
+        // (L33t format replaces the Adler32 with a CRC32 checksum)
+        int deflateOffset = offset + 2; // skip zlib CMF+FLG bytes
+        int deflateLen = data.Length - deflateOffset - 4; // exclude trailing 4-byte checksum
+
+        fixed (byte* d = data.Slice(deflateOffset))
         {
-            using var memory = new UnmanagedMemoryStream(d, data.Length - offset);
-            using var zlib = new ZLibStream(memory, CompressionMode.Decompress);
-            zlib.ReadExactly(output_data.Slice(0, size_uncompressed));
+            using var memory = new UnmanagedMemoryStream(d, deflateLen);
+            using var deflate = new DeflateStream(memory, CompressionMode.Decompress);
+            deflate.ReadExactly(output_data.Slice(0, size_uncompressed));
         }
 
         return size_uncompressed;
@@ -168,7 +184,52 @@ public static class BarCompression
         using (var zlib = new ZLibStream(memory, CompressionLevel.SmallestSize))
             zlib.Write(data);
 
-        return compressed.AsMemory(0, offset + (int)memory.Position);
+        var totalLen = offset + (int)memory.Position;
+        var result = compressed.AsMemory(0, totalLen);
+
+        // Replace the zlib Adler32 (last 4 bytes) with CRC32 of the entire file
+        // (with checksum field zeroed), stored as little-endian.
+        // The game validates this checksum on load and rejects mismatches.
+        var resultSpan = result.Span;
+        resultSpan[totalLen - 4] = 0;
+        resultSpan[totalLen - 3] = 0;
+        resultSpan[totalLen - 2] = 0;
+        resultSpan[totalLen - 1] = 0;
+        var crc = ComputeCrc32(resultSpan);
+        BinaryPrimitives.WriteUInt32LittleEndian(resultSpan.Slice(totalLen - 4), crc);
+
+        return result;
+    }
+
+    public static uint ComputeCrc32(Span<byte> data)
+    {
+        uint crc = 0xFFFFFFFF;
+        foreach (byte b in data)
+        {
+            crc ^= b;
+            for (int i = 0; i < 8; i++)
+                crc = (crc >> 1) ^ (0xEDB88320 & ~((crc & 1) - 1));
+        }
+        return ~crc;
+    }
+
+    /// <summary>
+    /// Verifies the CRC32 checksum stored in the last 4 bytes of an L33t file.
+    /// Returns true if the stored checksum matches CRC32(file with checksum field zeroed).
+    /// </summary>
+    public static bool VerifyL33tChecksum(Span<byte> data)
+    {
+        if (data.Length < 12) return false;
+        var stored = BinaryPrimitives.ReadUInt32LittleEndian(data[^4..]);
+
+        // Temporarily zero the checksum field to compute expected CRC32
+        var tail = data[^4..];
+        uint b0 = tail[0], b1 = tail[1], b2 = tail[2], b3 = tail[3];
+        tail[0] = 0; tail[1] = 0; tail[2] = 0; tail[3] = 0;
+        var computed = ComputeCrc32(data);
+        tail[0] = (byte)b0; tail[1] = (byte)b1; tail[2] = (byte)b2; tail[3] = (byte)b3;
+
+        return stored == computed;
     }
     #endregion
 
