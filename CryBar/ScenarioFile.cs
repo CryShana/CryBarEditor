@@ -331,20 +331,12 @@ public class ScenarioFile
 
         writer.WriteAttributeString("hv", j1.HeaderValue.ToString());
 
-        // Collect TM tables for entity name resolution
-        var tmTables = new List<string[]>();
-        foreach (var sub in j1.Sections)
-        {
-            if (sub.Marker == "TM")
-                tmTables.Add(ReadTmStrings(sub.Data));
-        }
-
         foreach (var sub in j1.Sections)
         {
             if (sub.Marker == "TM")
                 WriteTmXml(writer, sub);
             else if (sub.Marker == "Z1")
-                WriteZ1Xml(writer, sub, tmTables.Count > 0 ? tmTables[0] : null);
+                WriteZ1Xml(writer, sub);
             else
                 WriteSectionXml(writer, sub);
         }
@@ -374,7 +366,7 @@ public class ScenarioFile
 
         foreach (var str in strings)
         {
-            writer.WriteStartElement("E");
+            writer.WriteStartElement("Proto");
             writer.WriteString(str);
             writer.WriteEndElement();
         }
@@ -385,7 +377,7 @@ public class ScenarioFile
     /// <summary>
     /// Writes Z1 (entities) section with decoded positions, types, and player IDs.
     /// </summary>
-    static void WriteZ1Xml(XmlWriter writer, ScenarioSection section, string[]? protoNames)
+    static void WriteZ1Xml(XmlWriter writer, ScenarioSection section)
     {
         var data = section.Data.AsSpan();
         if (data.Length < 5)
@@ -425,7 +417,7 @@ public class ScenarioFile
                 var subData = data.Slice(off + 6, (int)size);
 
                 if (marker == "H1" && size >= 86)
-                    WriteEntityH1Xml(writer, subData, protoNames);
+                    WriteEntityH1Xml(writer, subData);
                 else
                 {
                     writer.WriteStartElement("S");
@@ -446,13 +438,12 @@ public class ScenarioFile
     /// <summary>
     /// Writes an H1 entity section with decoded position, rotation, player, and sub-sections.
     /// H1 layout: [38 bytes header][12 bytes position (3 floats)][36 bytes rotation (9 floats)][sub-sections P1, P2, ...]
-    /// Header byte 14 = player ID. Sub-section P1 bytes 0-3 = protounit index into TM[0].
+    /// Header byte 14 = player ID. Sub-section P1 bytes 0-3 = unit index into TM[0].
     /// </summary>
-    static void WriteEntityH1Xml(XmlWriter writer, ReadOnlySpan<byte> h1, string[]? protoNames)
+    static void WriteEntityH1Xml(XmlWriter writer, ReadOnlySpan<byte> h1)
     {
-        // Pre-scan P1 to extract type info before writing any attributes
-        uint? typeIndex = null;
-        string? typeName = null;
+        // Pre-scan P1 to extract protoIndex before writing attributes (XML requires attributes before child elements)
+        uint? protoIndex = null;
         int scanOff = 86;
         while (scanOff + 6 <= h1.Length)
         {
@@ -462,11 +453,8 @@ public class ScenarioFile
             if (sz > MaxSubSectionSize || scanOff + 6 + sz > h1.Length) break;
 
             if (sb0 == 'P' && sb1 == '1' && sz >= 4)
-            {
-                typeIndex = BinaryPrimitives.ReadUInt32LittleEndian(h1.Slice(scanOff + 6));
-                if (protoNames != null && typeIndex.Value < protoNames.Length)
-                    typeName = protoNames[typeIndex.Value];
-            }
+                protoIndex = BinaryPrimitives.ReadUInt32LittleEndian(h1.Slice(scanOff + 6));
+
             scanOff += 6 + (int)sz;
         }
 
@@ -474,10 +462,8 @@ public class ScenarioFile
         var player = h1[14];
         writer.WriteAttributeString("player", player.ToString());
 
-        if (typeName != null)
-            writer.WriteAttributeString("type", typeName);
-        if (typeIndex.HasValue)
-            writer.WriteAttributeString("typeIndex", typeIndex.Value.ToString());
+        if (protoIndex.HasValue)
+            writer.WriteAttributeString("protoIndex", protoIndex.Value.ToString());
 
         var px = BitConverter.ToSingle(h1.Slice(38, 4));
         var py = BitConverter.ToSingle(h1.Slice(42, 4));
@@ -615,7 +601,7 @@ public class ScenarioFile
         var entries = new List<string>();
         foreach (XmlNode child in elem.ChildNodes)
         {
-            if (child is XmlElement e && e.Name == "E")
+            if (child is XmlElement e && e.Name == "Proto")
                 entries.Add(e.InnerText);
         }
 
@@ -657,27 +643,6 @@ public class ScenarioFile
         var verAttr = elem.GetAttribute("ver");
         var version = string.IsNullOrEmpty(verAttr) ? (byte)1 : byte.Parse(verAttr);
 
-        // Build TM[0] name-to-index map from sibling TM elements
-        Dictionary<string, uint>? nameToIndex = null;
-        if (elem.ParentNode is XmlElement parent)
-        {
-            foreach (XmlNode sibling in parent.ChildNodes)
-            {
-                if (sibling is XmlElement tmElem && tmElem.Name == "TM")
-                {
-                    // Use only the first TM table (protounits)
-                    nameToIndex = new Dictionary<string, uint>();
-                    uint idx = 0;
-                    foreach (XmlNode child in tmElem.ChildNodes)
-                    {
-                        if (child is XmlElement e && e.Name == "E")
-                            nameToIndex[e.InnerText] = idx++;
-                    }
-                    break;
-                }
-            }
-        }
-
         // Collect entity data
         using var ms = new MemoryStream();
         using var bw = new BinaryWriter(ms);
@@ -698,7 +663,7 @@ public class ScenarioFile
             bw.Write(flags);
 
             // Rebuild H1 from decoded attributes + stored data
-            var h1Data = RebuildEntityH1(entityElem, nameToIndex);
+            var h1Data = RebuildEntityH1(entityElem);
             bw.Write((byte)'H');
             bw.Write((byte)'1');
             bw.Write((uint)h1Data.Length);
@@ -711,7 +676,7 @@ public class ScenarioFile
     /// <summary>
     /// Rebuilds the H1 binary data from XML entity attributes and child elements.
     /// </summary>
-    static byte[] RebuildEntityH1(XmlElement entityElem, Dictionary<string, uint>? nameToIndex)
+    static byte[] RebuildEntityH1(XmlElement entityElem)
     {
         // Read H1 header from base64
         byte[] header = new byte[38];
@@ -749,14 +714,9 @@ public class ScenarioFile
         ms.Write(posBytes);
         ms.Write(rotBytes);
 
-        // Resolve type by name if changed
-        var typeAttr = entityElem.GetAttribute("type");
-        var typeIndexAttr = entityElem.GetAttribute("typeIndex");
-        uint? resolvedTypeIndex = null;
-        if (!string.IsNullOrEmpty(typeAttr) && nameToIndex != null && nameToIndex.TryGetValue(typeAttr, out var idx))
-            resolvedTypeIndex = idx;
-        else if (!string.IsNullOrEmpty(typeIndexAttr))
-            resolvedTypeIndex = uint.Parse(typeIndexAttr);
+        // Patch protoIndex into P1 if provided
+        var protoIndexAttr = entityElem.GetAttribute("protoIndex");
+        uint? protoIndex = !string.IsNullOrEmpty(protoIndexAttr) ? uint.Parse(protoIndexAttr) : null;
 
         foreach (XmlNode child in entityElem.ChildNodes)
         {
@@ -770,11 +730,11 @@ public class ScenarioFile
             {
                 marker = "P1";
                 sectionData = Convert.FromBase64String(e.InnerText.Trim());
-                // Patch type index if resolved
-                if (resolvedTypeIndex.HasValue && sectionData.Length >= 8)
+                // Patch unit index into P1 bytes 0-3 and 4-7
+                if (protoIndex.HasValue && sectionData.Length >= 8)
                 {
-                    BinaryPrimitives.WriteUInt32LittleEndian(sectionData, resolvedTypeIndex.Value);
-                    BinaryPrimitives.WriteUInt32LittleEndian(sectionData.AsSpan(4), resolvedTypeIndex.Value);
+                    BinaryPrimitives.WriteUInt32LittleEndian(sectionData, protoIndex.Value);
+                    BinaryPrimitives.WriteUInt32LittleEndian(sectionData.AsSpan(4), protoIndex.Value);
                 }
             }
             else if (e.Name == "S")
