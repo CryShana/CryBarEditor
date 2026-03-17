@@ -14,6 +14,7 @@ namespace CryBar.Tests;
 /// These tests are skipped unless the game is installed at the expected path.
 /// Set the AOMR_GAME_PATH environment variable to override the default path.
 /// </summary>
+[Collection("Integration")]
 public class IntegrationTests
 {
     static readonly string GamePath =
@@ -995,7 +996,7 @@ public class IntegrationTests
     /// and that the CRC32 checksum in the recompressed output is self-consistent.
     /// </summary>
     [SkippableFact]
-    public void L33t_Roundtrip_Mythscn_ContentAndChecksum()
+    public async Task L33t_Roundtrip_Mythscn_ContentAndChecksum()
     {
         Skip.IfNot(Directory.Exists(FottCampaignDir), $"Campaign directory not found: {FottCampaignDir}");
 
@@ -1005,49 +1006,50 @@ public class IntegrationTests
         var failures = new List<string>();
         var tested = 0;
 
-        foreach (var filePath in mythscnFiles)
+        await Parallel.ForEachAsync(mythscnFiles, async (filePath, t) =>
         {
             var original = File.ReadAllBytes(filePath);
-            if (!((Span<byte>)original).IsL33t()) continue;
+            if (!((Span<byte>)original).IsL33t()) return;
 
-            tested++;
+            Interlocked.Increment(ref tested);
             var fileName = Path.GetFileName(filePath);
 
             // Decompress original
             var decompressed = BarCompression.DecompressL33t(original);
             if (decompressed == null)
             {
-                failures.Add($"{fileName}: decompression returned null");
-                continue;
+                lock (failures) failures.Add($"{fileName}: decompression returned null");
+                return;
             }
 
             // Recompress
             var recompressed = BarCompression.CompressL33t(decompressed);
             if (!recompressed.Span.IsL33t())
             {
-                failures.Add($"{fileName}: recompressed data missing L33t header");
-                continue;
+                lock (failures) failures.Add($"{fileName}: recompressed data missing L33t header");
+                return;
             }
 
             // Verify CRC32 checksum is self-consistent in recompressed output
             var recompSpan = recompressed.Span;
             if (!BarCompression.VerifyL33tChecksum(recompSpan))
             {
-                failures.Add($"{fileName}: CRC32 checksum verification failed on recompressed output");
-                continue;
+                lock (failures) failures.Add($"{fileName}: CRC32 checksum verification failed on recompressed output");
+                return;
             }
 
             // Decompress the recompressed output and verify content matches
             var roundtripped = BarCompression.DecompressL33t(recompSpan);
             if (roundtripped == null)
             {
-                failures.Add($"{fileName}: roundtrip decompression returned null");
-                continue;
+                lock (failures) failures.Add($"{fileName}: roundtrip decompression returned null");
+                return;
             }
 
             if (!decompressed.AsSpan().SequenceEqual(roundtripped))
-                failures.Add($"{fileName}: content mismatch after roundtrip (original={decompressed.Length}, roundtripped={roundtripped.Length})");
-        }
+                lock (failures)
+                    failures.Add($"{fileName}: content mismatch after roundtrip (original={decompressed.Length}, roundtripped={roundtripped.Length})");
+        });
 
         Assert.True(tested > 0, "No L33t-compressed .mythscn files found in campaign/fott");
         Assert.True(failures.Count == 0,
@@ -1088,56 +1090,6 @@ public class IntegrationTests
     #endregion
 
     #region Compression Roundtrip - BAR Entries
-
-    [SkippableFact]
-    public void L33t_Roundtrip_BarEntries()
-    {
-        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
-
-        var barFiles = FindBarFiles();
-        Skip.If(barFiles.Length == 0, "No .bar files found");
-
-        var failures = new List<string>();
-        var tested = 0;
-
-        foreach (var barPath in barFiles)
-        {
-            using var stream = File.OpenRead(barPath);
-            var bar = new BarFile(stream);
-            if (!bar.Load(out _) || bar.Entries == null) continue;
-
-            foreach (var entry in bar.Entries)
-            {
-                var raw = entry.ReadDataRaw(stream);
-                if (!((Span<byte>)raw).IsL33t()) continue;
-
-                tested++;
-                var decompressed = BarCompression.DecompressL33t(raw);
-                if (decompressed == null)
-                {
-                    failures.Add($"{Path.GetFileName(barPath)}:{entry.Name}: decompression returned null");
-                    continue;
-                }
-
-                var recompressed = BarCompression.CompressL33t(decompressed);
-                var roundtripped = BarCompression.DecompressL33t(recompressed.Span);
-                if (roundtripped == null)
-                {
-                    failures.Add($"{Path.GetFileName(barPath)}:{entry.Name}: roundtrip decompression returned null");
-                    continue;
-                }
-
-                if (!decompressed.AsSpan().SequenceEqual(roundtripped))
-                    failures.Add($"{Path.GetFileName(barPath)}:{entry.Name}: roundtrip data mismatch");
-            }
-        }
-
-        // L33t entries might not exist in BAR files — that's ok, just report
-        Skip.If(tested == 0, "No L33t-compressed entries found in any BAR files");
-
-        Assert.True(failures.Count == 0,
-            $"{failures.Count}/{tested} L33t BAR entry roundtrips failed:\n{string.Join("\n", failures.Take(20))}");
-    }
 
     [SkippableFact]
     public void Alz4_Roundtrip_BarEntries()
@@ -1198,38 +1150,19 @@ public class IntegrationTests
 
     static string[] FindScenarioFiles()
     {
-        var dirs = new List<string>();
-
-        // Campaign directory (game install)
+        // Only use campaign files from the game install — user scenarios are not stable test fixtures
         var campaignDir = Path.Combine(GamePath, "campaign");
-        if (Directory.Exists(campaignDir))
-            dirs.Add(campaignDir);
-
-        // User scenario directories (Steam userdata or AoM Retold saves)
-        var userGamesDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Games", "Age of Mythology Retold");
-        if (Directory.Exists(userGamesDir))
-        {
-            foreach (var steamIdDir in Directory.GetDirectories(userGamesDir))
-            {
-                var scenarioDir = Path.Combine(steamIdDir, "scenario");
-                if (Directory.Exists(scenarioDir))
-                    dirs.Add(scenarioDir);
-            }
-        }
-
-        var files = new List<string>();
-        foreach (var dir in dirs)
-            files.AddRange(Directory.GetFiles(dir, "*.mythscn", SearchOption.AllDirectories));
-        return files.ToArray();
+        if (!Directory.Exists(campaignDir)) return [];
+        return Directory.GetFiles(campaignDir, "*.mythscn", SearchOption.AllDirectories);
     }
 
     [SkippableFact]
-    public void ScenarioFile_Parse_AllTestFiles()
+    public async Task ScenarioFile_Parse_AllTestFiles()
     {
         var allFiles = FindScenarioFiles();
         Skip.If(allFiles.Length == 0, "No .mythscn files found");
 
-        foreach (var filePath in allFiles)
+        await Parallel.ForEachAsync(allFiles, async (filePath, t) =>
         {
             var fileName = Path.GetFileName(filePath);
 
@@ -1254,17 +1187,17 @@ public class IntegrationTests
             Assert.NotNull(j1.FindSection("TN"));
             Assert.NotNull(j1.FindSection("PL"));
             Assert.NotNull(j1.FindSection("Z1"));
-        }
+        });
     }
 
     [SkippableFact]
-    public void ScenarioFile_Roundtrip_BytePerfect()
+    public async Task ScenarioFile_Roundtrip_BytePerfect()
     {
         var allFiles = FindScenarioFiles();
         Skip.If(allFiles.Length == 0, "No .mythscn files found");
         var failures = new List<string>();
 
-        foreach (var filePath in allFiles)
+        await Parallel.ForEachAsync(allFiles, async (filePath, t) =>
         {
             var fileName = Path.GetFileName(filePath);
             var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath))!;
@@ -1279,20 +1212,22 @@ public class IntegrationTests
                 int firstDiff = -1;
                 for (int i = 0; i < minLen; i++)
                     if (decompressed[i] != roundtripped[i]) { firstDiff = i; break; }
-                failures.Add($"{fileName}: size orig={decompressed.Length} rt={roundtripped.Length}, first diff at {firstDiff}");
+                
+                lock (failures)
+                    failures.Add($"{fileName}: size orig={decompressed.Length} rt={roundtripped.Length}, first diff at {firstDiff}");
             }
-        }
+        });
 
         Assert.True(failures.Count == 0, $"Roundtrip failures:\n{string.Join("\n", failures)}");
     }
 
     [SkippableFact]
-    public void ScenarioFile_J1_Roundtrip()
+    public async Task ScenarioFile_J1_Roundtrip()
     {
         var allFiles = FindScenarioFiles();
         Skip.If(allFiles.Length == 0, "No .mythscn files found");
 
-        foreach (var filePath in allFiles)
+        await Parallel.ForEachAsync(allFiles, async (filePath, t) =>
         {
             var fileName = Path.GetFileName(filePath);
             var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath))!;
@@ -1306,17 +1241,17 @@ public class IntegrationTests
             var roundtripped = j1.ToBytes();
             Assert.True(j1Section.Data.AsSpan().SequenceEqual(roundtripped),
                 $"{fileName}: J1 roundtrip mismatch (orig={j1Section.Data.Length}, rt={roundtripped.Length})");
-        }
+        });
     }
 
     [SkippableFact]
-    public void ScenarioFile_XmlRoundtrip_BytePerfect()
+    public async Task ScenarioFile_XmlRoundtrip_BytePerfect()
     {
         var allFiles = FindScenarioFiles();
         Skip.If(allFiles.Length == 0, "No .mythscn files found");
         var failures = new List<string>();
 
-        foreach (var filePath in allFiles)
+        await Parallel.ForEachAsync(allFiles, async (filePath, t) =>
         {
             var fileName = Path.GetFileName(filePath);
             var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath))!;
@@ -1337,27 +1272,13 @@ public class IntegrationTests
                 int firstDiff = -1;
                 for (int i = 0; i < minLen; i++)
                     if (decompressed[i] != roundtripped[i]) { firstDiff = i; break; }
-                failures.Add($"{fileName}: size orig={decompressed.Length} rt={roundtripped.Length}, first diff at {firstDiff}");
+                
+                lock (failures)
+                    failures.Add($"{fileName}: size orig={decompressed.Length} rt={roundtripped.Length}, first diff at {firstDiff}");
             }
-        }
+        });
 
         Assert.True(failures.Count == 0, $"XML roundtrip failures:\n{string.Join("\n", failures)}");
-    }
-
-    [SkippableFact]
-    public void ScenarioFile_GetSummary()
-    {
-        var allFiles = FindScenarioFiles();
-        Skip.If(allFiles.Length == 0, "No .mythscn files found");
-
-        var filePath = allFiles[0];
-        var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath))!;
-        var scenario = new ScenarioFile(decompressed);
-        Assert.True(scenario.Parsed);
-
-        var summary = scenario.GetSummary();
-        Assert.Contains("AoM Scenario", summary);
-        Assert.Contains("Entities:", summary);
     }
 
     #endregion

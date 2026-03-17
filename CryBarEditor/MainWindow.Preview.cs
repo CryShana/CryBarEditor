@@ -328,9 +328,9 @@ public partial class MainWindow
                     var scenario = new ScenarioFile(data.Memory);
                     if (scenario.Parsed)
                     {
-                        PreviewedFileNote = "(AoM Scenario)";
-                        text = scenario.GetSummary();
-                        ext = ".txt";
+                        PreviewedFileNote = "(AoM Scenario, converted to XML)";
+                        text = scenario.ToXml();
+                        ext = ".xml";
                     }
                     else
                     {

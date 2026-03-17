@@ -50,7 +50,7 @@ public class ScenarioFile
             if (b0 < 0x20 || b0 > 0x7E || b1 < 0x20 || b1 > 0x7E)
                 break;
 
-            var marker = $"{(char)b0}{(char)b1}";
+            var marker = ReadMarker(data, offset);
             var size = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(offset + 2, 4));
             if (size > MaxSectionSize || offset + 6 + size > (uint)data.Length)
                 break;
@@ -119,117 +119,6 @@ public class ScenarioFile
     }
 
     /// <summary>
-    /// Generates a human-readable summary of the parsed scenario.
-    /// </summary>
-    public string GetSummary()
-    {
-        if (!Parsed) return "(Scenario not parsed)";
-
-        var sb = new StringBuilder();
-        sb.AppendLine($"AoM Scenario (format version {Version})");
-
-        // FH details
-        var fh = FindSection("FH");
-        if (fh != null)
-        {
-            var fhSpan = fh.Data.AsSpan();
-            if (TryReadUTF16(fhSpan, 0, out var versionStr, out _))
-                sb.AppendLine($"Build: {versionStr}");
-        }
-
-        // SH details
-        var sh = FindSection("SH");
-        if (sh != null && sh.Data.Length >= 20)
-        {
-            var shSpan = sh.Data.AsSpan();
-            var w = BinaryPrimitives.ReadUInt32LittleEndian(shSpan.Slice(12, 4));
-            var h = BinaryPrimitives.ReadUInt32LittleEndian(shSpan.Slice(16, 4));
-            sb.AppendLine($"Map size: {w}x{h}");
-        }
-
-        // J1 summary
-        var j1 = GetJ1();
-        if (j1 is { Parsed: true })
-        {
-            var rn = j1.FindSection("RN");
-            if (rn != null)
-            {
-                var rnSpan = rn.Data.AsSpan();
-                if (TryReadUTF16(rnSpan, 0, out var name, out var off))
-                {
-                    TryReadUTF16(rnSpan, off, out var type, out _);
-                    sb.AppendLine($"Name: \"{name}\", Type: \"{type}\"");
-                }
-            }
-
-            // Player info
-            var pl = j1.FindSection("PL");
-            if (pl != null && pl.Data.Length >= 4)
-            {
-                var playerCount = BinaryPrimitives.ReadInt32LittleEndian(pl.Data.AsSpan().Slice(0, 4));
-                sb.AppendLine($"\nPlayers: {playerCount}");
-            }
-
-            // Entity count from Z1
-            var z1 = j1.FindSection("Z1");
-            if (z1 != null && z1.Data.Length >= 4)
-            {
-                var entityCount = BinaryPrimitives.ReadUInt32LittleEndian(z1.Data.AsSpan().Slice(0, 4));
-                sb.AppendLine($"\nEntities: {entityCount}");
-                sb.AppendLine($"Entity data size: {z1.Data.Length:N0} bytes");
-            }
-
-            // Triggers
-            var tr = FindSection("TR");
-            if (tr != null)
-            {
-                sb.AppendLine($"\nTrigger data: {tr.Data.Length:N0} bytes");
-                if (tr.Data.Length > 100)
-                    sb.AppendLine("  (Contains triggers/scripts)");
-            }
-
-            // Terrain
-            var tn = j1.FindSection("TN");
-            if (tn != null)
-                sb.AppendLine($"\nTerrain data: {tn.Data.Length:N0} bytes");
-
-            // Template counts
-            var tmSections = j1.FindSections("TM");
-            if (tmSections.Length > 0)
-            {
-                sb.AppendLine($"\nTemplate tables: {tmSections.Length}");
-                for (int i = 0; i < tmSections.Length; i++)
-                    sb.AppendLine($"  TM[{i}]: {tmSections[i].Data.Length:N0} bytes");
-            }
-
-            // W7 objectives
-            var w7 = j1.FindSection("W7");
-            if (w7 != null && w7.Data.Length > 20)
-                sb.AppendLine($"\nObjectives data: {w7.Data.Length:N0} bytes");
-
-            // Section overview
-            sb.AppendLine($"\nJ1 sub-sections: {j1.Sections.Count}");
-            var sectionCounts = new Dictionary<string, int>();
-            foreach (var s in j1.Sections)
-            {
-                sectionCounts.TryGetValue(s.Marker, out var c);
-                sectionCounts[s.Marker] = c + 1;
-            }
-            foreach (var kvp in sectionCounts.Where(k => k.Value > 1 || k.Key.Length == 2))
-            {
-                if (kvp.Value > 1)
-                    sb.AppendLine($"  \"{kvp.Key}\" x{kvp.Value}");
-            }
-        }
-
-        sb.AppendLine($"\nTop-level sections: {Sections.Length}");
-        foreach (var s in Sections)
-            sb.AppendLine($"  \"{s.Marker}\" — {s.Data.Length:N0} bytes");
-
-        return sb.ToString();
-    }
-
-    /// <summary>
     /// Converts the scenario to an editable XML string with human-readable
     /// entities, template tables, and known section decoding.
     /// </summary>
@@ -249,6 +138,8 @@ public class ScenarioFile
         {
             if (section.Marker == "J1")
                 WriteJ1Xml(writer, section);
+            else if (section.Marker == "TR")
+                WriteTrXml(writer, section);
             else
                 WriteSectionXml(writer, section);
         }
@@ -265,17 +156,25 @@ public class ScenarioFile
     /// </summary>
     public static ScenarioFile FromXml(string xml)
     {
-        var doc = new XmlDocument();
-        doc.LoadXml(xml);
-
-        var root = doc.DocumentElement ?? throw new InvalidOperationException("No root element");
-        var version = uint.Parse(root.GetAttribute("version"));
+        var readerSettings = new XmlReaderSettings { IgnoreWhitespace = true };
+        using var reader = XmlReader.Create(new StringReader(xml), readerSettings);
+        reader.MoveToContent();
+        var version = uint.Parse(reader.GetAttribute("version")!);
 
         var sections = new List<ScenarioSection>();
-        foreach (XmlNode child in root.ChildNodes)
+        if (!reader.IsEmptyElement)
         {
-            if (child is not XmlElement elem) continue;
-            sections.Add(elem.Name == "J1" ? ReadJ1Xml(elem) : ReadSectionXml(elem));
+            reader.Read();
+            while (reader.NodeType != XmlNodeType.EndElement)
+            {
+                if (reader.NodeType != XmlNodeType.Element) { reader.Read(); continue; }
+                switch (reader.Name)
+                {
+                    case "J1": sections.Add(ReadJ1Xml(reader)); break;
+                    case "TR": sections.Add(ReadTrXml(reader)); break;
+                    default: sections.Add(ReadSectionXml(reader)); break;
+                }
+            }
         }
 
         var total = 10 + ScenarioSection.CalculateTotalSize(sections) + 1;
@@ -333,10 +232,12 @@ public class ScenarioFile
 
         foreach (var sub in j1.Sections)
         {
-            if (sub.Marker == "TM")
+            if (sub.Marker is "TM" or "PT")
                 WriteTmXml(writer, sub);
             else if (sub.Marker == "Z1")
                 WriteZ1Xml(writer, sub);
+            else if (sub.Marker == "TN")
+                WriteTnXml(writer, sub);
             else
                 WriteSectionXml(writer, sub);
         }
@@ -360,13 +261,13 @@ public class ScenarioFile
         var count = BinaryPrimitives.ReadUInt32LittleEndian(section.Data.AsSpan(4));
         var strings = ReadTmStrings(section.Data);
 
-        writer.WriteStartElement("TM");
+        writer.WriteStartElement(section.Marker);
         writer.WriteAttributeString("type", type.ToString());
         writer.WriteAttributeString("count", count.ToString());
 
         foreach (var str in strings)
         {
-            writer.WriteStartElement("Proto");
+            writer.WriteStartElement("E");
             writer.WriteString(str);
             writer.WriteEndElement();
         }
@@ -410,7 +311,7 @@ public class ScenarioFile
                 byte b0 = data[off], b1 = data[off + 1];
                 if (b0 < 0x20 || b0 > 0x7E || b1 < 0x20 || b1 > 0x7E) break;
 
-                var marker = $"{(char)b0}{(char)b1}";
+                var marker = ReadMarker(data, off);
                 var size = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(off + 2));
                 if (size > MaxSubSectionSize || off + 6 + size > (uint)data.Length) break;
 
@@ -492,7 +393,7 @@ public class ScenarioFile
             byte b0 = h1[off], b1 = h1[off + 1];
             if (b0 < 0x20 || b0 > 0x7E || b1 < 0x20 || b1 > 0x7E) break;
 
-            var marker = $"{(char)b0}{(char)b1}";
+            var marker = ReadMarker(h1, off);
             var size = BinaryPrimitives.ReadUInt32LittleEndian(h1.Slice(off + 2));
             if (size > MaxSubSectionSize || off + 6 + size > h1.Length) break;
 
@@ -523,59 +424,526 @@ public class ScenarioFile
         }
     }
 
+    internal static string ReadMarker(ReadOnlySpan<byte> data, int off)
+    {
+        Span<char> chars = stackalloc char[2];
+        chars[0] = (char)data[off];
+        chars[1] = (char)data[off + 1];
+        return new string(chars);
+    }
+
     static string FormatFloat(float f)
     {
         // Use round-trip format to preserve exact binary value
         return f.ToString("R");
     }
 
+    /// <summary>
+    /// Writes a TR (Triggers) section with decoded header, trigger names, and fully decoded groups.
+    /// Each trigger's body (conditions/effects) is preserved as base64 for byte-perfect roundtrip.
+    /// </summary>
+    static void WriteTrXml(XmlWriter writer, ScenarioSection section)
+    {
+        var data = section.Data;
+        if (data.Length < 28 || !CanParseTr(data))
+        {
+            WriteSectionXml(writer, section);
+            return;
+        }
+
+        WriteTrXmlInner(writer, section);
+    }
+
+    /// <summary>
+    /// Pre-validates that the TR section can be fully parsed without errors.
+    /// Returns false if any condition/effect parsing would go out of bounds.
+    /// </summary>
+    static bool CanParseTr(byte[] data)
+    {
+        try
+        {
+            var span = data.AsSpan();
+            int off = 24; // skip header
+            var triggerCount = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
+            if (triggerCount > 10000) return false;
+            for (uint ti = 0; ti < triggerCount; ti++)
+            {
+                off += 4 + 12; // magic + 3 unk
+                off = SkipString16(span, off); // name
+                off += 4 + 5; // unk1 + flags
+                off = SkipString16(span, off); // note
+                var condCount = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
+                for (uint ci = 0; ci < condCount; ci++) off = SkipConditionOrEffect(span, off);
+                var effectCount = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
+                for (uint ei = 0; ei < effectCount; ei++) off = SkipConditionOrEffect(span, off);
+            }
+            var groupCount = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
+            if (groupCount > 10000) return false;
+            for (uint gi = 0; gi < groupCount; gi++)
+            {
+                off += 4 + 4; // magic + id
+                off = SkipString8(span, off); // name
+                var idxCount = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
+                off += (int)idxCount * 4;
+            }
+            return off == data.Length;
+        }
+        catch { return false; }
+    }
+
+    static void WriteTrXmlInner(XmlWriter writer, ScenarioSection section)
+    {
+        var data = section.Data;
+        var span = data.AsSpan();
+        int off = 0;
+
+        var version = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(off)); off += 4;
+        var zero1 = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(off)); off += 4;
+        var zero2 = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(off)); off += 4;
+        var unk0 = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
+        var unk1 = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
+        var unk2 = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
+
+        writer.WriteStartElement("TR");
+        writer.WriteAttributeString("version", version.ToString());
+        if (zero1 != 0) writer.WriteAttributeString("zero1", zero1.ToString());
+        if (zero2 != 0) writer.WriteAttributeString("zero2", zero2.ToString());
+        writer.WriteAttributeString("unk", $"{unk0},{unk1},{unk2}");
+
+        var triggerCount = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
+
+        for (uint ti = 0; ti < triggerCount; ti++)
+        {
+            int triggerStart = off;
+
+            off += 4; // MagicU32<9>
+            off += 12; // 3 unknown uint32s
+            // String16 name
+            var nameCharCount = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(off)); off += 4;
+            var name = Encoding.Unicode.GetString(span.Slice(off, nameCharCount * 2)); off += nameCharCount * 2;
+            off += 4; // s32 unk
+            off += 5; // 5 bool bytes (flags)
+            // String16 note
+            var noteCharCount = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(off)); off += 4;
+            var note = Encoding.Unicode.GetString(span.Slice(off, noteCharCount * 2)); off += noteCharCount * 2;
+
+            // Skip conditions
+            var condCount = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
+            for (uint ci = 0; ci < condCount; ci++)
+                off = SkipConditionOrEffect(span, off);
+
+            // Skip effects
+            var effectCount = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
+            for (uint ei = 0; ei < effectCount; ei++)
+                off = SkipConditionOrEffect(span, off);
+
+            writer.WriteStartElement("Trigger");
+            writer.WriteAttributeString("name", name);
+            if (!string.IsNullOrEmpty(note)) writer.WriteAttributeString("note", note);
+            writer.WriteString(Convert.ToBase64String(span.Slice(triggerStart, off - triggerStart)));
+            writer.WriteEndElement();
+        }
+
+        // Groups
+        var groupCount = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
+        for (uint gi = 0; gi < groupCount; gi++)
+        {
+            off += 4; // MagicU32<1>
+            var groupId = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
+            var nameByteLen = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(off)); off += 4;
+            var groupName = nameByteLen > 1
+                ? Encoding.ASCII.GetString(span.Slice(off, nameByteLen - 1))
+                : "";
+            off += nameByteLen;
+            var idxCount = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
+
+            writer.WriteStartElement("Group");
+            writer.WriteAttributeString("id", groupId.ToString());
+            writer.WriteAttributeString("name", groupName);
+            if (idxCount > 0)
+            {
+                var sb = new StringBuilder();
+                for (uint i = 0; i < idxCount; i++)
+                {
+                    if (i > 0) sb.Append(',');
+                    sb.Append(BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)));
+                    off += 4;
+                }
+                writer.WriteAttributeString("indexes", sb.ToString());
+            }
+            writer.WriteEndElement();
+        }
+
+        writer.WriteEndElement();
+    }
+
+    static void WriteTnXml(XmlWriter writer, ScenarioSection section)
+    {
+        var data = section.Data.AsSpan();
+        if (data.Length < 2) { WriteSectionXml(writer, section); return; }
+
+        writer.WriteStartElement("TN");
+        int off = 0;
+
+        byte hasT3 = data[off++];
+        writer.WriteAttributeString("hasT3", hasT3.ToString());
+
+        if (hasT3 != 0 && off + 6 <= data.Length)
+        {
+            var t3Size = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(off + 2));
+            off += 6;
+            if (off + (int)t3Size <= data.Length)
+            {
+                var t3 = data.Slice(off, (int)t3Size);
+                // Write T3 magic as attribute on TN (must come before child elements)
+                if (t3.Length >= 4)
+                    writer.WriteAttributeString("t3Magic", BinaryPrimitives.ReadUInt32LittleEndian(t3).ToString());
+                byte hasTm2 = (off + (int)t3Size < data.Length) ? data[off + (int)t3Size] : (byte)0;
+                writer.WriteAttributeString("hasTm", hasTm2.ToString());
+                WriteTnT3Xml(writer, t3);
+                off += (int)t3Size;
+            }
+        }
+
+        byte hasTm = 0;
+        if (off < data.Length)
+        {
+            hasTm = data[off++];
+            // hasTm already written above as attribute
+        }
+
+        if (hasTm != 0 && off + 6 <= data.Length)
+        {
+            var tmSize = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(off + 2));
+            off += 6;
+            if (off + (int)tmSize <= data.Length)
+            {
+                writer.WriteStartElement("TnTM");
+                writer.WriteString(Convert.ToBase64String(data.Slice(off, (int)tmSize)));
+                writer.WriteEndElement();
+                off += (int)tmSize;
+            }
+        }
+
+        if (off < data.Length)
+        {
+            writer.WriteStartElement("TnTrail");
+            writer.WriteString(Convert.ToBase64String(data[off..]));
+            writer.WriteEndElement();
+        }
+
+        writer.WriteEndElement();
+    }
+
+    static void WriteTnT3Xml(XmlWriter writer, ReadOnlySpan<byte> t3)
+    {
+        int off = 0;
+        if (off + 4 > t3.Length) return;
+        // t3Magic already written as attribute on parent <TN>
+        off += 4;
+
+        // TT terrain groups sub-section
+        if (off + 6 > t3.Length) return;
+        var ttGroupSize = BinaryPrimitives.ReadUInt32LittleEndian(t3.Slice(off + 2));
+        off += 6;
+        if (off + (int)ttGroupSize <= t3.Length)
+        {
+            WriteTnTerrainGroupsXml(writer, t3.Slice(off, (int)ttGroupSize));
+            off += (int)ttGroupSize;
+        }
+
+        // map_size_x, map_size_z
+        if (off + 8 > t3.Length) return;
+        var mapSizeX = BinaryPrimitives.ReadUInt32LittleEndian(t3.Slice(off));
+        var mapSizeZ = BinaryPrimitives.ReadUInt32LittleEndian(t3.Slice(off + 4));
+        off += 8;
+        writer.WriteStartElement("MapSize");
+        writer.WriteAttributeString("x", mapSizeX.ToString());
+        writer.WriteAttributeString("z", mapSizeZ.ToString());
+        writer.WriteEndElement();
+
+        // 2 unknown floats
+        if (off + 8 > t3.Length) return;
+        writer.WriteStartElement("UnkFloats");
+        writer.WriteAttributeString("f0", FormatFloat(BitConverter.ToSingle(t3.Slice(off, 4))));
+        writer.WriteAttributeString("f1", FormatFloat(BitConverter.ToSingle(t3.Slice(off + 4, 4))));
+        writer.WriteEndElement();
+        off += 8;
+
+        // TT tile group indices: [marker TT][u32 size][SizeList<u8>]
+        if (off + 6 > t3.Length) return;
+        off += WriteSizeListXml(writer, t3, off, "TileGroups", 1);
+        if (off + 6 > t3.Length) return;
+        off += WriteSizeListXml(writer, t3, off, "TileSubs", 2);
+        if (off + 6 > t3.Length) return;
+        off += WriteSizeListXml(writer, t3, off, "TilePT", 1);
+        if (off + 6 > t3.Length) return;
+        off += WriteSizeListXml(writer, t3, off, "WaterColors", 2);
+
+        // WI water names: [marker WI][u32 size][MagicU32<0>, SizeList<String16>]
+        if (off + 6 > t3.Length) return;
+        {
+            var wiMarker = ReadMarker(t3, off);
+            var wiSize = BinaryPrimitives.ReadUInt32LittleEndian(t3.Slice(off + 2));
+            var wiData = t3.Slice(off + 6, (int)wiSize);
+            off += 6 + (int)wiSize;
+
+            writer.WriteStartElement("WaterNames");
+            writer.WriteAttributeString("marker", wiMarker);
+            if (wiData.Length >= 8)
+            {
+                var wiMagic = BinaryPrimitives.ReadUInt32LittleEndian(wiData);
+                writer.WriteAttributeString("magic", wiMagic.ToString());
+                var nameCount = BinaryPrimitives.ReadUInt32LittleEndian(wiData.Slice(4));
+                writer.WriteAttributeString("count", nameCount.ToString());
+                int wiOff = 8;
+                for (uint i = 0; i < nameCount; i++)
+                {
+                    if (!TryReadUTF16(wiData, wiOff, out var name, out wiOff)) break;
+                    writer.WriteStartElement("Water");
+                    writer.WriteString(name);
+                    writer.WriteEndElement();
+                }
+            }
+            writer.WriteEndElement();
+        }
+
+        // WT water type
+        if (off + 6 > t3.Length) return;
+        off += WriteSizeListXml(writer, t3, off, "WaterType", 1);
+
+        // Height arrays
+        if (off + 4 > t3.Length) return;
+        var heightCount = BinaryPrimitives.ReadUInt32LittleEndian(t3.Slice(off));
+        off += 4;
+
+        writer.WriteStartElement("Heights");
+        writer.WriteAttributeString("count", heightCount.ToString());
+        off += WriteFloatArrayXml(writer, t3, off, heightCount);
+        writer.WriteEndElement();
+
+        writer.WriteStartElement("WaterHeights");
+        writer.WriteAttributeString("count", heightCount.ToString());
+        off += WriteFloatArrayXml(writer, t3, off, heightCount);
+        writer.WriteEndElement();
+
+        writer.WriteStartElement("UnkHeights");
+        writer.WriteAttributeString("count", heightCount.ToString());
+        off += WriteFloatArrayXml(writer, t3, off, heightCount);
+        writer.WriteEndElement();
+
+        // Remaining opaque data (CM, UM, EmbeddedImage)
+        if (off < t3.Length)
+        {
+            writer.WriteStartElement("T3Tail");
+            writer.WriteString(Convert.ToBase64String(t3[off..]));
+            writer.WriteEndElement();
+        }
+    }
+
+    static void WriteTnTerrainGroupsXml(XmlWriter writer, ReadOnlySpan<byte> ttData)
+    {
+        writer.WriteStartElement("TerrainGroups");
+        if (ttData.Length < 8) { writer.WriteEndElement(); return; }
+
+        var ttMagic = BinaryPrimitives.ReadUInt32LittleEndian(ttData);
+        writer.WriteAttributeString("magic", ttMagic.ToString());
+        var groupCount = BinaryPrimitives.ReadUInt32LittleEndian(ttData.Slice(4));
+        int gOff = 8;
+
+        for (uint g = 0; g < groupCount; g++)
+        {
+            if (!TryReadUTF16(ttData, gOff, out var groupName, out gOff)) break;
+            writer.WriteStartElement("Group");
+            writer.WriteAttributeString("name", groupName);
+            if (gOff + 4 > ttData.Length) { writer.WriteEndElement(); break; }
+            var texCount = BinaryPrimitives.ReadUInt32LittleEndian(ttData.Slice(gOff));
+            gOff += 4;
+            for (uint t = 0; t < texCount; t++)
+            {
+                if (!TryReadUTF16(ttData, gOff, out var texName, out gOff)) break;
+                writer.WriteStartElement("Tex");
+                writer.WriteString(texName);
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+        }
+        writer.WriteEndElement();
+    }
+
+    static int WriteSizeListXml(XmlWriter writer, ReadOnlySpan<byte> data, int off, string elemName, int elemSize)
+    {
+        var marker = ReadMarker(data, off);
+        var size = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(off + 2));
+        var inner = data.Slice(off + 6, (int)size);
+        writer.WriteStartElement(elemName);
+        writer.WriteAttributeString("marker", marker);
+        if (inner.Length >= 4)
+        {
+            var count = BinaryPrimitives.ReadUInt32LittleEndian(inner);
+            writer.WriteAttributeString("count", count.ToString());
+            var sb = new StringBuilder();
+            for (uint i = 0; i < count && 4 + i * elemSize + elemSize <= (uint)inner.Length; i++)
+            {
+                if (i > 0) sb.Append(',');
+                if (elemSize == 1)
+                    sb.Append(inner[4 + (int)i]);
+                else
+                    sb.Append(BinaryPrimitives.ReadUInt16LittleEndian(inner.Slice(4 + (int)i * 2)));
+            }
+            writer.WriteString(sb.ToString());
+        }
+        writer.WriteEndElement();
+        return 6 + (int)size;
+    }
+
+    static int WriteFloatArrayXml(XmlWriter writer, ReadOnlySpan<byte> data, int off, uint count)
+    {
+        var sb = new StringBuilder();
+        for (uint i = 0; i < count && off + (i + 1) * 4 <= (uint)data.Length; i++)
+        {
+            if (i > 0) sb.Append(' ');
+            sb.Append(FormatFloat(BitConverter.ToSingle(data.Slice(off + (int)i * 4, 4))));
+        }
+        writer.WriteString(sb.ToString());
+        return (int)count * 4;
+    }
+
+    static int SkipString8(ReadOnlySpan<byte> span, int off)
+    {
+        var len = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(off));
+        return off + 4 + len;
+    }
+
+    static int SkipString16(ReadOnlySpan<byte> span, int off)
+    {
+        var charCount = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(off));
+        return off + 4 + charCount * 2;
+    }
+
+    static int SkipXsArgValue(ReadOnlySpan<byte> span, int off, uint valueType)
+    {
+        switch (valueType)
+        {
+            case 4: // UnitIdList: SizeList<String16> + bool
+                var count = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
+                for (uint i = 0; i < count; i++)
+                    off = SkipString16(span, off);
+                return off + 1;
+            case 22: // StringId: u32 valueCount + MagicS32<0> + valueCount * String16
+                var valCount = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
+                off += 4;
+                for (uint i = 0; i < valCount; i++)
+                    off = SkipString16(span, off);
+                return off;
+            case 42: // AnimationName: MagicS32<1> + 3 String16
+                off += 4;
+                off = SkipString16(span, off);
+                off = SkipString16(span, off);
+                return SkipString16(span, off);
+            case 43: // AnimationVariant: MagicS32<1> + 4 String16
+                off += 4;
+                off = SkipString16(span, off);
+                off = SkipString16(span, off);
+                off = SkipString16(span, off);
+                return SkipString16(span, off);
+            case 50: // ProtoAction: MagicS32<1> + 2 String16
+                off += 4;
+                off = SkipString16(span, off);
+                return SkipString16(span, off);
+            case 2 or 5 or 8 or 56: // WithFlag: MagicS32<1> + String16 + bool
+                off += 4;
+                off = SkipString16(span, off);
+                return off + 1;
+            default: // Common: MagicS32<1> + String16
+                off += 4;
+                return SkipString16(span, off);
+        }
+    }
+
+    static int SkipConditionOrEffect(ReadOnlySpan<byte> span, int off)
+    {
+        off += 4; // MagicU32<6>
+        off = SkipString8(span, off); // name
+        off = SkipString8(span, off); // type
+        var argCount = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
+        for (uint i = 0; i < argCount; i++)
+        {
+            off += 4; // key_type
+            off = SkipString8(span, off); // key
+            off = SkipString8(span, off); // name
+            var valueType = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
+            off = SkipXsArgValue(span, off, valueType);
+        }
+        off = SkipString8(span, off); // command
+        var extraCount = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
+        for (uint i = 0; i < extraCount; i++)
+        {
+            off = SkipString8(span, off); // ecommand
+            off += 1; // bool has_string
+            var strCount = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
+            for (uint j = 0; j < strCount; j++)
+                off = SkipString8(span, off);
+        }
+        return off + 2; // padding
+    }
+
     #endregion
 
     #region XML Read Helpers
 
-    static ScenarioSection ReadSectionXml(XmlElement elem)
+    /// <summary>Reader must be on start element; advances past end element.</summary>
+    static ScenarioSection ReadSectionXml(XmlReader reader)
     {
-        var marker = elem.GetAttribute("m");
-        if (string.IsNullOrEmpty(marker))
-            marker = elem.Name; // fallback
+        var marker = reader.GetAttribute("m") ?? reader.Name;
+        var valAttr = reader.GetAttribute("v");
 
-        var valAttr = elem.GetAttribute("v");
         if (!string.IsNullOrEmpty(valAttr))
         {
             var data = new byte[4];
             BinaryPrimitives.WriteUInt32LittleEndian(data, uint.Parse(valAttr));
+            reader.Skip();
             return new ScenarioSection(marker, data);
         }
 
-        var text = elem.InnerText.Trim();
-        if (text.Length > 0)
-            return new ScenarioSection(marker, Convert.FromBase64String(text));
+        if (reader.IsEmptyElement) { reader.Read(); return new ScenarioSection(marker, []); }
 
-        return new ScenarioSection(marker, []);
+        var text = reader.ReadElementContentAsString().Trim();
+        return text.Length > 0
+            ? new ScenarioSection(marker, Convert.FromBase64String(text))
+            : new ScenarioSection(marker, []);
     }
 
-    static ScenarioSection ReadJ1Xml(XmlElement elem)
+    static ScenarioSection ReadJ1Xml(XmlReader reader)
     {
-        var hvAttr = elem.GetAttribute("hv");
+        var hvAttr = reader.GetAttribute("hv");
         if (string.IsNullOrEmpty(hvAttr))
         {
-            var text = elem.InnerText.Trim();
+            if (reader.IsEmptyElement) { reader.Read(); return new ScenarioSection("J1", []); }
+            var text = reader.ReadElementContentAsString().Trim();
             return new ScenarioSection("J1", text.Length > 0 ? Convert.FromBase64String(text) : []);
         }
 
         var headerValue = uint.Parse(hvAttr);
         var subSections = new List<ScenarioSection>();
-        foreach (XmlNode child in elem.ChildNodes)
-        {
-            if (child is not XmlElement subElem) continue;
 
-            if (subElem.Name == "TM")
-                subSections.Add(ReadTmXml(subElem));
-            else if (subElem.Name == "Z1")
-                subSections.Add(ReadZ1Xml(subElem));
-            else
-                subSections.Add(ReadSectionXml(subElem));
+        if (!reader.IsEmptyElement)
+        {
+            reader.Read();
+            while (reader.NodeType != XmlNodeType.EndElement)
+            {
+                if (reader.NodeType != XmlNodeType.Element) { reader.Read(); continue; }
+                switch (reader.Name)
+                {
+                    case "TM": case "PT": subSections.Add(ReadTmXml(reader)); break;
+                    case "Z1": subSections.Add(ReadZ1Xml(reader)); break;
+                    case "TN": subSections.Add(ReadTnXml(reader)); break;
+                    default: subSections.Add(ReadSectionXml(reader)); break;
+                }
+            }
+            reader.ReadEndElement();
         }
+        else reader.Read();
 
         var result = new byte[4 + ScenarioSection.CalculateTotalSize(subSections)];
         BinaryPrimitives.WriteUInt32LittleEndian(result, headerValue);
@@ -584,31 +952,36 @@ public class ScenarioFile
         return new ScenarioSection("J1", result);
     }
 
-    /// <summary>
-    /// Reads a TM section from XML back to binary.
-    /// </summary>
-    static ScenarioSection ReadTmXml(XmlElement elem)
+    static ScenarioSection ReadTmXml(XmlReader reader)
     {
-        var countAttr = elem.GetAttribute("count");
+        var marker = reader.Name;
+        var countAttr = reader.GetAttribute("count");
         if (string.IsNullOrEmpty(countAttr))
-            return ReadSectionXml(elem);
+            return ReadSectionXml(reader);
 
-        var typeAttr = elem.GetAttribute("type");
+        var typeAttr = reader.GetAttribute("type");
         var type = string.IsNullOrEmpty(typeAttr) ? 0u : uint.Parse(typeAttr);
         var count = uint.Parse(countAttr);
 
-        // Collect string entries
         var entries = new List<string>();
-        foreach (XmlNode child in elem.ChildNodes)
+        if (!reader.IsEmptyElement)
         {
-            if (child is XmlElement e && e.Name == "Proto")
-                entries.Add(e.InnerText);
+            reader.Read();
+            while (reader.NodeType != XmlNodeType.EndElement)
+            {
+                if (reader.NodeType != XmlNodeType.Element) { reader.Read(); continue; }
+                if (reader.Name is "E" or "Proto")
+                    entries.Add(reader.ReadElementContentAsString());
+                else
+                    reader.Skip();
+            }
+            reader.ReadEndElement();
         }
+        else reader.Read();
 
-        // Build binary: [uint32 type][uint32 count][entries: uint32 byteLen, ASCII + null]
         int totalSize = 8;
         foreach (var s in entries)
-            totalSize += 4 + Encoding.ASCII.GetByteCount(s) + 1; // +1 for null terminator
+            totalSize += 4 + Encoding.ASCII.GetByteCount(s) + 1;
 
         var data = new byte[totalSize];
         BinaryPrimitives.WriteUInt32LittleEndian(data, type);
@@ -618,89 +991,83 @@ public class ScenarioFile
         foreach (var s in entries)
         {
             var strBytes = Encoding.ASCII.GetBytes(s);
-            var byteLen = strBytes.Length + 1; // include null terminator
+            var byteLen = strBytes.Length + 1;
             BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(off), (uint)byteLen);
             off += 4;
             strBytes.CopyTo(data, off);
             off += strBytes.Length;
-            data[off] = 0; // null terminator
+            data[off] = 0;
             off++;
         }
 
-        return new ScenarioSection("TM", data);
+        return new ScenarioSection(marker, data);
     }
 
-    /// <summary>
-    /// Reads a Z1 section from XML back to binary.
-    /// </summary>
-    static ScenarioSection ReadZ1Xml(XmlElement elem)
+    static ScenarioSection ReadZ1Xml(XmlReader reader)
     {
-        var countAttr = elem.GetAttribute("count");
+        var countAttr = reader.GetAttribute("count");
         if (string.IsNullOrEmpty(countAttr))
-            return ReadSectionXml(elem);
+            return ReadSectionXml(reader);
 
         var entityCount = uint.Parse(countAttr);
-        var verAttr = elem.GetAttribute("ver");
+        var verAttr = reader.GetAttribute("ver");
         var version = string.IsNullOrEmpty(verAttr) ? (byte)1 : byte.Parse(verAttr);
 
-        // Collect entity data
         using var ms = new MemoryStream();
         using var bw = new BinaryWriter(ms);
         bw.Write(entityCount);
         bw.Write(version);
 
-        foreach (XmlNode child in elem.ChildNodes)
+        if (!reader.IsEmptyElement)
         {
-            if (child is not XmlElement entityElem || entityElem.Name != "Entity") continue;
+            reader.Read();
+            while (reader.NodeType != XmlNodeType.EndElement)
+            {
+                if (reader.NodeType != XmlNodeType.Element) { reader.Read(); continue; }
+                if (reader.Name == "Entity")
+                {
+                    var id = ushort.Parse(reader.GetAttribute("id")!);
+                    var flagsStr = reader.GetAttribute("flags");
+                    var flags = !string.IsNullOrEmpty(flagsStr)
+                        ? ushort.Parse(flagsStr.Replace("0x", ""), System.Globalization.NumberStyles.HexNumber)
+                        : (ushort)0;
+                    bw.Write(id);
+                    bw.Write(flags);
 
-            var id = ushort.Parse(entityElem.GetAttribute("id"));
-            var flagsStr = entityElem.GetAttribute("flags");
-            var flags = !string.IsNullOrEmpty(flagsStr)
-                ? ushort.Parse(flagsStr.Replace("0x", ""), System.Globalization.NumberStyles.HexNumber)
-                : (ushort)0;
-
-            bw.Write(id);
-            bw.Write(flags);
-
-            // Rebuild H1 from decoded attributes + stored data
-            var h1Data = RebuildEntityH1(entityElem);
-            bw.Write((byte)'H');
-            bw.Write((byte)'1');
-            bw.Write((uint)h1Data.Length);
-            bw.Write(h1Data);
+                    var h1Data = RebuildEntityH1(reader);
+                    bw.Write((byte)'H'); bw.Write((byte)'1');
+                    bw.Write((uint)h1Data.Length);
+                    bw.Write(h1Data);
+                }
+                else reader.Skip();
+            }
+            reader.ReadEndElement();
         }
+        else reader.Read();
 
         return new ScenarioSection("Z1", ms.ToArray());
     }
 
-    /// <summary>
-    /// Rebuilds the H1 binary data from XML entity attributes and child elements.
-    /// </summary>
-    static byte[] RebuildEntityH1(XmlElement entityElem)
+    /// <summary>Reader is on &lt;Entity&gt; start; advances past end.</summary>
+    static byte[] RebuildEntityH1(XmlReader reader)
     {
-        // Read H1 header from base64
+        var playerAttr = reader.GetAttribute("player");
+        var protoIndexAttr = reader.GetAttribute("protoIndex");
+        var xAttr = reader.GetAttribute("x");
+        var yAttr = reader.GetAttribute("y");
+        var zAttr = reader.GetAttribute("z");
+        var rotAttr = reader.GetAttribute("rot");
+
         byte[] header = new byte[38];
-        var hdrElem = entityElem.SelectSingleNode("H1Hdr") as XmlElement;
-        if (hdrElem != null)
-        {
-            var decoded = Convert.FromBase64String(hdrElem.InnerText.Trim());
-            Array.Copy(decoded, header, Math.Min(decoded.Length, 38));
-        }
-
-        // Patch player ID at byte 14
-        var playerAttr = entityElem.GetAttribute("player");
-        if (!string.IsNullOrEmpty(playerAttr))
-            header[14] = byte.Parse(playerAttr);
-
-        // Position (3 floats at bytes 38-49)
         var posBytes = new byte[12];
-        WriteFloatAttr(entityElem, "x", posBytes, 0);
-        WriteFloatAttr(entityElem, "y", posBytes, 4);
-        WriteFloatAttr(entityElem, "z", posBytes, 8);
-
-        // Rotation (9 floats at bytes 50-85)
         var rotBytes = new byte[36];
-        var rotAttr = entityElem.GetAttribute("rot");
+        byte[]? h1Trail = null;
+        uint? protoIndex = !string.IsNullOrEmpty(protoIndexAttr) ? uint.Parse(protoIndexAttr) : null;
+
+        if (!string.IsNullOrEmpty(xAttr)) BitConverter.TryWriteBytes(posBytes.AsSpan(0), float.Parse(xAttr));
+        if (!string.IsNullOrEmpty(yAttr)) BitConverter.TryWriteBytes(posBytes.AsSpan(4), float.Parse(yAttr));
+        if (!string.IsNullOrEmpty(zAttr)) BitConverter.TryWriteBytes(posBytes.AsSpan(8), float.Parse(zAttr));
+
         if (!string.IsNullOrEmpty(rotAttr))
         {
             var parts = rotAttr.Split(',');
@@ -708,42 +1075,62 @@ public class ScenarioFile
                 BitConverter.TryWriteBytes(rotBytes.AsSpan(i * 4), float.Parse(parts[i]));
         }
 
-        // Collect sub-sections (P1, P2, etc.)
+        var subSections = new List<(string marker, byte[] data)>();
+
+        if (!reader.IsEmptyElement)
+        {
+            reader.Read();
+            while (reader.NodeType != XmlNodeType.EndElement)
+            {
+                if (reader.NodeType != XmlNodeType.Element) { reader.Read(); continue; }
+                switch (reader.Name)
+                {
+                    case "H1Hdr":
+                    {
+                        var decoded = Convert.FromBase64String(reader.ReadElementContentAsString().Trim());
+                        Array.Copy(decoded, header, Math.Min(decoded.Length, 38));
+                        break;
+                    }
+                    case "H1Trail":
+                        h1Trail = Convert.FromBase64String(reader.ReadElementContentAsString().Trim());
+                        break;
+                    case "P1":
+                    {
+                        var sectionData = Convert.FromBase64String(reader.ReadElementContentAsString().Trim());
+                        if (protoIndex.HasValue && sectionData.Length >= 8)
+                        {
+                            BinaryPrimitives.WriteUInt32LittleEndian(sectionData, protoIndex.Value);
+                            BinaryPrimitives.WriteUInt32LittleEndian(sectionData.AsSpan(4), protoIndex.Value);
+                        }
+                        subSections.Add(("P1", sectionData));
+                        break;
+                    }
+                    case "S":
+                    {
+                        var m = reader.GetAttribute("m")!;
+                        var sectionData = Convert.FromBase64String(reader.ReadElementContentAsString().Trim());
+                        subSections.Add((m, sectionData));
+                        break;
+                    }
+                    default:
+                        reader.Skip();
+                        break;
+                }
+            }
+            reader.ReadEndElement();
+        }
+        else reader.Read();
+
+        if (!string.IsNullOrEmpty(playerAttr))
+            header[14] = byte.Parse(playerAttr);
+
         using var ms = new MemoryStream();
         ms.Write(header);
         ms.Write(posBytes);
         ms.Write(rotBytes);
 
-        // Patch protoIndex into P1 if provided
-        var protoIndexAttr = entityElem.GetAttribute("protoIndex");
-        uint? protoIndex = !string.IsNullOrEmpty(protoIndexAttr) ? uint.Parse(protoIndexAttr) : null;
-
-        foreach (XmlNode child in entityElem.ChildNodes)
+        foreach (var (marker, sectionData) in subSections)
         {
-            if (child is not XmlElement e) continue;
-            if (e.Name == "H1Hdr" || e.Name == "H1Trail") continue;
-
-            string marker;
-            byte[] sectionData;
-
-            if (e.Name == "P1")
-            {
-                marker = "P1";
-                sectionData = Convert.FromBase64String(e.InnerText.Trim());
-                // Patch unit index into P1 bytes 0-3 and 4-7
-                if (protoIndex.HasValue && sectionData.Length >= 8)
-                {
-                    BinaryPrimitives.WriteUInt32LittleEndian(sectionData, protoIndex.Value);
-                    BinaryPrimitives.WriteUInt32LittleEndian(sectionData.AsSpan(4), protoIndex.Value);
-                }
-            }
-            else if (e.Name == "S")
-            {
-                marker = e.GetAttribute("m");
-                sectionData = Convert.FromBase64String(e.InnerText.Trim());
-            }
-            else continue;
-
             ms.WriteByte((byte)marker[0]);
             ms.WriteByte((byte)marker[1]);
             var sizeBytes = new byte[4];
@@ -752,19 +1139,343 @@ public class ScenarioFile
             ms.Write(sectionData);
         }
 
-        // Trailing data
-        var trailElem = entityElem.SelectSingleNode("H1Trail") as XmlElement;
-        if (trailElem != null)
-            ms.Write(Convert.FromBase64String(trailElem.InnerText.Trim()));
+        if (h1Trail != null)
+            ms.Write(h1Trail);
 
         return ms.ToArray();
     }
 
-    static void WriteFloatAttr(XmlElement elem, string attr, byte[] target, int offset)
+    static ScenarioSection ReadTrXml(XmlReader reader)
     {
-        var val = elem.GetAttribute(attr);
-        if (!string.IsNullOrEmpty(val))
-            BitConverter.TryWriteBytes(target.AsSpan(offset), float.Parse(val));
+        var versionAttr = reader.GetAttribute("version");
+        if (string.IsNullOrEmpty(versionAttr))
+            return ReadSectionXml(reader);
+
+        using var ms = new MemoryStream();
+        using var bw = new BinaryWriter(ms);
+
+        bw.Write(int.Parse(versionAttr));
+        var zero1Attr = reader.GetAttribute("zero1");
+        bw.Write(string.IsNullOrEmpty(zero1Attr) ? 0 : int.Parse(zero1Attr));
+        var zero2Attr = reader.GetAttribute("zero2");
+        bw.Write(string.IsNullOrEmpty(zero2Attr) ? 0 : int.Parse(zero2Attr));
+
+        var unkParts = reader.GetAttribute("unk")!.Split(',');
+        bw.Write(uint.Parse(unkParts[0]));
+        bw.Write(uint.Parse(unkParts[1]));
+        bw.Write(uint.Parse(unkParts[2]));
+
+        var triggerBlobs = new List<byte[]>();
+        var groups = new List<(uint id, string name, string? indexes)>();
+
+        if (!reader.IsEmptyElement)
+        {
+            reader.Read();
+            while (reader.NodeType != XmlNodeType.EndElement)
+            {
+                if (reader.NodeType != XmlNodeType.Element) { reader.Read(); continue; }
+                if (reader.Name == "Trigger")
+                    triggerBlobs.Add(Convert.FromBase64String(reader.ReadElementContentAsString().Trim()));
+                else if (reader.Name == "Group")
+                {
+                    groups.Add((
+                        uint.Parse(reader.GetAttribute("id")!),
+                        reader.GetAttribute("name") ?? "",
+                        reader.GetAttribute("indexes")));
+                    reader.Skip();
+                }
+                else reader.Skip();
+            }
+            reader.ReadEndElement();
+        }
+        else reader.Read();
+
+        bw.Write((uint)triggerBlobs.Count);
+        foreach (var blob in triggerBlobs)
+            bw.Write(blob);
+
+        bw.Write((uint)groups.Count);
+        foreach (var (id, name, indexes) in groups)
+        {
+            bw.Write((uint)1);
+            bw.Write(id);
+            var nameBytes = Encoding.ASCII.GetBytes(name);
+            bw.Write((uint)(nameBytes.Length + 1));
+            bw.Write(nameBytes);
+            bw.Write((byte)0);
+
+            if (string.IsNullOrEmpty(indexes))
+                bw.Write((uint)0);
+            else
+            {
+                var idxParts = indexes.Split(',');
+                bw.Write((uint)idxParts.Length);
+                foreach (var idx in idxParts)
+                    bw.Write(uint.Parse(idx));
+            }
+        }
+
+        return new ScenarioSection("TR", ms.ToArray());
+    }
+
+    /// <summary>Reader is on &lt;TN&gt; start. T3 children processed sequentially.</summary>
+    static ScenarioSection ReadTnXml(XmlReader reader)
+    {
+        var hasT3Attr = reader.GetAttribute("hasT3");
+        if (string.IsNullOrEmpty(hasT3Attr))
+        {
+            reader.Skip();
+            return new ScenarioSection("TN", []);
+        }
+
+        var t3MagicAttr = reader.GetAttribute("t3Magic");
+        var hasTmAttr = reader.GetAttribute("hasTm");
+
+        using var ms = new MemoryStream();
+        using var bw = new BinaryWriter(ms);
+
+        byte hasT3 = byte.Parse(hasT3Attr);
+        bw.Write(hasT3);
+
+        MemoryStream? t3Ms = hasT3 != 0 ? new MemoryStream() : null;
+        BinaryWriter? t3Bw = t3Ms != null ? new BinaryWriter(t3Ms) : null;
+
+        if (t3Bw != null)
+            t3Bw.Write(string.IsNullOrEmpty(t3MagicAttr) ? 0u : uint.Parse(t3MagicAttr));
+
+        byte[]? tnTmData = null;
+        byte[]? tnTrailData = null;
+
+        if (!reader.IsEmptyElement)
+        {
+            reader.Read();
+            while (reader.NodeType != XmlNodeType.EndElement)
+            {
+                if (reader.NodeType != XmlNodeType.Element) { reader.Read(); continue; }
+                switch (reader.Name)
+                {
+                    case "TerrainGroups":
+                        ReadTerrainGroupsTT(reader, t3Bw!);
+                        break;
+                    case "MapSize":
+                        if (t3Bw != null)
+                        {
+                            t3Bw.Write(uint.Parse(reader.GetAttribute("x") ?? "0"));
+                            t3Bw.Write(uint.Parse(reader.GetAttribute("z") ?? "0"));
+                        }
+                        reader.Skip();
+                        break;
+                    case "UnkFloats":
+                        if (t3Bw != null)
+                        {
+                            t3Bw.Write(float.Parse(reader.GetAttribute("f0") ?? "0"));
+                            t3Bw.Write(float.Parse(reader.GetAttribute("f1") ?? "0"));
+                        }
+                        reader.Skip();
+                        break;
+                    case "TileGroups" or "TilePT" or "WaterType":
+                        ReadSizeListSection(reader, t3Bw!, 1);
+                        break;
+                    case "TileSubs" or "WaterColors":
+                        ReadSizeListSection(reader, t3Bw!, 2);
+                        break;
+                    case "WaterNames":
+                        ReadWaterNames(reader, t3Bw!);
+                        break;
+                    case "Heights":
+                    {
+                        var hc = uint.Parse(reader.GetAttribute("count") ?? "0");
+                        if (t3Bw != null) t3Bw.Write(hc);
+                        if (reader.IsEmptyElement) { reader.Read(); break; }
+                        var text = reader.ReadElementContentAsString();
+                        if (t3Bw != null) WriteFloatArrayFromText(t3Bw, text, hc);
+                        break;
+                    }
+                    case "WaterHeights" or "UnkHeights":
+                    {
+                        var hc = uint.Parse(reader.GetAttribute("count") ?? "0");
+                        if (reader.IsEmptyElement) { reader.Read(); break; }
+                        var text = reader.ReadElementContentAsString();
+                        if (t3Bw != null) WriteFloatArrayFromText(t3Bw, text, hc);
+                        break;
+                    }
+                    case "T3Tail":
+                    {
+                        if (reader.IsEmptyElement) { reader.Read(); break; }
+                        var text = reader.ReadElementContentAsString().Trim();
+                        if (t3Bw != null && text.Length > 0)
+                            t3Bw.Write(Convert.FromBase64String(text));
+                        break;
+                    }
+                    case "TnTM":
+                        if (reader.IsEmptyElement) { reader.Read(); break; }
+                        tnTmData = Convert.FromBase64String(reader.ReadElementContentAsString().Trim());
+                        break;
+                    case "TnTrail":
+                        if (reader.IsEmptyElement) { reader.Read(); break; }
+                        tnTrailData = Convert.FromBase64String(reader.ReadElementContentAsString().Trim());
+                        break;
+                    default:
+                        reader.Skip();
+                        break;
+                }
+            }
+            reader.ReadEndElement();
+        }
+        else reader.Read();
+
+        if (t3Ms != null)
+        {
+            var t3Data = t3Ms.ToArray();
+            bw.Write((byte)'T'); bw.Write((byte)'3');
+            bw.Write((uint)t3Data.Length);
+            bw.Write(t3Data);
+            t3Bw!.Dispose();
+            t3Ms.Dispose();
+        }
+
+        byte hasTm = string.IsNullOrEmpty(hasTmAttr) ? (byte)0 : byte.Parse(hasTmAttr);
+        bw.Write(hasTm);
+
+        if (hasTm != 0 && tnTmData != null)
+        {
+            bw.Write((byte)'T'); bw.Write((byte)'M');
+            bw.Write((uint)tnTmData.Length);
+            bw.Write(tnTmData);
+        }
+
+        if (tnTrailData != null)
+            bw.Write(tnTrailData);
+
+        return new ScenarioSection("TN", ms.ToArray());
+    }
+
+    static void ReadTerrainGroupsTT(XmlReader reader, BinaryWriter t3Bw)
+    {
+        var magicAttr = reader.GetAttribute("magic");
+
+        using var ms = new MemoryStream();
+        using var bw = new BinaryWriter(ms);
+        bw.Write(string.IsNullOrEmpty(magicAttr) ? 1u : uint.Parse(magicAttr));
+
+        var groups = new List<(string name, List<string> textures)>();
+        if (!reader.IsEmptyElement)
+        {
+            reader.Read();
+            while (reader.NodeType != XmlNodeType.EndElement)
+            {
+                if (reader.NodeType != XmlNodeType.Element) { reader.Read(); continue; }
+                if (reader.Name == "Group")
+                {
+                    var name = reader.GetAttribute("name") ?? "";
+                    var textures = new List<string>();
+                    if (!reader.IsEmptyElement)
+                    {
+                        reader.Read();
+                        while (reader.NodeType != XmlNodeType.EndElement)
+                        {
+                            if (reader.NodeType != XmlNodeType.Element) { reader.Read(); continue; }
+                            if (reader.Name == "Tex")
+                                textures.Add(reader.ReadElementContentAsString());
+                            else
+                                reader.Skip();
+                        }
+                        reader.ReadEndElement();
+                    }
+                    else reader.Read();
+                    groups.Add((name, textures));
+                }
+                else reader.Skip();
+            }
+            reader.ReadEndElement();
+        }
+        else reader.Read();
+
+        bw.Write((uint)groups.Count);
+        foreach (var (name, textures) in groups)
+        {
+            WriteString16(bw, name);
+            bw.Write((uint)textures.Count);
+            foreach (var tex in textures)
+                WriteString16(bw, tex);
+        }
+
+        var ttData = ms.ToArray();
+        t3Bw.Write((byte)'T'); t3Bw.Write((byte)'T');
+        t3Bw.Write((uint)ttData.Length);
+        t3Bw.Write(ttData);
+    }
+
+    static void ReadSizeListSection(XmlReader reader, BinaryWriter bw, int elemSize)
+    {
+        var marker = reader.GetAttribute("marker") ?? "??";
+        var countAttr = reader.GetAttribute("count");
+        var count = string.IsNullOrEmpty(countAttr) ? 0u : uint.Parse(countAttr);
+
+        bw.Write((byte)marker[0]); bw.Write((byte)marker[1]);
+        bw.Write((uint)(4 + count * (uint)elemSize));
+        bw.Write(count);
+
+        if (reader.IsEmptyElement) { reader.Read(); return; }
+
+        var text = reader.ReadElementContentAsString().Trim();
+        if (text.Length > 0)
+            foreach (var p in text.Split(','))
+            {
+                if (elemSize == 1)
+                    bw.Write(byte.Parse(p.Trim()));
+                else
+                    bw.Write(ushort.Parse(p.Trim()));
+            }
+    }
+
+    static void ReadWaterNames(XmlReader reader, BinaryWriter t3Bw)
+    {
+        var marker = reader.GetAttribute("marker") ?? "WI";
+        var magicAttr = reader.GetAttribute("magic");
+
+        using var innerMs = new MemoryStream();
+        using var innerBw = new BinaryWriter(innerMs);
+        innerBw.Write(string.IsNullOrEmpty(magicAttr) ? 0u : uint.Parse(magicAttr));
+
+        var names = new List<string>();
+        if (!reader.IsEmptyElement)
+        {
+            reader.Read();
+            while (reader.NodeType != XmlNodeType.EndElement)
+            {
+                if (reader.NodeType != XmlNodeType.Element) { reader.Read(); continue; }
+                if (reader.Name == "Water")
+                    names.Add(reader.ReadElementContentAsString());
+                else
+                    reader.Skip();
+            }
+            reader.ReadEndElement();
+        }
+        else reader.Read();
+
+        innerBw.Write((uint)names.Count);
+        foreach (var name in names)
+            WriteString16(innerBw, name);
+        var innerData = innerMs.ToArray();
+
+        t3Bw.Write((byte)marker[0]); t3Bw.Write((byte)marker[1]);
+        t3Bw.Write((uint)innerData.Length);
+        t3Bw.Write(innerData);
+    }
+
+    static void WriteString16(BinaryWriter bw, string value)
+    {
+        bw.Write((uint)value.Length);
+        foreach (var c in value)
+            bw.Write((ushort)c);
+    }
+
+    static void WriteFloatArrayFromText(BinaryWriter bw, string text, uint count)
+    {
+        var parts = text.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        for (uint i = 0; i < count && i < (uint)parts.Length; i++)
+            bw.Write(float.Parse(parts[i]));
     }
 
     #endregion
@@ -888,7 +1599,7 @@ public class ScenarioJ1
             if (b0 < 0x20 || b0 > 0x7E || b1 < 0x20 || b1 > 0x7E)
                 break;
 
-            var marker = $"{(char)b0}{(char)b1}";
+            var marker = ScenarioFile.ReadMarker(data, offset);
             var size = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(offset + 2, 4));
             if (size > ScenarioFile.MaxSectionSize || offset + 6 + size > (uint)data.Length)
                 break;
