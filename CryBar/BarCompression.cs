@@ -165,7 +165,7 @@ public static class BarCompression
 
         // ZLibStream writes zlib header + deflate data + adler32 checksum
         var memory = new ActualMemoryStream(compressed.AsMemory(offset));
-        using (var zlib = new ZLibStream(memory, CompressionLevel.Optimal))
+        using (var zlib = new ZLibStream(memory, CompressionLevel.SmallestSize))
             zlib.Write(data);
 
         return compressed.AsMemory(0, offset + (int)memory.Position);
