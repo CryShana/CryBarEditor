@@ -442,4 +442,164 @@ public class DependencyFinderTests
         // The stem "turkey" matches, but the entry itself should be excluded
         Assert.Empty(paths[0].Resolved);
     }
+
+    [Fact]
+    public void ChildIdElement_GroupsByIdChild()
+    {
+        var content = """
+            <?xml version="1.0" encoding="utf-8"?>
+            <CinematicData>
+                <Portrait>
+                    <ID>STR_PORTRAIT_ATHE</ID>
+                    <Icon>spc\player_color\units\athena_icon.png</Icon>
+                    <TalkingHead>talking_heads/athena/athena_spc_neutral.png</TalkingHead>
+                </Portrait>
+                <Portrait>
+                    <ID>STR_PORTRAIT_ARKA</ID>
+                    <Icon>spc\player_color\units\arkantos_icon.png</Icon>
+                    <TalkingHead>talking_heads/arkantos/arkantos_spc_neutral.png</TalkingHead>
+                </Portrait>
+                <Portrait>
+                    <ID>STR_PORTRAIT_ARKAU</ID>
+                    <Icon>spc\player_color\units\arkantos_uber_icon.png</Icon>
+                    <TalkingHead>talking_heads/arkantos_uber/arkantos_uber_spc_neutral.png</TalkingHead>
+                </Portrait>
+            </CinematicData>
+            """;
+
+        var result = DependencyFinder.FindDependencies(content, "game\\data\\cinematic.xml");
+        Assert.Equal(3, result.Groups.Count);
+        Assert.Equal("STR_PORTRAIT_ATHE", result.Groups[0].EntityName);
+        Assert.Equal("STR_PORTRAIT_ARKA", result.Groups[1].EntityName);
+        Assert.Equal("STR_PORTRAIT_ARKAU", result.Groups[2].EntityName);
+        Assert.Equal("portrait", result.Groups[0].EntityType);
+    }
+
+    [Fact]
+    public void ChildIdElement_GroupsByIdChild_WithBom()
+    {
+        var content = "\uFEFF" + """
+            <?xml version="1.0" encoding="utf-8"?>
+            <CinematicData>
+                <Portrait>
+                    <ID>STR_PORTRAIT_ATHE</ID>
+                    <Icon>spc\player_color\units\athena_icon.png</Icon>
+                </Portrait>
+                <Portrait>
+                    <ID>STR_PORTRAIT_ARKA</ID>
+                    <Icon>spc\player_color\units\arkantos_icon.png</Icon>
+                </Portrait>
+            </CinematicData>
+            """;
+
+        var result = DependencyFinder.FindDependencies(content, "game\\data\\cinematic.xml");
+        Assert.Equal(2, result.Groups.Count);
+        Assert.Equal("STR_PORTRAIT_ATHE", result.Groups[0].EntityName);
+        Assert.Equal("STR_PORTRAIT_ARKA", result.Groups[1].EntityName);
+    }
+
+    [Fact]
+    public void Comments_SkippedDuringGrouping()
+    {
+        var content = """
+            <!-- This is a comment that should be ignored -->
+            <ChatSets>
+                <Chatset name="Shared">
+                    <Tag name="ToAllyCompletedTownCenter" priority="Background">
+                        <Sentence>
+                            <String>A new city joins my empire.</String>
+                            <StringID>STR_AI_CHAT_COMPLETE_TC_1</StringID>
+                        </Sentence>
+                        <Sentence>
+                            <String>Aha! Another city sings my praises.</String>
+                            <StringID>STR_AI_CHAT_COMPLETE_TC_2</StringID>
+                        </Sentence>
+                    </Tag>
+                </Chatset>
+            </ChatSets>
+            """;
+
+        var result = DependencyFinder.FindDependencies(content, "game\\data\\chat.xml");
+
+        // Single <Chatset name="Shared"> should still be grouped (Rule 2)
+        Assert.Contains(result.Groups, g => g.EntityName == "Shared");
+        Assert.Contains(result.Groups, g => g.EntityType == "chatset");
+
+        var shared = result.Groups.First(g => g.EntityName == "Shared");
+        var strKeys = shared.References.Where(r => r.Type == DependencyRefType.StringKey).ToList();
+        Assert.Equal(2, strKeys.Count);
+    }
+
+    [Fact]
+    public void FilenameAttribute_GroupsByFilenameAttr()
+    {
+        var content = """
+            <cinematicpreloaddata>
+                <cinematic filename="game\campaign\fott\cinematics\fott01_a">
+                    <preload filename="\lighting\luts\snow_lut2" preloadtype="0" />
+                    <preload filename="\vfx\textures\emissive_crawling02" preloadtype="0" />
+                </cinematic>
+                <cinematic filename="game\campaign\fott\fott01">
+                    <preload filename="\vfx\textures\decals\ground\ground_ice_normals" preloadtype="0" />
+                </cinematic>
+            </cinematicpreloaddata>
+            """;
+
+        var result = DependencyFinder.FindDependencies(content, "game\\data\\cinematicpreload.xml");
+        Assert.Equal(2, result.Groups.Count);
+        Assert.Equal(@"game\campaign\fott\cinematics\fott01_a", result.Groups[0].EntityName);
+        Assert.Equal(@"game\campaign\fott\fott01", result.Groups[1].EntityName);
+        Assert.Equal("cinematic", result.Groups[0].EntityType);
+    }
+
+    [Fact]
+    public void UniqueTagChildren_GroupByTagName()
+    {
+        var content = """
+            <ringmenufindmenu>
+                <greekbuildings>
+                    <temple icon="resources\shared\static_color\buildings\temple_icon.png" stringid="STR_GRM_FIND_BUILDINGS_TEMPLE"></temple>
+                    <dock icon="resources\shared\static_color\buildings\dock_icon.png" stringid="STR_GRM_FIND_BUILDINGS_DOCK"></dock>
+                </greekbuildings>
+                <greekunits>
+                    <abstractscout icon="\resources\shared\static_color\abilities\auto_scout_ability_icon.png" stringid="STR_GRM_FIND_UNITS_SCOUT"></abstractscout>
+                    <mythunit icon="resources\greek\player_color\units\cyclops_icon.png" stringid="STR_GRM_FIND_UNITS_MYTH"></mythunit>
+                </greekunits>
+                <egyptianbuildings>
+                    <temple icon="resources\shared\static_color\buildings\temple_icon.png" stringid="STR_GRM_FIND_BUILDINGS_TEMPLE"></temple>
+                    <armory icon="resources\shared\static_color\buildings\armory_icon.png" stringid="STR_GRM_FIND_BUILDINGS_ARMORY"></armory>
+                </egyptianbuildings>
+            </ringmenufindmenu>
+            """;
+
+        var result = DependencyFinder.FindDependencies(content, "game\\data\\ringmenu.xml");
+
+        // 3 unique-tag children → 3 groups named by tag
+        Assert.Equal(3, result.Groups.Count);
+        Assert.Equal("greekbuildings", result.Groups[0].EntityName);
+        Assert.Equal("greekunits", result.Groups[1].EntityName);
+        Assert.Equal("egyptianbuildings", result.Groups[2].EntityName);
+
+        // Each group should have its own refs
+        var greekBuildings = result.Groups.First(g => g.EntityName == "greekbuildings");
+        var strKeys = greekBuildings.References.Where(r => r.Type == DependencyRefType.StringKey).ToList();
+        Assert.Contains(strKeys, r => r.RawValue == "STR_GRM_FIND_BUILDINGS_TEMPLE");
+        Assert.Contains(strKeys, r => r.RawValue == "STR_GRM_FIND_BUILDINGS_DOCK");
+    }
+
+    [Fact]
+    public void SingleNamedChild_StillGrouped()
+    {
+        // A file with only one named direct child should still create a named group (Rule 2)
+        var content = """
+            <root>
+                <category name="Primary">
+                    <item>resources\icons\primary_icon.png</item>
+                </category>
+            </root>
+            """;
+
+        var result = DependencyFinder.FindDependencies(content, "game\\data\\test.xml");
+        Assert.Contains(result.Groups, g => g.EntityName == "Primary");
+    }
 }

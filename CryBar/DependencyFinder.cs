@@ -99,19 +99,25 @@ public static partial class DependencyFinder
     /// to collect all direct children, determine entity tags, and extract references in parallel.
     /// Non-XML files go into an ungrouped group.
     /// </summary>
+    static List<DependencyGroup> UngroupedFallback(string content)
+    {
+        var refs = ExtractReferences(content);
+        return refs.Count > 0
+            ? [new DependencyGroup { References = refs }]
+            : [];
+    }
+
     static List<DependencyGroup> BuildGroups(string content)
     {
+        // Strip BOM if present
+        if (content.Length > 0 && content[0] == '\uFEFF')
+            content = content[1..];
+
         var trimmed = content.AsSpan().TrimStart();
         if (trimmed.Length == 0 || trimmed[0] != '<')
-        {
-            // Non-XML content: single ungrouped group
-            var refs = ExtractReferences(content);
-            return refs.Count > 0
-                ? [new DependencyGroup { References = refs }]
-                : [];
-        }
+            return UngroupedFallback(content);
 
-        // Single XmlReader pass: collect all direct children with their tag, name attr, and OuterXml
+        // Single XmlReader pass: collect all direct children with their tag, identity, and OuterXml
         var children = new List<(string tag, string? name, string xml)>();
 
         try
@@ -122,12 +128,10 @@ public static partial class DependencyFinder
             while (reader.Read())
                 if (reader.NodeType == XmlNodeType.Element) break;
             if (reader.NodeType != XmlNodeType.Element)
-            {
-                var refs = ExtractReferences(content);
-                return refs.Count > 0
-                    ? [new DependencyGroup { References = refs }]
-                    : [];
-            }
+                return UngroupedFallback(content);
+
+            // Track tags where ExtractChildIdentityElement returned null — skip after 2 nulls since last success
+            var noIdentityCount = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
             int rootDepth = reader.Depth;
             while (reader.Read())
@@ -136,7 +140,9 @@ public static partial class DependencyFinder
                     continue;
 
                 var tag = reader.Name;
-                var name = reader.GetAttribute("name");
+                var name = reader.GetAttribute("name")
+                        ?? reader.GetAttribute("filename")
+                        ?? reader.GetAttribute("id");
 
                 if (reader.IsEmptyElement)
                 {
@@ -146,9 +152,19 @@ public static partial class DependencyFinder
                 {
                     var xml = reader.ReadOuterXml();
 
-                    // If no name attribute, check for a direct <name> child element
+                    // If no identity attribute, check for a direct <name> or <ID> child element
                     if (name == null)
-                        name = ExtractChildNameElement(xml);
+                    {
+                        noIdentityCount.TryGetValue(tag, out var nullCount);
+                        if (nullCount < 2)
+                        {
+                            name = ExtractChildIdentityElement(xml);
+                            if (name == null)
+                                noIdentityCount[tag] = nullCount + 1;
+                            else
+                                noIdentityCount.Remove(tag); // reset — keep checking this tag
+                        }
+                    }
 
                     children.Add((tag, name, xml));
                 }
@@ -160,14 +176,9 @@ public static partial class DependencyFinder
         }
 
         if (children.Count == 0)
-        {
-            var refs = ExtractReferences(content);
-            return refs.Count > 0
-                ? [new DependencyGroup { References = refs }]
-                : [];
-        }
+            return UngroupedFallback(content);
 
-        // Determine entity tags: direct children appearing ≥2 times with at least one name (attribute or child element)
+        // Entity detection — three rules, evaluated in order:
         var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var hasName = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (tag, name, _) in children)
@@ -179,20 +190,43 @@ public static partial class DependencyFinder
         }
 
         var entityTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // Rule 1: Repeated same-tag children (≥2) with at least one named — the strictest match.
+        // Preferred over Rule 2 so that singleton infrastructure tags (e.g. <settings>) don't
+        // become entities when real repeated entities (e.g. <unit>) exist alongside them.
         foreach (var (tag, count) in counts)
         {
             if (count >= 2 && hasName.Contains(tag))
                 entityTags.Add(tag);
         }
 
+        // Rule 2: Any named children, even singletons (e.g. single <Chatset name="Shared">)
         if (entityTags.Count == 0)
         {
-            // No entity structure — single ungrouped group
-            var refs = ExtractReferences(content);
-            return refs.Count > 0
-                ? [new DependencyGroup { References = refs }]
-                : [];
+            foreach (var (tag, _) in counts)
+            {
+                if (hasName.Contains(tag))
+                    entityTags.Add(tag);
+            }
         }
+
+        // Rule 3: All children have unique tags with content — tag name IS the entity name.
+        // Mutation below sets name = tag, which the partitioning loop relies on.
+        if (entityTags.Count == 0 && children.Count >= 2
+            && counts.Values.All(c => c == 1)
+            && children.All(c => c.xml.Length > 0))
+        {
+            for (int i = 0; i < children.Count; i++)
+            {
+                var (tag, name, xml) = children[i];
+                children[i] = (tag, name ?? tag, xml);
+            }
+            foreach (var (tag, _) in counts)
+                entityTags.Add(tag);
+        }
+
+        if (entityTags.Count == 0)
+            return UngroupedFallback(content);
 
         // Partition children into entities vs ungrouped
         var entities = new List<(string name, string tag, string xml)>();
@@ -262,21 +296,46 @@ public static partial class DependencyFinder
     }
 
     /// <summary>
-    /// Extracts text content of a direct &lt;name&gt; child element from an XML fragment.
-    /// Returns null if no such element exists.
+    /// Extracts text content of a direct &lt;name&gt; or &lt;ID&gt; child element from an XML fragment.
+    /// Checks &lt;name&gt; first, then falls back to &lt;ID&gt;.
+    /// Returns null if neither element exists.
     /// </summary>
-    static string? ExtractChildNameElement(string outerXml)
+    static string? ExtractChildIdentityElement(string outerXml)
     {
         try
         {
             using var reader = XmlReader.Create(new StringReader(outerXml), SafeXmlSettings);
-            if (!reader.ReadToFollowing("name")) return null;
+            string? idValue = null;
 
-            // Only accept <name> as a direct child (depth 1 inside the outer element)
-            if (reader.Depth != 1) return null;
+            // Advance to the wrapper element
+            while (reader.Read())
+                if (reader.NodeType == XmlNodeType.Element) break;
+            if (reader.NodeType != XmlNodeType.Element) return null;
 
-            var value = reader.ReadElementContentAsString();
-            return string.IsNullOrWhiteSpace(value) ? null : value;
+            int parentDepth = reader.Depth;
+
+            while (reader.Read())
+            {
+                if (reader.NodeType != XmlNodeType.Element || reader.Depth != parentDepth + 1)
+                    continue;
+
+                var tagName = reader.Name;
+
+                if (tagName.Equals("name", StringComparison.OrdinalIgnoreCase))
+                {
+                    var value = reader.ReadElementContentAsString();
+                    if (!string.IsNullOrWhiteSpace(value))
+                        return value; // <name> wins immediately
+                }
+                else if (idValue == null && tagName.Equals("ID", StringComparison.OrdinalIgnoreCase))
+                {
+                    var value = reader.ReadElementContentAsString();
+                    if (!string.IsNullOrWhiteSpace(value))
+                        idValue = value; // remember <ID> as fallback
+                }
+            }
+
+            return idValue;
         }
         catch (XmlException)
         {
