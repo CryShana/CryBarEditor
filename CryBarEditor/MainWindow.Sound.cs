@@ -316,7 +316,8 @@ public partial class MainWindow
 
         var progress = new Progress<string?>();
         IProgress<string?> p = progress;
-        _ = ShowProgress($"Exporting {sounds.Count} sounds", progress);
+        var prompt = ShowProgress($"Exporting {sounds.Count} sounds", progress);
+        prompt.OpenFolderPath = outputDir;
 
         var targetCount = sounds.Count;
         var maxAttempts = targetCount * 20;

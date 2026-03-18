@@ -31,7 +31,7 @@ public partial class MainWindow
         var progress = new Progress<string?>();
         IProgress<string?> p = progress;
 
-        _ = ShowProgress($"Exporting {files.Count} files", progress);
+        var prompt = ShowProgress($"Exporting {files.Count} files", progress);
 
         p.Report("Starting export...");
 
@@ -166,6 +166,8 @@ public partial class MainWindow
         {
             p.Report($"Finished in {sw.Elapsed.TotalSeconds:0.00} seconds");
         }
+
+        prompt.OpenFolderPath = exportBaseDir;
 
         // Open in editor if requested
         if (options?.OpenInEditor == true && !string.IsNullOrWhiteSpace(_editorCommand))
@@ -521,7 +523,7 @@ public partial class MainWindow
 
             var progress = new Progress<string?>();
             IProgress<string?> p = progress;
-            _ = ShowProgress($"Exporting with new image", progress);
+            var prompt = ShowProgress($"Exporting with new image", progress);
 
             try
             {
@@ -536,6 +538,7 @@ public partial class MainWindow
                 p.Report("Exporting final DDT");
                 var output_path = Path.Combine(_exportRootDirectory, relative_path_full);
                 var dir = Path.GetDirectoryName(output_path);
+                prompt.OpenFolderPath = dir;
                 if (dir != null) Directory.CreateDirectory(dir);
 
                 using (var out_file = File.Create(output_path))

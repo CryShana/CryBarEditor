@@ -31,7 +31,7 @@ public partial class MainWindow
             var data = BarFormatConverter.XMLtoXMB(xml, CompressionType.Alz4);
             using (var f = File.Create(out_file)) f.Write(data.Span);
 
-            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file));
+            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file), Path.GetDirectoryName(out_file));
         }
         catch (Exception ex)
         {
@@ -57,7 +57,7 @@ public partial class MainWindow
 
             File.WriteAllText(out_file, xmlText);
 
-            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file));
+            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file), Path.GetDirectoryName(out_file));
         }
         catch (Exception ex)
         {
@@ -87,7 +87,7 @@ public partial class MainWindow
 
             File.WriteAllBytes(out_file, convertedBytes);
 
-            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file));
+            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file), Path.GetDirectoryName(out_file));
         }
         catch (Exception ex)
         {
@@ -138,7 +138,7 @@ public partial class MainWindow
 
             File.WriteAllBytes(out_file, convertedBytes);
 
-            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file));
+            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file), Path.GetDirectoryName(out_file));
         }
         catch (Exception ex)
         {
@@ -182,7 +182,7 @@ public partial class MainWindow
             var xml = scenario.ToXml();
             await File.WriteAllTextAsync(out_file, xml);
 
-            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file));
+            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file), Path.GetDirectoryName(out_file));
         }
         catch (Exception ex)
         {
@@ -206,7 +206,7 @@ public partial class MainWindow
             var compressed = BarCompression.CompressL33t(bytes);
             using (var f = File.Create(out_file)) f.Write(compressed.Span);
 
-            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file));
+            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file), Path.GetDirectoryName(out_file));
         }
         catch (Exception ex)
         {
@@ -226,7 +226,7 @@ public partial class MainWindow
             var compressed = BarCompression.CompressAlz4(data);
             using (var f = File.Create(out_file)) f.Write(compressed.Span);
 
-            _ = ShowSuccess("Compression completed, new file:\n" + Path.GetFileName(out_file));
+            _ = ShowSuccess("Compression completed, new file:\n" + Path.GetFileName(out_file), Path.GetDirectoryName(out_file));
         }
         catch (Exception ex)
         {
@@ -246,7 +246,7 @@ public partial class MainWindow
             var compressed = BarCompression.CompressL33t(data);
             using (var f = File.Create(out_file)) f.Write(compressed.Span);
 
-            _ = ShowSuccess("Compression completed, new file:\n" + Path.GetFileName(out_file));
+            _ = ShowSuccess("Compression completed, new file:\n" + Path.GetFileName(out_file), Path.GetDirectoryName(out_file));
         }
         catch (Exception ex)
         {
@@ -272,7 +272,7 @@ public partial class MainWindow
                 CompressionType.L33t => "L33t",
                 _ => "None (file was not compressed)"
             };
-            _ = ShowSuccess($"Decompression completed ({typeName}), new file:\n" + Path.GetFileName(out_file));
+            _ = ShowSuccess($"Decompression completed ({typeName}), new file:\n" + Path.GetFileName(out_file), Path.GetDirectoryName(out_file));
         }
         catch (Exception ex)
         {
@@ -291,7 +291,7 @@ public partial class MainWindow
             var class_name = XStoRM.GetSafeClassNameRgx().Replace(Path.GetFileNameWithoutExtension(file), "");
             XStoRM.Convert(file, out_file, class_name);
 
-            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file));
+            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file), Path.GetDirectoryName(out_file));
         }
         catch (Exception ex)
         {
@@ -349,7 +349,7 @@ public partial class MainWindow
             var output_path = Path.Combine(output_dir, format.FileName);
             File.WriteAllText(output_path, format.Content);
 
-            _ = ShowSuccess("Additive mod created, new file:\n" + Path.GetFileName(output_path));
+            _ = ShowSuccess("Additive mod created, new file:\n" + Path.GetFileName(output_path), Path.GetDirectoryName(output_path));
         }
         catch (Exception ex)
         {
