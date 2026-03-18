@@ -101,16 +101,16 @@ public partial class ScenarioFile
 
         if (off + 6 > t3.Length) return;
         writer.WriteComment("TileGroups (base64: u32 count + u8[])");
-        off += WriteSizeListXml(writer, t3, off, 1);
+        off += WriteSizeListXml(writer, t3, off);
         if (off + 6 > t3.Length) return;
         writer.WriteComment("TileSubs (base64: u32 count + u16le[])");
-        off += WriteSizeListXml(writer, t3, off, 2);
+        off += WriteSizeListXml(writer, t3, off);
         if (off + 6 > t3.Length) return;
         writer.WriteComment("TilePT (base64: u32 count + u8[])");
-        off += WriteSizeListXml(writer, t3, off, 1);
+        off += WriteSizeListXml(writer, t3, off);
         if (off + 6 > t3.Length) return;
         writer.WriteComment("WaterColors (base64: u32 count + u16le[])");
-        off += WriteSizeListXml(writer, t3, off, 2);
+        off += WriteSizeListXml(writer, t3, off);
 
         // WI water names: [marker WI][u32 size][MagicU32<0>, SizeList<String16>]
         if (off + 6 > t3.Length) return;
@@ -142,7 +142,7 @@ public partial class ScenarioFile
         // WT water type
         if (off + 6 > t3.Length) return;
         writer.WriteComment("WaterType (base64: u32 count + u8[])");
-        off += WriteSizeListXml(writer, t3, off, 1);
+        off += WriteSizeListXml(writer, t3, off);
 
         // Height arrays
         if (off + 4 > t3.Length) return;
@@ -203,7 +203,7 @@ public partial class ScenarioFile
         writer.WriteEndElement();
     }
 
-    static int WriteSizeListXml(XmlWriter writer, ReadOnlySpan<byte> data, int off, int elemSize)
+    static int WriteSizeListXml(XmlWriter writer, ReadOnlySpan<byte> data, int off)
     {
         var marker = ReadMarker(data, off);
         var size = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(off + 2));
@@ -217,10 +217,33 @@ public partial class ScenarioFile
 
     static int WriteFloatArrayXml(XmlWriter writer, ReadOnlySpan<byte> data, int off, uint count)
     {
-        var byteCount = (int)Math.Min(count * 4, (uint)Math.Max(0, data.Length - off));
+        var byteCount = (int)Math.Min((long)count * 4, Math.Max(0, data.Length - off));
         if (byteCount > 0)
             writer.WriteString(Convert.ToBase64String(data.Slice(off, byteCount)));
         return byteCount;
+    }
+
+    static void ReadFloatArrayXml(string text, BinaryWriter? bw, bool writeCount)
+    {
+        if (bw == null) return;
+        if (text.Length == 0)
+        {
+            if (writeCount) bw.Write(0u);
+            return;
+        }
+        if (IsBase64Content(text))
+        {
+            var bytes = Convert.FromBase64String(text);
+            if (writeCount) bw.Write((uint)(bytes.Length / 4));
+            bw.Write(bytes);
+        }
+        else
+        {
+            // Old format: space-separated floats
+            var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (writeCount) bw.Write((uint)parts.Length);
+            WriteFloatArray(bw, parts);
+        }
     }
 
     static ScenarioSection ReadTnXml(XmlReader reader)
@@ -289,46 +312,13 @@ public partial class ScenarioFile
                     case "Heights":
                     {
                         if (reader.IsEmptyElement) { if (t3Bw != null) t3Bw.Write(0u); reader.Read(); break; }
-                        var text = reader.ReadElementContentAsString().Trim();
-                        if (t3Bw != null)
-                        {
-                            if (text.Length == 0)
-                            {
-                                t3Bw.Write(0u);
-                            }
-                            else if (text.Contains(' '))
-                            {
-                                // Old format: space-separated floats
-                                var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                                t3Bw.Write((uint)parts.Length);
-                                WriteFloatArray(t3Bw, parts);
-                            }
-                            else
-                            {
-                                // New format: base64 of raw float bytes
-                                var bytes = Convert.FromBase64String(text);
-                                t3Bw.Write((uint)(bytes.Length / 4));
-                                t3Bw.Write(bytes);
-                            }
-                        }
+                        ReadFloatArrayXml(reader.ReadElementContentAsString().Trim(), t3Bw, writeCount: true);
                         break;
                     }
                     case "WaterHeights" or "UnkHeights":
                     {
                         if (reader.IsEmptyElement) { reader.Read(); break; }
-                        var text = reader.ReadElementContentAsString().Trim();
-                        if (t3Bw != null && text.Length > 0)
-                        {
-                            if (text.Contains(' '))
-                            {
-                                var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                                WriteFloatArray(t3Bw, parts);
-                            }
-                            else
-                            {
-                                t3Bw.Write(Convert.FromBase64String(text));
-                            }
-                        }
+                        ReadFloatArrayXml(reader.ReadElementContentAsString().Trim(), t3Bw, writeCount: false);
                         break;
                     }
                     case "T3Tail":
