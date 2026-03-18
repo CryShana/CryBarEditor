@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Xml;
 
 namespace CryBar;
@@ -12,6 +13,15 @@ namespace CryBar;
 /// </summary>
 public partial class ScenarioFile
 {
+    [GeneratedRegex(@"(?<=>)[A-Za-z0-9+/=\r\n]{60,}(?=<)")]
+    private static partial Regex Base64ContentRegex();
+
+    /// <summary>
+    /// Replaces long base64 element content with a placeholder for preview display.
+    /// </summary>
+    public static string StripBinaryForPreview(string xml) =>
+        Base64ContentRegex().Replace(xml, "[BINARY DATA]");
+
     internal const int MaxSectionSize = 50_000_000;
     const int MaxSubSectionSize = 100_000;
     const int MaxSections = 10_000;
@@ -218,11 +228,12 @@ public partial class ScenarioFile
 
         writer.WriteAttributeString("hv", j1.HeaderValue.ToString());
 
+        int tmIndex = 0;
         foreach (var sub in j1.Sections)
         {
             switch (sub.Marker)
             {
-                case "TM" or "PT": WriteTmXml(writer, sub); break;
+                case "TM" or "PT": WriteTmXml(writer, sub, tmIndex++); break;
                 case "Z1": WriteZ1Xml(writer, sub); break;
                 case "TN": WriteTnXml(writer, sub); break;
                 case "PL": WritePlXml(writer, sub); break;

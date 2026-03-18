@@ -6,13 +6,19 @@ namespace CryBar;
 
 public partial class ScenarioFile
 {
-    static void WriteTmXml(XmlWriter writer, ScenarioSection section)
+    /// <summary>TM/PT section labels by index (from AomrLib StringDb).</summary>
+    static readonly string[] TmLabels = ["Unit/Protounit names (referenced by Entity protoIndex)", "Logical names", "Tech names", "Ability names"];
+
+    static void WriteTmXml(XmlWriter writer, ScenarioSection section, int tmIndex)
     {
         if (section.Data.Length < 8)
         {
             WriteSectionXml(writer, section);
             return;
         }
+
+        if (tmIndex >= 0 && tmIndex < TmLabels.Length)
+            writer.WriteComment($" {TmLabels[tmIndex]} ");
 
         var type = BinaryPrimitives.ReadUInt32LittleEndian(section.Data);
         var strings = ReadTmStrings(section.Data);
@@ -45,6 +51,7 @@ public partial class ScenarioFile
         var entityCount = BinaryPrimitives.ReadUInt32LittleEndian(data);
         var version = data[4];
 
+        writer.WriteComment(" protoIndex references the first PT/TM table (Unit/Protounit names) ");
         writer.WriteStartElement("Entities");
         writer.WriteAttributeString("ver", version.ToString());
 
@@ -71,7 +78,7 @@ public partial class ScenarioFile
 
                 var subData = data.Slice(off + 6, (int)size);
 
-                if (marker == "H1" && size >= 86)
+                if (marker == "H1" && size >= 82)
                     WriteEntityH1Xml(writer, subData);
                 else
                 {
@@ -91,15 +98,52 @@ public partial class ScenarioFile
     }
 
     /// <summary>
+    /// Computes entity field offsets from the EN sub-section inside H1.
+    /// H1 layout: [EN marker 2B][EN size 4B][unitIdCopy 4B][magic 4B][playerId 4B][Unk2 len+data][Position 12B][Matrix 36B][optional bool]][P1...][P2...][P3...][2x ConstP1]
+    /// EN size varies: 76 (Unk2=12, old format) or 80 (Unk2=16, new format), plus optional +1 for boolean.
+    /// Old format (j1Version &lt;= 412): P1/P2 are inline (no markers). New format: P1/P2 have "P1"/"P2" section markers.
+    /// </summary>
+    static bool GetEntityOffsets(ReadOnlySpan<byte> h1, out int posOff, out int rotOff, out int enEnd)
+    {
+        posOff = rotOff = enEnd = 0;
+        if (h1.Length < 22) return false;
+
+        // EN section: h1[0..1] = 'EN' marker, h1[2..5] = size
+        var enSize = (int)BinaryPrimitives.ReadUInt32LittleEndian(h1.Slice(2));
+        enEnd = 6 + enSize;
+        if (enEnd > h1.Length || enSize < 52) return false; // minimum: 4+4+4+4+0+12+36 = 64, but Unk2 len adds 4
+
+        var unk2Len = (int)BinaryPrimitives.ReadUInt32LittleEndian(h1.Slice(18));
+        if (unk2Len < 0 || unk2Len > 1000) return false;
+
+        posOff = 22 + unk2Len;
+        rotOff = posOff + 12;
+
+        // Validate: rotation must fit within EN section
+        return rotOff + 36 <= enEnd;
+    }
+
+    /// <summary>
     /// Writes an H1 entity section with decoded position, rotation, player, and sub-sections.
-    /// H1 layout: [38 bytes header][12 bytes position (3 floats)][36 bytes rotation (9 floats)][sub-sections P1, P2, ...]
-    /// Header byte 14 = player ID. Sub-section P1 bytes 0-3 = unit index into TM[0].
+    /// Handles both old format (inline P1, EN size ~76) and new format (named P1 section, EN size ~80).
     /// </summary>
     static void WriteEntityH1Xml(XmlWriter writer, ReadOnlySpan<byte> h1)
     {
-        // Pre-scan P1 to extract protoIndex before writing attributes (XML requires attributes before child elements)
+        if (!GetEntityOffsets(h1, out int posOff, out int rotOff, out int enEnd))
+        {
+            // Fallback: write as raw base64
+            writer.WriteStartElement("S");
+            writer.WriteAttributeString("m", "H1");
+            writer.WriteString(Convert.ToBase64String(h1));
+            writer.WriteEndElement();
+            return;
+        }
+
+        // Extract protoIndex: check for named P1 section or inline P1 after EN
         uint? protoIndex = null;
-        int scanOff = 86;
+        int scanOff = enEnd;
+
+        // Try named P1 sections first
         while (scanOff + 6 <= h1.Length)
         {
             byte sb0 = h1[scanOff], sb1 = h1[scanOff + 1];
@@ -116,6 +160,15 @@ public partial class ScenarioFile
             scanOff += 6 + (int)sz;
         }
 
+        // Fallback: inline P1 (old format) — first uint32 after EN end is NameIndex
+        if (!protoIndex.HasValue && enEnd + 4 <= h1.Length)
+        {
+            // Check that the bytes at enEnd are NOT an ASCII section marker (confirming inline format)
+            byte fb0 = h1[enEnd], fb1 = h1[enEnd + 1];
+            if (fb0 < 0x20 || fb0 > 0x7E || fb1 < 0x20 || fb1 > 0x7E)
+                protoIndex = BinaryPrimitives.ReadUInt32LittleEndian(h1.Slice(enEnd));
+        }
+
         // Write ALL attributes first (before any child elements)
         var player = h1[14];
         writer.WriteAttributeString("player", player.ToString());
@@ -123,9 +176,9 @@ public partial class ScenarioFile
         if (protoIndex.HasValue)
             writer.WriteAttributeString("protoIndex", protoIndex.Value.ToString());
 
-        var px = BitConverter.ToSingle(h1.Slice(38, 4));
-        var py = BitConverter.ToSingle(h1.Slice(42, 4));
-        var pz = BitConverter.ToSingle(h1.Slice(46, 4));
+        var px = BitConverter.ToSingle(h1.Slice(posOff, 4));
+        var py = BitConverter.ToSingle(h1.Slice(posOff + 4, 4));
+        var pz = BitConverter.ToSingle(h1.Slice(posOff + 8, 4));
         writer.WriteAttributeString("x", FormatFloat(px));
         writer.WriteAttributeString("y", FormatFloat(py));
         writer.WriteAttributeString("z", FormatFloat(pz));
@@ -134,17 +187,17 @@ public partial class ScenarioFile
         for (int i = 0; i < 9; i++)
         {
             if (i > 0) rotSb.Append(',');
-            rotSb.Append(FormatFloat(BitConverter.ToSingle(h1.Slice(50 + i * 4, 4))));
+            rotSb.Append(FormatFloat(BitConverter.ToSingle(h1.Slice(rotOff + i * 4, 4))));
         }
         writer.WriteAttributeString("rot", rotSb.ToString());
 
-        // Now write child elements
+        // H1Hdr = full EN section (variable size, contains all pre-P1 data including position/rotation)
         writer.WriteStartElement("H1Hdr");
-        writer.WriteString(Convert.ToBase64String(h1[..38]));
+        writer.WriteString(Convert.ToBase64String(h1[..enEnd]));
         writer.WriteEndElement();
 
-        // Walk sub-sections inside H1 starting at byte 86 (after rotation matrix)
-        int off = 86;
+        // Walk named sub-sections after EN (new format has P1, P2 here)
+        int off = enEnd;
         while (off + 6 <= h1.Length)
         {
             byte b0 = h1[off], b1 = h1[off + 1];
@@ -173,29 +226,29 @@ public partial class ScenarioFile
             off += 6 + (int)size;
         }
 
+        // H1Trail: everything after named sub-sections (P3 data, ConstP1s, or inline P1/P2/P3/ConstP1s for old format)
         if (off < h1.Length)
         {
             var trail = h1[off..];
-            // Trailing structure: 4 magic values (16 bytes) + Pad0<20> + has_note(1) + [optional note] + MagicS32<-1>(4) + Pad0<18> + 2x fake P1 (12)
-            if (trail.Length >= 51)
-            {
-                int tOff = 16 + 20; // skip 4 magic values + Pad0<20>
-                byte hasNote = trail[tOff++];
-                string? note = null;
-                if (hasNote != 0 && TryReadUTF16(trail, tOff, out var noteStr, out tOff))
-                    note = noteStr;
+            string? note = null;
 
-                writer.WriteStartElement("H1Trail");
-                if (!string.IsNullOrEmpty(note)) writer.WriteAttributeString("note", note);
-                writer.WriteString(Convert.ToBase64String(trail));
-                writer.WriteEndElement();
-            }
-            else
+            // Try to extract note from trail structure
+            // Old format trail: P1 inline + P2 inline + P3(magic*4 + pad20 + hasNote + [note] + magic + pad18) + 2x ConstP1
+            // New format trail: P3(magic*4 + pad20 + hasNote + [note] + magic + pad18) + 2x ConstP1
+            // Note extraction: scan for hasNote byte in the P3 area
+            int noteSearchOff = off == enEnd ? -1 : 0; // for new format, P3 starts at trail beginning
+            if (noteSearchOff == 0 && trail.Length >= 51)
             {
-                writer.WriteStartElement("H1Trail");
-                writer.WriteString(Convert.ToBase64String(trail));
-                writer.WriteEndElement();
+                int tOff = 16 + 20; // skip P3: 4 magic values (16 bytes) + Pad0<20>
+                byte hasNote = trail[tOff++];
+                if (hasNote != 0 && TryReadUTF16(trail, tOff, out var noteStr, out _))
+                    note = noteStr;
             }
+
+            writer.WriteStartElement("H1Trail");
+            if (!string.IsNullOrEmpty(note)) writer.WriteAttributeString("note", note);
+            writer.WriteString(Convert.ToBase64String(trail));
+            writer.WriteEndElement();
         }
     }
 
@@ -258,22 +311,9 @@ public partial class ScenarioFile
         var zAttr = reader.GetAttribute("z");
         var rotAttr = reader.GetAttribute("rot");
 
-        byte[] header = new byte[38];
-        var posBytes = new byte[12];
-        var rotBytes = new byte[36];
+        byte[] header = [];
         byte[]? h1Trail = null;
         uint? protoIndex = !string.IsNullOrEmpty(protoIndexAttr) ? uint.Parse(protoIndexAttr) : null;
-
-        if (!string.IsNullOrEmpty(xAttr)) BitConverter.TryWriteBytes(posBytes.AsSpan(0), float.Parse(xAttr));
-        if (!string.IsNullOrEmpty(yAttr)) BitConverter.TryWriteBytes(posBytes.AsSpan(4), float.Parse(yAttr));
-        if (!string.IsNullOrEmpty(zAttr)) BitConverter.TryWriteBytes(posBytes.AsSpan(8), float.Parse(zAttr));
-
-        if (!string.IsNullOrEmpty(rotAttr))
-        {
-            var parts = rotAttr.Split(',');
-            for (int i = 0; i < Math.Min(parts.Length, 9); i++)
-                BitConverter.TryWriteBytes(rotBytes.AsSpan(i * 4), float.Parse(parts[i]));
-        }
 
         var subSections = new List<(string marker, byte[] data)>();
 
@@ -287,8 +327,7 @@ public partial class ScenarioFile
                 {
                     case "H1Hdr":
                     {
-                        var decoded = Convert.FromBase64String(reader.ReadElementContentAsString().Trim());
-                        Array.Copy(decoded, header, Math.Min(decoded.Length, 38));
+                        header = Convert.FromBase64String(reader.ReadElementContentAsString().Trim());
                         break;
                     }
                     case "H1Trail":
@@ -321,28 +360,76 @@ public partial class ScenarioFile
         }
         else reader.Read();
 
-        if (!string.IsNullOrEmpty(playerAttr))
-            header[14] = byte.Parse(playerAttr);
+        // Patch player, position, rotation into the header at correct offsets
+        if (header.Length >= 22 && GetEntityOffsets(header, out int posOff, out int rotOff, out int enEnd))
+        {
+            if (!string.IsNullOrEmpty(playerAttr))
+                BinaryPrimitives.WriteInt32LittleEndian(header.AsSpan(14), int.Parse(playerAttr));
+
+            if (!string.IsNullOrEmpty(xAttr)) BitConverter.TryWriteBytes(header.AsSpan(posOff), float.Parse(xAttr));
+            if (!string.IsNullOrEmpty(yAttr)) BitConverter.TryWriteBytes(header.AsSpan(posOff + 4), float.Parse(yAttr));
+            if (!string.IsNullOrEmpty(zAttr)) BitConverter.TryWriteBytes(header.AsSpan(posOff + 8), float.Parse(zAttr));
+
+            if (!string.IsNullOrEmpty(rotAttr))
+            {
+                var parts = rotAttr.Split(',');
+                for (int i = 0; i < Math.Min(parts.Length, 9); i++)
+                    BitConverter.TryWriteBytes(header.AsSpan(rotOff + i * 4), float.Parse(parts[i]));
+            }
+
+            // Patch protoIndex into inline P1 within trail (old format: no named P1 sub-sections)
+            if (protoIndex.HasValue && subSections.All(s => s.marker != "P1") && h1Trail != null && h1Trail.Length >= 8)
+            {
+                BinaryPrimitives.WriteUInt32LittleEndian(h1Trail.AsSpan(0), protoIndex.Value);
+                BinaryPrimitives.WriteUInt32LittleEndian(h1Trail.AsSpan(4), protoIndex.Value);
+            }
+        }
+        else
+        {
+            // Legacy fallback: old 38-byte header format (for XMLs exported before this change)
+            if (header.Length == 0) header = new byte[38];
+            if (header.Length <= 38)
+            {
+                if (!string.IsNullOrEmpty(playerAttr) && header.Length > 14)
+                    header[14] = byte.Parse(playerAttr);
+            }
+
+            // Write position/rotation as separate blocks after header (legacy layout)
+            using var legacyMs = new MemoryStream();
+            legacyMs.Write(header);
+
+            var posBytes = new byte[12];
+            var rotBytes = new byte[36];
+            if (!string.IsNullOrEmpty(xAttr)) BitConverter.TryWriteBytes(posBytes.AsSpan(0), float.Parse(xAttr));
+            if (!string.IsNullOrEmpty(yAttr)) BitConverter.TryWriteBytes(posBytes.AsSpan(4), float.Parse(yAttr));
+            if (!string.IsNullOrEmpty(zAttr)) BitConverter.TryWriteBytes(posBytes.AsSpan(8), float.Parse(zAttr));
+            if (!string.IsNullOrEmpty(rotAttr))
+            {
+                var parts = rotAttr.Split(',');
+                for (int i = 0; i < Math.Min(parts.Length, 9); i++)
+                    BitConverter.TryWriteBytes(rotBytes.AsSpan(i * 4), float.Parse(parts[i]));
+            }
+            legacyMs.Write(posBytes);
+            legacyMs.Write(rotBytes);
+
+            WriteSubSectionsAndTrail(legacyMs, subSections, h1Trail);
+            return legacyMs.ToArray();
+        }
 
         using var ms = new MemoryStream();
         ms.Write(header);
-        ms.Write(posBytes);
-        ms.Write(rotBytes);
 
-        foreach (var (marker, sectionData) in subSections)
-        {
-            ms.WriteByte((byte)marker[0]);
-            ms.WriteByte((byte)marker[1]);
-            var sizeBytes = new byte[4];
-            BinaryPrimitives.WriteUInt32LittleEndian(sizeBytes, (uint)sectionData.Length);
-            ms.Write(sizeBytes);
-            ms.Write(sectionData);
-        }
-
-        if (h1Trail != null)
-            ms.Write(h1Trail);
-
+        WriteSubSectionsAndTrail(ms, subSections, h1Trail);
         return ms.ToArray();
+    }
+
+    static void WriteSubSectionsAndTrail(MemoryStream ms, List<(string marker, byte[] data)> subSections, byte[]? trail)
+    {
+        using var bw = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true);
+        foreach (var (marker, data) in subSections)
+            WriteSubSection(bw, marker, data);
+        if (trail != null)
+            ms.Write(trail);
     }
 
     static ScenarioSection ReadTmXml(XmlReader reader)

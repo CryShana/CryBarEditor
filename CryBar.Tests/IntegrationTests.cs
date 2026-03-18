@@ -1281,5 +1281,53 @@ public class IntegrationTests
         Assert.True(failures.Count == 0, $"XML roundtrip failures:\n{string.Join("\n", failures)}");
     }
 
+    [SkippableFact]
+    public void ScenarioFile_ProtoIndex_Extraction()
+    {
+        // Test hoplite scenario (new format, EN size 80, named P1)
+        var hoplitePath = @"C:\Users\adamv\Games\Age of Mythology Retold\76561198066415280\scenario\test-empty-hoplite.mythscn";
+        Skip.If(!File.Exists(hoplitePath), "test-empty-hoplite.mythscn not found");
+
+        var hopliteXml = ParseScenarioXml(hoplitePath);
+        var entities = hopliteXml.GetElementsByTagName("Entity");
+        Assert.True(entities.Count >= 1, "Expected at least 1 entity");
+        var hopliteEntity = (XmlElement)entities[0]!;
+        var protoIdx = hopliteEntity.GetAttribute("protoIndex");
+        Assert.False(string.IsNullOrEmpty(protoIdx), "protoIndex missing on hoplite entity");
+        // Hoplite is index 58 in TM[0]
+        Assert.Equal("58", protoIdx);
+
+        // Test campaign scenario (old format, EN size 76, inline P1)
+        var campaignFiles = FindScenarioFiles();
+        Skip.If(campaignFiles.Length == 0, "No campaign files found");
+        var fott18 = campaignFiles.FirstOrDefault(f => Path.GetFileName(f) == "fott18.mythscn");
+        Skip.If(fott18 == null, "fott18.mythscn not found");
+
+        var fott18Xml = ParseScenarioXml(fott18);
+        var fottEntities = fott18Xml.GetElementsByTagName("Entity");
+        Assert.True(fottEntities.Count > 0, "Expected entities in fott18");
+        // Verify protoIndex is present and not all zeros
+        bool hasNonZero = false;
+        for (int i = 0; i < Math.Min(fottEntities.Count, 50); i++)
+        {
+            var ent = (XmlElement)fottEntities[i]!;
+            var pi = ent.GetAttribute("protoIndex");
+            Assert.False(string.IsNullOrEmpty(pi), $"Entity {i} missing protoIndex");
+            if (pi != "0") hasNonZero = true;
+        }
+        Assert.True(hasNonZero, "All protoIndex values are 0 — likely still reading fake P1");
+    }
+
+    static XmlDocument ParseScenarioXml(string path)
+    {
+        var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(path))!;
+        var scenario = new ScenarioFile(decompressed);
+        Assert.True(scenario.Parsed);
+        var xml = scenario.ToXml();
+        var doc = new XmlDocument();
+        doc.LoadXml(xml);
+        return doc;
+    }
+
     #endregion
 }

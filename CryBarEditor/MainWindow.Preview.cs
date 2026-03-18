@@ -331,7 +331,7 @@ public partial class MainWindow
                     {
                         var scenario = new ScenarioFile(mem);
                         if (scenario.Parsed)
-                            return (scenario.ToXml(), ".xml", "(AoM Scenario, converted to XML)");
+                            return (ScenarioFile.StripBinaryForPreview(scenario.ToXml()), ".xml", "(AoM Scenario, converted to XML)");
                         return ("Failed to parse scenario file", ".txt", "");
                     });
                     PreviewedFileNote = scenNote;
