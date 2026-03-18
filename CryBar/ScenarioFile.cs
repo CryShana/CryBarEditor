@@ -111,7 +111,9 @@ public partial class ScenarioFile
         if (!Parsed) throw new InvalidOperationException("Cannot convert unparsed scenario");
 
         var settings = new XmlWriterSettings { Indent = true, IndentChars = "\t", OmitXmlDeclaration = false, NewLineHandling = NewLineHandling.Entitize };
-        var sb = new StringBuilder();
+        var totalBytes = 0L;
+        foreach (var s in Sections) totalBytes += s.Data.Length;
+        var sb = new StringBuilder(Math.Max(1024, (int)Math.Min(totalBytes * 2, 50_000_000)));
         using var writer = XmlWriter.Create(sb, settings);
 
         writer.WriteStartDocument();
@@ -435,6 +437,16 @@ public partial class ScenarioFile
     {
         foreach (var p in parts)
             bw.Write(float.Parse(p));
+    }
+
+    static bool IsBase64Content(string text)
+    {
+        foreach (var c in text)
+        {
+            if (char.IsLetter(c) || c == '+' || c == '/' || c == '=')
+                return true;
+        }
+        return false;
     }
 
     static bool TryReadUTF16(ReadOnlySpan<byte> data, int offset, out string value, out int newOffset)

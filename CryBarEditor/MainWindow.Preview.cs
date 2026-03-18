@@ -325,18 +325,17 @@ public partial class MainWindow
                     HideTmmPreview();
                     await SetImagePreview(null);
 
-                    var scenario = new ScenarioFile(data.Memory);
-                    if (scenario.Parsed)
+                    var mem = data.Memory;
+                    var (scenText, scenExt, scenNote) = await Task.Run(() =>
                     {
-                        PreviewedFileNote = "(AoM Scenario, converted to XML)";
-                        text = scenario.ToXml();
-                        ext = ".xml";
-                    }
-                    else
-                    {
-                        text = "Failed to parse scenario file";
-                        ext = ".txt";
-                    }
+                        var scenario = new ScenarioFile(mem);
+                        if (scenario.Parsed)
+                            return (scenario.ToXml(), ".xml", "(AoM Scenario, converted to XML)");
+                        return ("Failed to parse scenario file", ".txt", "");
+                    });
+                    PreviewedFileNote = scenNote;
+                    text = scenText;
+                    ext = scenExt;
                 }
                 else if (ext == ".zip")
                 {
@@ -574,7 +573,7 @@ public partial class MainWindow
 
     void InstallFolding(string ext, int textLength)
     {
-        const int FOLDING_MAX_CHARS = 2_000_000; // skip XML folding on huge files — it's also slow
+        const int FOLDING_MAX_CHARS = 5_000_000; // skip XML folding on huge files — it's also slow
         if (ext is not ".xml" || textLength > FOLDING_MAX_CHARS) return;
 
         _foldingManager = FoldingManager.Install(_txtEditor.TextArea);
