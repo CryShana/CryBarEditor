@@ -111,6 +111,7 @@ public partial class MainWindow
 
         PreviewedFileName = Path.GetFileName(relative_path);
         PreviewedFileNote = "";
+        ShowExperimentalWarning = false;
 
         // Cancel any in-progress background document build from a previous preview
         _docLoadCts?.Cancel();
@@ -334,6 +335,7 @@ public partial class MainWindow
                         return ("Failed to parse scenario file", ".txt", "");
                     });
                     PreviewedFileNote = scenNote;
+                    ShowExperimentalWarning = scenExt == ".xml";
                     text = scenText;
                     ext = scenExt;
                 }

@@ -410,11 +410,22 @@
 								   Cursor="Hand" PointerPressed="ExportDirectoryPath_Click"
 								   TextTrimming="CharacterEllipsis" />
 					</DockPanel>
-					<TextBlock DockPanel.Dock="Top" Margin="0,10,0,0" FontSize="16">
-						<Run Text="Previewing: " FontWeight="Bold" />
-						<Run Text="{Binding PreviewedFileName}" Foreground="#ffe6a1" />
-						<Run Text="{Binding PreviewedFileNote}" Foreground="#edc042" />
-					</TextBlock>
+					<StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,10,0,0">
+						<TextBlock FontSize="16">
+							<Run Text="Previewing: " FontWeight="Bold" />
+							<Run Text="{Binding PreviewedFileName}" Foreground="#ffe6a1" />
+							<Run Text="{Binding PreviewedFileNote}" Foreground="#edc042" />
+						</TextBlock>
+						<StackPanel Orientation="Horizontal" Margin="8,0,0,0"
+									IsVisible="{Binding ShowExperimentalWarning}"
+									VerticalAlignment="Center">
+							<micons:MaterialIcon Kind="AlertOutline" Width="18" Height="18"
+												  Foreground="#e8a33e" VerticalAlignment="Center" />
+							<TextBlock Text="EXPERIMENTAL (partial parsing)" Foreground="#e8a33e"
+									   FontSize="12" FontWeight="Bold" Margin="3,0,0,0"
+									   VerticalAlignment="Center" />
+						</StackPanel>
+					</StackPanel>
 					<SelectableTextBlock DockPanel.Dock="Top"
 							   Text="{Binding PreviewedFileData}"
 							   Margin="0,3,0,13" Foreground="Gray"  />

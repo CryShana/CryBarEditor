@@ -33,6 +33,7 @@ public partial class MainWindow : SimpleWindow
     string _previewedFileName = "";
     string _previewedFileNote = "";
     string _previewedFileData = "";
+    bool _showExperimentalWarning;
     string? _latestVersion = null;
     int _contextSelectedItemsCount = 0;
 
@@ -208,6 +209,7 @@ public partial class MainWindow : SimpleWindow
     public string PreviewedFileName { get => string.IsNullOrEmpty(_previewedFileName) ? "No file selected" : _previewedFileName; set { _previewedFileName = value; OnPropertyChanged(nameof(PreviewedFileName)); } }
     public string PreviewedFileNote { get => _previewedFileNote; set { _previewedFileNote = value; OnSelfChanged(); } }
     public string PreviewedFileData { get => _previewedFileData; set { _previewedFileData = value; OnSelfChanged(); } }
+    public bool ShowExperimentalWarning { get => _showExperimentalWarning; set { _showExperimentalWarning = value; OnSelfChanged(); } }
     public bool SelectedIsDDT =>
         Path.GetExtension(SelectedRootFileEntry?.RelativePath ?? "").ToLower() == ".ddt" ||
         Path.GetExtension(SelectedBarEntry?.RelativePath ?? "").ToLower() == ".ddt";
