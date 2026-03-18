@@ -38,6 +38,8 @@ The purpose of this tool is to enable fast and easy modding of Age of Mythology 
   - Convert TMM -> OBJ (optionally with materials)
   - Convert TMM -> glTF (optionally with materials)
   - Convert image -> DDT
+  - Convert mythscn -> XML
+  - Convert XML -> mythscn
   - Compress with Alz4/L33t
   - Decompress file with Alz4/L33t
 - Easily create additive mod for files that support it with right click
