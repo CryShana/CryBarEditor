@@ -26,6 +26,7 @@ The purpose of this tool is to enable fast and easy modding of Age of Mythology 
     - TMA (decoding)
 - Rich preview for TMM models (bones, mesh groups, materials, attachments) and TMM.DATA (vertex/triangle stats)
 - Syntax highlighting for common formats (json,xml,ini,xs,...) and folding support for XML
+- Partial **Mythscn (Scenario)** support, can convert to editable XML and back to scenario
 
 ### Extras
 - Replace existing DDT image with custom image on export (params are copied) for easy texture manipulation

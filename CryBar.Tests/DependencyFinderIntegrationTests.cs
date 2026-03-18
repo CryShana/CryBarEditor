@@ -7,6 +7,7 @@ namespace CryBar.Tests;
 /// Validates against examples from example_dependencies.md.
 /// Skipped when game is not installed.
 /// </summary>
+[Collection("Integration")]
 public class DependencyFinderIntegrationTests
 {
     static readonly string GamePath =

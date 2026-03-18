@@ -383,7 +383,7 @@ public partial class MainWindow : SimpleWindow
 
                     Dispatcher.UIThread.Post(async () =>
                     {
-                        var prompt = new Prompt(PromptType.Information, "Version " + s.Result.version, "New version is available for download:\n\n" + s.Result.link + "");
+                        var prompt = new Prompt(PromptType.Information, "Version " + s.Result.version, "New version is available for download:") { LinkUrl = s.Result.link };
                         await prompt.ShowDialog(this);
                     });
                 }
@@ -710,16 +710,17 @@ public partial class MainWindow : SimpleWindow
         await prompt.ShowDialog(this);
     }
 
-    async Task ShowSuccess(string text)
+    async Task ShowSuccess(string text, string? openFolderPath = null)
     {
-        var prompt = new Prompt(PromptType.Success, "Success", text);
+        var prompt = new Prompt(PromptType.Success, "Success", text) { OpenFolderPath = openFolderPath };
         await prompt.ShowDialog(this);
     }
 
-    async Task ShowProgress(string title, Progress<string?> progress)
+    Prompt ShowProgress(string title, Progress<string?> progress)
     {
         var prompt = new Prompt(PromptType.Progress, title, progress_reporter: progress);
-        await prompt.ShowDialog(this);
+        _ = prompt.ShowDialog(this);
+        return prompt;
     }
     #endregion
 

@@ -320,6 +320,23 @@ public partial class MainWindow
                         PreviewedFileNote = "TMM Data (no companion)";
                     }
                 }
+                else if (ext == ".mythscn")
+                {
+                    HideTmmPreview();
+                    await SetImagePreview(null);
+
+                    var mem = data.Memory;
+                    var (scenText, scenExt, scenNote) = await Task.Run(() =>
+                    {
+                        var scenario = new ScenarioFile(mem);
+                        if (scenario.Parsed)
+                            return (scenario.ToXml(), ".xml", "(AoM Scenario, converted to XML)");
+                        return ("Failed to parse scenario file", ".txt", "");
+                    });
+                    PreviewedFileNote = scenNote;
+                    text = scenText;
+                    ext = scenExt;
+                }
                 else if (ext == ".zip")
                 {
                     HideTmmPreview();
@@ -485,7 +502,7 @@ public partial class MainWindow
             _docReadyTask = Task.CompletedTask;
             _txtEditor.Document = cachedDoc!;
             _textMateInstallation.SetGrammar(scope);
-            InstallFolding(ext, cachedDoc!.TextLength);
+            InstallFolding(ext);
             ScrollEditorToTop();
             return;
         }
@@ -521,7 +538,7 @@ public partial class MainWindow
                 _textMateInstallation.SetGrammar(scope);
                 if (cacheKey != null) _docCache.Add(cacheKey, fullDoc);
 
-                InstallFolding(ext, text.Length);
+                InstallFolding(ext);
                 ScrollEditorToTop();
             }
             finally
@@ -537,7 +554,7 @@ public partial class MainWindow
         _txtEditor.Document = doc;
         if (cacheKey != null) _docCache.Add(cacheKey, doc);
         _textMateInstallation.SetGrammar(scope);
-        InstallFolding(ext, text.Length);
+        InstallFolding(ext);
         ScrollEditorToTop();
     }
 
@@ -554,10 +571,9 @@ public partial class MainWindow
         }));
     }
 
-    void InstallFolding(string ext, int textLength)
+    void InstallFolding(string ext)
     {
-        const int FOLDING_MAX_CHARS = 2_000_000; // skip XML folding on huge files — it's also slow
-        if (ext is not ".xml" || textLength > FOLDING_MAX_CHARS) return;
+        if (ext is not ".xml") return;
 
         _foldingManager = FoldingManager.Install(_txtEditor.TextArea);
         var strategy = new XmlFoldingStrategy();
