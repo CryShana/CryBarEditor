@@ -212,6 +212,14 @@ public partial class ScenarioFile
             if (marker == "P1")
             {
                 writer.WriteStartElement("P1");
+                WriteP1Attributes(writer, innerData);
+                writer.WriteString(Convert.ToBase64String(innerData));
+                writer.WriteEndElement();
+            }
+            else if (marker == "P2")
+            {
+                writer.WriteStartElement("P2");
+                WriteP2Attributes(writer, innerData);
                 writer.WriteString(Convert.ToBase64String(innerData));
                 writer.WriteEndElement();
             }
@@ -231,14 +239,28 @@ public partial class ScenarioFile
         {
             var trail = h1[off..];
             string? note = null;
+            bool isOldFormat = off == enEnd; // old format: no named sub-sections, P1/P2 are inline in trail
+            int p1End = isOldFormat && trail.Length >= 77 ? CalcP1End(trail) : -1;
 
-            // Try to extract note from trail structure
-            // Old format trail: P1 inline + P2 inline + P3(magic*4 + pad20 + hasNote + [note] + magic + pad18) + 2x ConstP1
-            // New format trail: P3(magic*4 + pad20 + hasNote + [note] + magic + pad18) + 2x ConstP1
-            // Note extraction: scan for hasNote byte in the P3 area
-            int noteSearchOff = off == enEnd ? -1 : 0; // for new format, P3 starts at trail beginning
-            if (noteSearchOff == 0 && trail.Length >= 51)
+            if (p1End > 0 && p1End + 15 <= trail.Length)
             {
+                // Old format: trail = inline P1 + P2 + P3 + 2x ConstP1. Walk past P2 to find P3 note.
+                var p2Count = BinaryPrimitives.ReadInt32LittleEndian(trail.Slice(p1End + 5));
+                var p2End = p1End + 15 + Math.Max(0, Math.Min(p2Count, 10000)) * 4;
+                if (p2End + 37 <= trail.Length)
+                {
+                    int tOff = p2End + 16 + 20; // P3: 4 magic values (16 bytes) + Pad0<20>
+                    if (tOff < trail.Length)
+                    {
+                        byte hasNote = trail[tOff++];
+                        if (hasNote != 0 && TryReadUTF16(trail, tOff, out var noteStr, out _))
+                            note = noteStr;
+                    }
+                }
+            }
+            else if (!isOldFormat && trail.Length >= 51)
+            {
+                // New format: P3 starts at trail beginning (P1/P2 are named sub-sections above)
                 int tOff = 16 + 20; // skip P3: 4 magic values (16 bytes) + Pad0<20>
                 byte hasNote = trail[tOff++];
                 if (hasNote != 0 && TryReadUTF16(trail, tOff, out var noteStr, out _))
@@ -247,6 +269,12 @@ public partial class ScenarioFile
 
             writer.WriteStartElement("H1Trail");
             if (!string.IsNullOrEmpty(note)) writer.WriteAttributeString("note", note);
+            if (p1End > 0)
+            {
+                WriteP1Attributes(writer, trail);
+                if (p1End + 5 <= trail.Length)
+                    WriteP2Attributes(writer, trail[p1End..]);
+            }
             writer.WriteString(Convert.ToBase64String(trail));
             writer.WriteEndElement();
         }
@@ -331,17 +359,43 @@ public partial class ScenarioFile
                         break;
                     }
                     case "H1Trail":
+                    {
+                        var trailScaleAttr = reader.GetAttribute("scale");
+                        var trailHpAttr = reader.GetAttribute("hp");
+                        var trailGarrisonInAttr = reader.GetAttribute("garrisonedIn");
                         h1Trail = Convert.FromBase64String(reader.ReadElementContentAsString().Trim());
+                        // Patch inline P1 fields (old format: P1/P2 are inline in trail)
+                        PatchP1Fields(h1Trail, trailScaleAttr, trailHpAttr);
+                        // Patch inline P2 garrisonedIn
+                        if (!string.IsNullOrEmpty(trailGarrisonInAttr))
+                        {
+                            var p1End = CalcP1End(h1Trail);
+                            if (p1End > 0 && p1End + 5 <= h1Trail.Length)
+                                BinaryPrimitives.WriteInt32LittleEndian(h1Trail.AsSpan(p1End + 1), int.Parse(trailGarrisonInAttr));
+                        }
                         break;
+                    }
                     case "P1":
                     {
+                        var scaleAttr = reader.GetAttribute("scale");
+                        var hpAttr = reader.GetAttribute("hp");
                         var sectionData = Convert.FromBase64String(reader.ReadElementContentAsString().Trim());
                         if (protoIndex.HasValue && sectionData.Length >= 8)
                         {
                             BinaryPrimitives.WriteUInt32LittleEndian(sectionData, protoIndex.Value);
                             BinaryPrimitives.WriteUInt32LittleEndian(sectionData.AsSpan(4), protoIndex.Value);
                         }
+                        PatchP1Fields(sectionData, scaleAttr, hpAttr);
                         subSections.Add(("P1", sectionData));
+                        break;
+                    }
+                    case "P2":
+                    {
+                        var garrisonInAttr = reader.GetAttribute("garrisonedIn");
+                        var sectionData = Convert.FromBase64String(reader.ReadElementContentAsString().Trim());
+                        if (!string.IsNullOrEmpty(garrisonInAttr) && sectionData.Length >= 5)
+                            BinaryPrimitives.WriteInt32LittleEndian(sectionData.AsSpan(1), int.Parse(garrisonInAttr));
+                        subSections.Add(("P2", sectionData));
                         break;
                     }
                     case "S":
@@ -501,5 +555,182 @@ public partial class ScenarioFile
         }
 
         return strings;
+    }
+
+    /// <summary>
+    /// Writes decoded P1 attributes: scale, hp, and optionally held resources.
+    /// P1 binary layout (from AomrLib UnitModelP1):
+    ///   [0] nameIdx(4) [4] nameIdxCopy(4) [8] zero(1) [9] scale(12) [21] magic-1(4)
+    ///   [25] posY(4) [29] unk5(4) [33] 0xFFFF(2) [35] zeros(16) [51] unk6A(4)
+    ///   [55] hp(4) [59] zeros(8) [67] unk7(4) [71] magic1.0(4) [75] unk8(1)
+    ///   [76] hasBd(1) [77] if hasBd: BD section [?] unk9(4) [?] hasResources(1)
+    ///   if hasResources: unitIdCopy2(4) + ResourceBlock(24: magic4+gold+wood+food+favor+total) + zeros(1) + pad0xFF(12)
+    ///   [?] unk14(4)
+    /// </summary>
+    static void WriteP1Attributes(XmlWriter writer, ReadOnlySpan<byte> p1)
+    {
+        if (p1.Length < 77) return;
+
+        var scaleX = BitConverter.ToSingle(p1.Slice(9, 4));
+        var scaleY = BitConverter.ToSingle(p1.Slice(13, 4));
+        var scaleZ = BitConverter.ToSingle(p1.Slice(17, 4));
+        writer.WriteAttributeString("scale", $"{FormatFloat(scaleX)},{FormatFloat(scaleY)},{FormatFloat(scaleZ)}");
+
+        var hp = BitConverter.ToSingle(p1.Slice(55, 4));
+        writer.WriteAttributeString("hp", FormatFloat(hp));
+
+        // Use shared walker to find resource offset
+        if (!WalkP1Tail(p1, out _, out int resOff) || resOff < 0) return;
+
+        // ResourceBlock: magic(4) + gold(4) + wood(4) + food(4) + favor(4) + total(4)
+        if (resOff + 4 + 24 > p1.Length) return;
+        resOff += 4; // skip UnitIdCopy2
+        resOff += 4; // skip magic (expected 4)
+        writer.WriteAttributeString("resGold", FormatFloat(BitConverter.ToSingle(p1.Slice(resOff, 4))));
+        writer.WriteAttributeString("resWood", FormatFloat(BitConverter.ToSingle(p1.Slice(resOff + 4, 4))));
+        writer.WriteAttributeString("resFood", FormatFloat(BitConverter.ToSingle(p1.Slice(resOff + 8, 4))));
+        writer.WriteAttributeString("resFavor", FormatFloat(BitConverter.ToSingle(p1.Slice(resOff + 12, 4))));
+    }
+
+    /// <summary>
+    /// Writes decoded P2 attributes: garrisonedIn, garrisonedUnits.
+    /// P2 binary layout (from AomrLib UnitModelP2):
+    ///   [0] unk16(1) [1] garrisonedIn(4, -1=none) [5] count(4) [9] units(4*N)
+    ///   [9+4N] pad(1) [10+4N] unk17(1) [11+4N] magic-1(4)
+    /// </summary>
+    static void WriteP2Attributes(XmlWriter writer, ReadOnlySpan<byte> p2)
+    {
+        if (p2.Length < 5) return;
+
+        var garrisonedIn = BinaryPrimitives.ReadInt32LittleEndian(p2.Slice(1));
+        writer.WriteAttributeString("garrisonedIn", garrisonedIn.ToString());
+
+        if (p2.Length < 9) return;
+        var count = BinaryPrimitives.ReadInt32LittleEndian(p2.Slice(5));
+        if (count > 0 && count < 10000 && 9 + count * 4 <= p2.Length)
+        {
+            var sb = new StringBuilder();
+            for (int i = 0; i < count; i++)
+            {
+                if (i > 0) sb.Append(',');
+                sb.Append(BinaryPrimitives.ReadInt32LittleEndian(p2.Slice(9 + i * 4)));
+            }
+            writer.WriteAttributeString("garrisonedUnits", sb.ToString());
+        }
+    }
+
+    /// <summary>
+    /// Patches P1 binary data with edited scale and hp values from XML attributes.
+    /// </summary>
+    static void PatchP1Fields(byte[] p1, string? scaleAttr, string? hpAttr)
+    {
+        if (!string.IsNullOrEmpty(scaleAttr) && p1.Length >= 21)
+        {
+            var parts = scaleAttr.Split(',');
+            if (parts.Length == 3)
+            {
+                BitConverter.TryWriteBytes(p1.AsSpan(9), float.Parse(parts[0]));
+                BitConverter.TryWriteBytes(p1.AsSpan(13), float.Parse(parts[1]));
+                BitConverter.TryWriteBytes(p1.AsSpan(17), float.Parse(parts[2]));
+            }
+        }
+
+        if (!string.IsNullOrEmpty(hpAttr) && p1.Length >= 59)
+            BitConverter.TryWriteBytes(p1.AsSpan(55), float.Parse(hpAttr));
+    }
+
+    /// <summary>
+    /// Walks the variable-length tail of P1 data (from offset 77 onward).
+    /// Returns true if the walk succeeded. Sets <paramref name="p1End"/> to the byte after unk14,
+    /// and <paramref name="resourceOff"/> to the start of the resource block (UnitIdCopy2), or -1 if none.
+    /// P1 tail layout: hasBd(1) [BD section] unk9(4) hasRes(1) [UnitIdCopy2(4)+ResourceBlock(24)+zeros(1)+pad(12)] unk14(4)
+    /// </summary>
+    static bool WalkP1Tail(ReadOnlySpan<byte> p1, out int p1End, out int resourceOff)
+    {
+        p1End = -1;
+        resourceOff = -1;
+        if (p1.Length < 77) return false;
+        int off = 77;
+        var hasBd = p1[76] != 0;
+        if (hasBd)
+        {
+            if (off + 6 > p1.Length) return false;
+            var bdSize = (int)BinaryPrimitives.ReadUInt32LittleEndian(p1.Slice(off + 2));
+            off += 6 + bdSize;
+        }
+        if (off + 5 > p1.Length) return false;
+        off += 4; // _unk9
+        var hasRes = p1[off++] != 0;
+        if (hasRes)
+        {
+            resourceOff = off;
+            off += 4 + 24 + 1 + 12; // UnitIdCopy2 + ResourceBlock + zeros(1) + pad0xFF(12)
+        }
+        if (off + 4 > p1.Length) return false;
+        off += 4; // unk14
+        p1End = off;
+        return true;
+    }
+
+    /// <summary>Convenience wrapper returning just the P1 end offset, or -1.</summary>
+    static int CalcP1End(ReadOnlySpan<byte> p1) => WalkP1Tail(p1, out var end, out _) ? end : -1;
+
+    /// <summary>
+    /// Writes KB (army data) section with decoded army names as XML comments.
+    /// KB binary: typed sub-section headers + KA army entries with String8 names.
+    /// </summary>
+    static void WriteKBXml(XmlWriter writer, ScenarioSection section)
+    {
+        var data = section.Data.AsSpan();
+        var armies = ScanString8Values(data);
+
+        writer.WriteStartElement("KB");
+        if (armies.Count > 0)
+            writer.WriteAttributeString("armies", string.Join(",", armies));
+        if (data.Length > 0)
+            writer.WriteString(Convert.ToBase64String(data));
+        writer.WriteEndElement();
+    }
+
+    // armies attribute is informational only — base64 body is source of truth
+    static ScenarioSection ReadKBXml(XmlReader reader) => ReadSectionXml(reader);
+
+    /// <summary>
+    /// Scans binary data for String8 patterns (4-byte length + printable ASCII + null terminator).
+    /// Used to extract army names from KB sections.
+    /// </summary>
+    static List<string> ScanString8Values(ReadOnlySpan<byte> data)
+    {
+        var results = new List<string>();
+
+        // Walk typed sub-sections to find where structured data ends
+        int off = 0;
+        while (off + 6 <= data.Length)
+        {
+            byte b0 = data[off], b1 = data[off + 1];
+            if (b0 < 0x20 || b0 > 0x7E || b1 < 0x20 || b1 > 0x7E) break;
+            var sz = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(off + 2));
+            if (sz > MaxSubSectionSize || off + 6 + sz > data.Length) break;
+            off += 6 + (int)sz;
+        }
+
+        // Scan remaining data for String8 patterns
+        for (int i = off; i < data.Length - 4; i++)
+        {
+            var len = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(i));
+            if (len < 3 || len > 200 || i + 4 + len > data.Length) continue;
+            if (data[i + 4 + len - 1] != 0) continue;
+            bool printable = true;
+            for (int j = 0; j < len - 1; j++)
+            {
+                if (data[i + 4 + j] < 0x20 || data[i + 4 + j] > 0x7E) { printable = false; break; }
+            }
+            if (!printable) continue;
+            var str = Encoding.ASCII.GetString(data.Slice(i + 4, len - 1));
+            results.Add(str);
+            i += 4 + len - 1; // skip past this string
+        }
+
+        return results;
     }
 }

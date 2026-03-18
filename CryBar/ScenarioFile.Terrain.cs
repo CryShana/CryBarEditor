@@ -47,8 +47,20 @@ public partial class ScenarioFile
             off += 6;
             if (off + (int)tmSize <= data.Length)
             {
+                var tmData = data.Slice(off, (int)tmSize);
                 writer.WriteStartElement("TnTM");
-                writer.WriteString(Convert.ToBase64String(data.Slice(off, (int)tmSize)));
+                // Decode lighting preset: unk1(4) + unk2(4) + String16(preset)
+                if (tmData.Length >= 12)
+                {
+                    int tmOff = 8; // skip unk1, unk2
+                    var charCount = BinaryPrimitives.ReadInt32LittleEndian(tmData.Slice(tmOff));
+                    if (charCount > 0 && charCount < 1000 && tmOff + 4 + charCount * 2 <= tmData.Length)
+                    {
+                        var preset = Encoding.Unicode.GetString(tmData.Slice(tmOff + 4, charCount * 2));
+                        writer.WriteAttributeString("lightingPreset", preset);
+                    }
+                }
+                writer.WriteString(Convert.ToBase64String(tmData));
                 writer.WriteEndElement();
                 off += (int)tmSize;
             }
@@ -167,8 +179,24 @@ public partial class ScenarioFile
         // Remaining opaque data (CM, UM, EmbeddedImage)
         if (off < t3.Length)
         {
+            var tail = t3[off..];
             writer.WriteStartElement("T3Tail");
-            writer.WriteString(Convert.ToBase64String(t3[off..]));
+            // Scan for embedded minimap image: magic=1(4) + width(4) + height(4) + magic=6(4) + pixelCount(4)
+            for (int i = 0; i < tail.Length - 20; i++)
+            {
+                if (BinaryPrimitives.ReadInt32LittleEndian(tail.Slice(i)) != 1) continue;
+                if (BinaryPrimitives.ReadInt32LittleEndian(tail.Slice(i + 12)) != 6) continue;
+                var w = BinaryPrimitives.ReadInt32LittleEndian(tail.Slice(i + 4));
+                var h = BinaryPrimitives.ReadInt32LittleEndian(tail.Slice(i + 8));
+                var pxBytes = BinaryPrimitives.ReadInt32LittleEndian(tail.Slice(i + 16));
+                if (w > 0 && w <= 2048 && h > 0 && h <= 2048 && pxBytes == w * h * 4)
+                {
+                    writer.WriteAttributeString("minimapWidth", w.ToString());
+                    writer.WriteAttributeString("minimapHeight", h.ToString());
+                    break;
+                }
+            }
+            writer.WriteString(Convert.ToBase64String(tail));
             writer.WriteEndElement();
         }
     }

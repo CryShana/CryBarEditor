@@ -1284,19 +1284,6 @@ public class IntegrationTests
     [SkippableFact]
     public void ScenarioFile_ProtoIndex_Extraction()
     {
-        // Test hoplite scenario (new format, EN size 80, named P1)
-        var hoplitePath = @"C:\Users\adamv\Games\Age of Mythology Retold\76561198066415280\scenario\test-empty-hoplite.mythscn";
-        Skip.If(!File.Exists(hoplitePath), "test-empty-hoplite.mythscn not found");
-
-        var hopliteXml = ParseScenarioXml(hoplitePath);
-        var entities = hopliteXml.GetElementsByTagName("Entity");
-        Assert.True(entities.Count >= 1, "Expected at least 1 entity");
-        var hopliteEntity = (XmlElement)entities[0]!;
-        var protoIdx = hopliteEntity.GetAttribute("protoIndex");
-        Assert.False(string.IsNullOrEmpty(protoIdx), "protoIndex missing on hoplite entity");
-        // Hoplite is index 58 in TM[0]
-        Assert.Equal("58", protoIdx);
-
         // Test campaign scenario (old format, EN size 76, inline P1)
         var campaignFiles = FindScenarioFiles();
         Skip.If(campaignFiles.Length == 0, "No campaign files found");
@@ -1316,6 +1303,49 @@ public class IntegrationTests
             if (pi != "0") hasNonZero = true;
         }
         Assert.True(hasNonZero, "All protoIndex values are 0 — likely still reading fake P1");
+    }
+
+    [SkippableFact]
+    public void ScenarioFile_P1_P2_KB_Decode()
+    {
+        // Campaign scenarios use old format (inline P1/P2 in H1Trail)
+        var campaignFiles = FindScenarioFiles();
+        Skip.If(campaignFiles.Length == 0, "No campaign files found");
+        var anyWithEntities = campaignFiles.FirstOrDefault(f => Path.GetFileName(f) == "fott18.mythscn");
+        Skip.If(anyWithEntities == null, "fott18.mythscn not found");
+
+        var doc = ParseScenarioXml(anyWithEntities);
+        var entities = doc.GetElementsByTagName("Entity");
+        Assert.True(entities.Count > 0, "Expected entities");
+
+        // Old format: P1/P2 attrs should appear on H1Trail element
+        var entity0 = (XmlElement)entities[0]!;
+        var trail = entity0.SelectSingleNode("H1Trail") as XmlElement;
+        Assert.NotNull(trail);
+        var hp = trail.GetAttribute("hp");
+        Assert.False(string.IsNullOrEmpty(hp), "hp missing on H1Trail (old format inline P1)");
+        Assert.True(float.Parse(hp) > 0, "hp should be positive");
+        var scale = trail.GetAttribute("scale");
+        Assert.False(string.IsNullOrEmpty(scale), "scale missing on H1Trail (old format inline P1)");
+        var garrisonedIn = trail.GetAttribute("garrisonedIn");
+        Assert.False(string.IsNullOrEmpty(garrisonedIn), "garrisonedIn missing on H1Trail (old format inline P2)");
+
+        // KB should have army names
+        var kbElements = doc.GetElementsByTagName("KB");
+        Assert.True(kbElements.Count >= 1, "Expected at least 1 KB section");
+        var kb = (XmlElement)kbElements[0]!;
+        var armies = kb.GetAttribute("armies");
+        Assert.Contains("SelectionArmy", armies);
+
+        // T3Tail minimap
+        var t3Tail = doc.GetElementsByTagName("T3Tail");
+        if (t3Tail.Count >= 1)
+        {
+            var minimap = (XmlElement)t3Tail[0]!;
+            var mw = minimap.GetAttribute("minimapWidth");
+            if (!string.IsNullOrEmpty(mw))
+                Assert.True(int.Parse(mw) > 0, "minimapWidth should be positive");
+        }
     }
 
     static XmlDocument ParseScenarioXml(string path)

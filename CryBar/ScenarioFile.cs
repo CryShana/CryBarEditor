@@ -240,6 +240,7 @@ public partial class ScenarioFile
                 case "FH": WriteFhXml(writer, sub); break;
                 case "RN": WriteRnXml(writer, sub); break;
                 case "RM": WriteRmXml(writer, sub); break;
+                case "KB": WriteKBXml(writer, sub); break;
                 case "W1": WriteW1Xml(writer, sub); break;
                 case "W4": WriteW4Xml(writer, sub); break;
                 case "W5": WriteW5Xml(writer, sub); break;
@@ -303,6 +304,7 @@ public partial class ScenarioFile
                     case "FileHeader": subSections.Add(ReadFhXml(reader)); break;
                     case "MapInfo": subSections.Add(ReadRnXml(reader)); break;
                     case "RandomMap": subSections.Add(ReadRmXml(reader)); break;
+                    case "KB": subSections.Add(ReadKBXml(reader)); break;
                     case "Teams": subSections.Add(ReadW1Xml(reader)); break;
                     case "W4": subSections.Add(ReadW4Xml(reader)); break;
                     case "W5": subSections.Add(ReadW5Xml(reader)); break;
