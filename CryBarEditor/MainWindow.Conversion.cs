@@ -214,6 +214,108 @@ public partial class MainWindow
         }
     }
 
+    async void MenuItem_ConvertTRGtoXML(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var file = await PickFile(sender, "Convert TRG to XML", [new("AoM Trigger Export") { Patterns = ["*.trg"] }]);
+        if (file == null) return;
+
+        var out_file = PickOutFile(file, new_extension: ".xml", overwrite: true);
+        try
+        {
+            using var data = await PooledBuffer.FromFile(file);
+            using var decompressed = BarCompression.EnsureDecompressedPooled(data, out _);
+
+            var trg = new TriggerFile(decompressed.Memory);
+            if (!trg.Parsed) throw new InvalidDataException("Failed to parse trigger file");
+
+            var xml = trg.ToXml();
+            await File.WriteAllTextAsync(out_file, xml);
+
+            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file), Path.GetDirectoryName(out_file));
+        }
+        catch (Exception ex)
+        {
+            _ = ShowError("Failed to convert TRG to XML:\n" + ex.Message);
+        }
+    }
+
+    async void MenuItem_ConvertXMLtoTRG(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var file = await PickFile(sender, "Convert XML to TRG", [new("XML file") { Patterns = ["*.xml"] }]);
+        if (file == null) return;
+
+        var out_file = PickOutFile(file, new_extension: ".trg", overwrite: true);
+        try
+        {
+            var xml = await File.ReadAllTextAsync(file);
+            var trg = TriggerFile.FromXml(xml);
+            if (!trg.Parsed) throw new InvalidDataException("Failed to parse trigger XML");
+
+            var bytes = trg.ToBytes();
+            await File.WriteAllBytesAsync(out_file, bytes);
+
+            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file), Path.GetDirectoryName(out_file));
+        }
+        catch (Exception ex)
+        {
+            _ = ShowError("Failed to convert XML to TRG:\n" + ex.Message);
+        }
+    }
+
+    async void MenuItem_ConvertTRGtoXS(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var file = await PickFile(sender, "Convert TRG to XS", [new("AoM Trigger Export") { Patterns = ["*.trg"] }]);
+        if (file == null) return;
+
+        var out_file = PickOutFile(file, new_extension: ".xs", overwrite: true);
+        try
+        {
+            using var data = await PooledBuffer.FromFile(file);
+            using var decompressed = BarCompression.EnsureDecompressedPooled(data, out _);
+
+            var trg = new TriggerFile(decompressed.Memory);
+            if (!trg.Parsed) throw new InvalidDataException("Failed to parse trigger file");
+
+            var xs = ScenarioFile.ConvertTriggersXmlToXs(trg.ToXml());
+            await File.WriteAllTextAsync(out_file, xs);
+
+            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file), Path.GetDirectoryName(out_file));
+        }
+        catch (Exception ex)
+        {
+            _ = ShowError("Failed to convert TRG to XS:\n" + ex.Message);
+        }
+    }
+
+    async void MenuItem_ExtractTRGfromScenario(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var file = await PickFile(sender, "Extract TRG from Scenario", [new("AoM Scenario") { Patterns = ["*.mythscn"] }]);
+        if (file == null) return;
+
+        var out_file = PickOutFile(file, new_extension: ".trg", overwrite: true);
+        try
+        {
+            using var data = await PooledBuffer.FromFile(file);
+            using var decompressed = BarCompression.EnsureDecompressedPooled(data, out _);
+
+            var scenario = new ScenarioFile(decompressed.Memory);
+            if (!scenario.Parsed) throw new InvalidDataException("Failed to parse scenario file");
+
+            var trSection = scenario.FindSection("TR");
+            if (trSection == null) throw new InvalidDataException("Scenario has no trigger (TR) section");
+
+            // Direct binary conversion: strip zero1/zero2 header fields
+            var trg = TriggerFile.FromScenarioSection(trSection);
+            await File.WriteAllBytesAsync(out_file, trg.ToBytes());
+
+            _ = ShowSuccess("Extraction completed, new file:\n" + Path.GetFileName(out_file), Path.GetDirectoryName(out_file));
+        }
+        catch (Exception ex)
+        {
+            _ = ShowError("Failed to extract TRG from scenario:\n" + ex.Message);
+        }
+    }
+
     async void MenuItem_CompressAlz4(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         var file = await PickFile(sender, "Compress using Alz4");

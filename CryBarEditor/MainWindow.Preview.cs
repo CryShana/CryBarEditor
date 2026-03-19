@@ -339,6 +339,24 @@ public partial class MainWindow
                     text = scenText;
                     ext = scenExt;
                 }
+                else if (ext == ".trg")
+                {
+                    HideTmmPreview();
+                    await SetImagePreview(null);
+
+                    var mem = data.Memory;
+                    var (trgText, trgExt, trgNote) = await Task.Run(() =>
+                    {
+                        var trg = new TriggerFile(mem);
+                        if (trg.Parsed)
+                            return (ScenarioFile.StripBinaryForPreview(trg.ToXml()), ".xml", "(AoM Trigger Export, converted to XML)");
+                        return ("Failed to parse trigger file", ".txt", "");
+                    });
+                    PreviewedFileNote = trgNote;
+                    ShowExperimentalWarning = trgExt == ".xml";
+                    text = trgText;
+                    ext = trgExt;
+                }
                 else if (ext == ".zip")
                 {
                     HideTmmPreview();

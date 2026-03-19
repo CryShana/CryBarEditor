@@ -1,27 +1,68 @@
 using System.Buffers.Binary;
+using System.Text;
 using System.Xml;
 
 namespace CryBar;
 
 public partial class ScenarioFile
 {
+    /// <summary>
+    /// Converts a TR ScenarioSection to standalone Triggers XML string.
+    /// </summary>
+    public static string SectionToTriggersXml(ScenarioSection section)
+    {
+        if (!CanParseTr(section.Data, out var headerSize))
+            throw new InvalidOperationException("Invalid TR section data");
+
+        var settings = new XmlWriterSettings
+        {
+            Indent = true,
+            IndentChars = "\t",
+            OmitXmlDeclaration = false,
+            NewLineHandling = NewLineHandling.Entitize
+        };
+        var sb = new StringBuilder(Math.Max(1024, section.Data.Length * 2));
+        using var writer = XmlWriter.Create(sb, settings);
+        writer.WriteStartDocument();
+        WriteTrXmlInner(writer, section, headerSize);
+        writer.WriteEndDocument();
+        writer.Flush();
+        return sb.ToString();
+    }
+
     static void WriteTrXml(XmlWriter writer, ScenarioSection section)
     {
-        if (section.Data.Length < 28 || !CanParseTr(section.Data))
+        if (section.Data.Length < 20 || !CanParseTr(section.Data, out var headerSize))
         {
             WriteSectionXml(writer, section);
             return;
         }
 
-        WriteTrXmlInner(writer, section);
+        WriteTrXmlInner(writer, section, headerSize);
     }
 
-    static bool CanParseTr(byte[] data)
+    /// <summary>
+    /// Validates TR section data structure. Auto-detects header size:
+    /// - Scenario format (24 bytes): version + zero1 + zero2 + unk0 + unk1 + unk2
+    /// - Standalone .trg format (16 bytes): version + unk0 + unk1 + unk2
+    /// The zero1/zero2 fields are scenario-context fields omitted in standalone trigger exports.
+    /// </summary>
+    internal static bool CanParseTr(byte[] data, out int headerSize)
+    {
+        // Try scenario format first (24-byte header), then standalone (16-byte)
+        if (TryValidateTrBody(data, 24)) { headerSize = 24; return true; }
+        if (TryValidateTrBody(data, 16)) { headerSize = 16; return true; }
+        headerSize = 0;
+        return false;
+    }
+
+    static bool TryValidateTrBody(byte[] data, int headerBytes)
     {
         try
         {
             var span = data.AsSpan();
-            int off = 24; // skip 6 header u32s
+            int off = headerBytes;
+            if (off + 4 > span.Length) return false;
             var triggerCount = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
             if (triggerCount > 10000) return false;
             for (uint ti = 0; ti < triggerCount; ti++)
@@ -49,15 +90,23 @@ public partial class ScenarioFile
         catch { return false; }
     }
 
-    static void WriteTrXmlInner(XmlWriter writer, ScenarioSection section)
+    /// <summary>
+    /// Writes TR section to XML using the pre-detected header size.
+    /// headerSize 24 = scenario format (with zero1/zero2), 16 = standalone .trg format.
+    /// </summary>
+    static void WriteTrXmlInner(XmlWriter writer, ScenarioSection section, int headerSize)
     {
         var data = section.Data;
         var span = data.AsSpan();
         int off = 0;
 
         var version = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(off)); off += 4;
-        var zero1 = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(off)); off += 4;
-        var zero2 = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(off)); off += 4;
+        int zero1 = 0, zero2 = 0;
+        if (headerSize == 24)
+        {
+            zero1 = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(off)); off += 4;
+            zero2 = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(off)); off += 4;
+        }
         var unk0 = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
         var unk1 = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
         var unk2 = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
@@ -352,7 +401,12 @@ public partial class ScenarioFile
 
     // ── TR Read ──
 
-    static ScenarioSection ReadTrXml(XmlReader reader)
+    /// <summary>
+    /// Reads TR XML back to binary. When includePadding is true (default, scenario format),
+    /// writes the 24-byte header with zero1/zero2. When false (.trg format), writes the
+    /// 16-byte header without them.
+    /// </summary>
+    internal static ScenarioSection ReadTrXml(XmlReader reader, bool includePadding = true)
     {
         var versionAttr = reader.GetAttribute("version");
         if (string.IsNullOrEmpty(versionAttr))
@@ -362,10 +416,13 @@ public partial class ScenarioFile
         using var bw = new BinaryWriter(ms);
 
         bw.Write(int.Parse(versionAttr));
-        var zero1Attr = reader.GetAttribute("zero1");
-        bw.Write(string.IsNullOrEmpty(zero1Attr) ? 0 : int.Parse(zero1Attr));
-        var zero2Attr = reader.GetAttribute("zero2");
-        bw.Write(string.IsNullOrEmpty(zero2Attr) ? 0 : int.Parse(zero2Attr));
+        if (includePadding)
+        {
+            var zero1Attr = reader.GetAttribute("zero1");
+            bw.Write(string.IsNullOrEmpty(zero1Attr) ? 0 : int.Parse(zero1Attr));
+            var zero2Attr = reader.GetAttribute("zero2");
+            bw.Write(string.IsNullOrEmpty(zero2Attr) ? 0 : int.Parse(zero2Attr));
+        }
 
         var unkParts = reader.GetAttribute("unk")!.Split(',');
         bw.Write(uint.Parse(unkParts[0]));

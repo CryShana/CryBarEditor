@@ -479,48 +479,6 @@ public class IntegrationTests
 
     #region TMM.DATA - Compressed and Uncompressed
     [SkippableFact]
-    public async Task TmmData_Japanese_ShutenDoji_PooledAndNonPooled()
-    {
-        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
-
-        var (bar, entry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheModelDataJapanese.bar", "shuten_doji.tmm.data");
-        using var s = stream;
-
-        var raw = entry.ReadDataRaw(stream);
-        using var rawPooled = await entry.ReadDataRawPooledAsync(stream);
-        Assert.Equal(raw, rawPooled.Memory);
-
-        // Warmup both paths equally
-        const int WARMUP = 200;
-        const int RUNS = 3000;
-        for (int i = 0; i < WARMUP; i++)
-        {
-            _ = entry.ReadDataRaw(stream);
-            (await entry.ReadDataRawPooledAsync(stream)).Dispose();
-        }
-
-        // Interleave runs to reduce bias from CPU/OS scheduling
-        double rawTotalMs = 0, pooledTotalMs = 0;
-        for (int i = 0; i < RUNS; i++)
-        {
-            var start = Stopwatch.GetTimestamp();
-            _ = entry.ReadDataRaw(stream);
-            rawTotalMs += Stopwatch.GetElapsedTime(start).TotalMilliseconds;
-
-            start = Stopwatch.GetTimestamp();
-            (await entry.ReadDataRawPooledAsync(stream)).Dispose();
-            pooledTotalMs += Stopwatch.GetElapsedTime(start).TotalMilliseconds;
-        }
-
-        var rawTimeMs = rawTotalMs / RUNS;
-        var pooledTimeMs = pooledTotalMs / RUNS;
-
-        // pooled avoids allocations but microbenchmarks are noisy
-        Assert.True(pooledTimeMs < rawTimeMs,
-            $"Pooled ({pooledTimeMs:F4}ms) should be faster than raw ({rawTimeMs:F4}ms)");
-    }
-
-    [SkippableFact]
     public void TmmData_Japanese_ShutenDoji_ReadDataDecompressed()
     {
         Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");

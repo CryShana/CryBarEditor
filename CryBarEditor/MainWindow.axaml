@@ -153,6 +153,11 @@
 					<Separator />
 					<MenuItem Header="Scenario to XML" Click="MenuItem_ConvertScenarioToXML" />
 					<MenuItem Header="XML to Scenario" Click="MenuItem_ConvertXMLtoScenario" />
+					<MenuItem Header="Scenario to TRG" Click="MenuItem_ExtractTRGfromScenario" />
+					<Separator />
+					<MenuItem Header="TRG to XML" Click="MenuItem_ConvertTRGtoXML" />
+					<MenuItem Header="XML to TRG" Click="MenuItem_ConvertXMLtoTRG" />
+					<MenuItem Header="TRG to XS" Click="MenuItem_ConvertTRGtoXS" />
 				</MenuItem>
 				<MenuItem Header="Compress">
 					<MenuItem Header="Alz4" Click="MenuItem_CompressAlz4" />
