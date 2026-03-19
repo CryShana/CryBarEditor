@@ -10,6 +10,7 @@
     <ApplicationIcon>crybar.ico</ApplicationIcon>
     <AssemblyVersion>1.2.5</AssemblyVersion>
     <FileVersion>1.2.5</FileVersion>
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
