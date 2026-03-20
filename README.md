@@ -99,6 +99,8 @@ If you are writing XS scripts, you can also checkout my personal reference I wro
 ![CryBarEditor_9](https://assets.cryshana.me/LEhijgdvkF2M.avif)
 ### Advanced export
 ![CryBarEditor_10](https://assets.cryshana.me/9vougwHtzSd9.avif)
+### XML <-> XS conversion (Lossy)
+![CryBarEditor_11](https://assets.cryshana.me/fYJTyJ4ODeAN.avif)
 
 ## Thanks
 I wish to thank the developers of AoE3 Resource Manager, their code helped me with decoding of XMB and DDT files.
