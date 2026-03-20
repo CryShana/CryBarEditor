@@ -42,6 +42,12 @@ The purpose of this tool is to enable fast and easy modding of Age of Mythology 
   - Convert XML -> mythscn
   - Compress with Alz4/L33t
   - Decompress file with Alz4/L33t
+- Scenario tools:
+  - Scenario -> XML
+  - XML -> Scenario
+  - Scenario -> extract TRG
+  - TRG -> XML -> XS (lossy and lossless approach)
+  - XS -> XML -> TRG
 - Easily create additive mod for files that support it with right click
 - "**Search everything**" tool added that searches text in all files, BAR entries and their contents (for finding references)
 - Tool for converting XS trigger scripts to RM-friendly scripts for easy inclusion in random maps
