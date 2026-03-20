@@ -25,6 +25,7 @@ The purpose of this tool is to enable fast and easy modding of Age of Mythology 
     - TMM (decoding)
     - TMM.DATA (decoding)
     - TMA (decoding)
+    - mythscn/TRG (decoding + encoding)
 - Rich preview for TMM models (bones, mesh groups, materials, attachments) and TMM.DATA (vertex/triangle stats)
 - Syntax highlighting for common formats (json,xml,ini,xs,...) and folding support for XML
 
