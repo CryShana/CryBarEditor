@@ -56,7 +56,7 @@ public static partial class StringTableParser
                 }
                 else
                 {
-                    // No closing quote found — take everything
+                    // No closing quote found - take everything
                     value = valueStart + remainder.TrimEnd().ToString();
                 }
             }
@@ -73,7 +73,7 @@ public static partial class StringTableParser
     /// </summary>
     public static string? FindValue(string content, string key)
     {
-        // Quick check — if key doesn't appear at all, skip parsing
+        // Quick check - if key doesn't appear at all, skip parsing
         if (!content.Contains(key, StringComparison.OrdinalIgnoreCase))
             return null;
 

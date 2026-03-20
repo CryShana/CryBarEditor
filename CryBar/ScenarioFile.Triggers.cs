@@ -111,6 +111,14 @@ public partial class ScenarioFile
         var unk1 = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
         var unk2 = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
 
+        writer.WriteComment("""
+
+            CryBar Trigger XML - Known Value Types
+            vt: 0=string/number, 3=bool, 4=unitIdList, 5=location, 6=player,
+                10=tech, 11=status/techstatus, 12=godpower, 13=protounit, 22=stringId
+            kt: 10 (standard)
+
+        """);
         writer.WriteStartElement("Triggers");
         writer.WriteAttributeString("version", version.ToString());
         if (zero1 != 0) writer.WriteAttributeString("zero1", zero1.ToString());

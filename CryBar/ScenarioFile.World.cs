@@ -555,7 +555,7 @@ public partial class ScenarioFile
         var unk5 = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(off)); off += 4;
         byte pad = data[off++];
 
-        // Pre-scan to find sc2 (statesCount2) at the end — attributes must precede children
+        // Pre-scan to find sc2 (statesCount2) at the end - attributes must precede children
         int scanOff = off;
         int sc2 = -1;
         uint scanStateCount = 0;

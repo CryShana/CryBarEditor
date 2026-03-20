@@ -130,7 +130,7 @@ public static partial class DependencyFinder
             if (reader.NodeType != XmlNodeType.Element)
                 return UngroupedFallback(content);
 
-            // Track tags where ExtractChildIdentityElement returned null — skip after 2 nulls since last success
+            // Track tags where ExtractChildIdentityElement returned null - skip after 2 nulls since last success
             var noIdentityCount = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
             int rootDepth = reader.Depth;
@@ -162,7 +162,7 @@ public static partial class DependencyFinder
                             if (name == null)
                                 noIdentityCount[tag] = nullCount + 1;
                             else
-                                noIdentityCount.Remove(tag); // reset — keep checking this tag
+                                noIdentityCount.Remove(tag); // reset - keep checking this tag
                         }
                     }
 
@@ -178,7 +178,7 @@ public static partial class DependencyFinder
         if (children.Count == 0)
             return UngroupedFallback(content);
 
-        // Entity detection — three rules, evaluated in order:
+        // Entity detection - three rules, evaluated in order:
         var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var hasName = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (tag, name, _) in children)
@@ -191,7 +191,7 @@ public static partial class DependencyFinder
 
         var entityTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        // Rule 1: Repeated same-tag children (≥2) with at least one named — the strictest match.
+        // Rule 1: Repeated same-tag children (≥2) with at least one named - the strictest match.
         // Preferred over Rule 2 so that singleton infrastructure tags (e.g. <settings>) don't
         // become entities when real repeated entities (e.g. <unit>) exist alongside them.
         foreach (var (tag, count) in counts)
@@ -210,7 +210,7 @@ public static partial class DependencyFinder
             }
         }
 
-        // Rule 3: All children have unique tags with content — tag name IS the entity name.
+        // Rule 3: All children have unique tags with content - tag name IS the entity name.
         // Mutation below sets name = tag, which the partitioning loop relies on.
         if (entityTags.Count == 0 && children.Count >= 2
             && counts.Values.All(c => c == 1)
@@ -380,7 +380,7 @@ public static partial class DependencyFinder
             }
         }
 
-        // Single-segment file references (e.g. "handattack.tactics") — require a dot
+        // Single-segment file references (e.g. "handattack.tactics") - require a dot
         if (content.Contains('.'))
         {
             foreach (Match m in SingleSegmentFilePattern().Matches(content))
@@ -464,7 +464,7 @@ public static partial class DependencyFinder
         while (i >= 0 && content[i] is ' ' or '\t' or '\r' or '\n')
             i--;
 
-        // If preceded by '>', this is element content — find the tag name
+        // If preceded by '>', this is element content - find the tag name
         if (i >= 0 && content[i] == '>')
         {
             int tagEnd = i;
@@ -482,7 +482,7 @@ public static partial class DependencyFinder
             }
         }
 
-        // If preceded by '="' pattern, this is an attribute value — find attribute name
+        // If preceded by '="' pattern, this is an attribute value - find attribute name
         if (i >= 0 && content[i] == '"')
         {
             i--;
@@ -550,7 +550,7 @@ public static partial class DependencyFinder
         if (match.Contains('+') || match.Contains('='))
             return false;
 
-        // Exceeds MAX_PATH — no real game path is this long
+        // Exceeds MAX_PATH - no real game path is this long
         if (match.Length > 260)
             return false;
 
@@ -600,7 +600,7 @@ public static partial class DependencyFinder
         refs.Add(dataRef);
 
         // Companion material file: {stem}.material.XMB or {stem}.material
-        // Note: the .tmm extension is stripped — "armory_a_age2.tmm" → "armory_a_age2.material.XMB"
+        // Note: the .tmm extension is stripped - "armory_a_age2.tmm" -> "armory_a_age2.material.XMB"
         var tmmStem = Path.GetFileNameWithoutExtension(tmmFileName);
         var matFileName = tmmStem + ".material";
         var matRef = new DependencyReference

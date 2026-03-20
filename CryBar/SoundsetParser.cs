@@ -5,7 +5,6 @@ namespace CryBar;
 
 /// <summary>
 /// Parses soundset definition XML files and sound manifest XML files.
-/// AOT-safe: uses XmlReader instead of XmlDocument to avoid reflection.
 /// </summary>
 public static class SoundsetParser
 {

@@ -98,7 +98,7 @@ public static class BarCompression
     // it with a CRC32 (standard polynomial 0xEDB88320) of the entire file contents with
     // the checksum field zeroed out, stored as a little-endian uint32.
     //
-    // The game validates this CRC32 on load — if it doesn't match, the scenario is rejected.
+    // The game validates this CRC32 on load - if it doesn't match, the scenario is rejected.
     // Because the trailing bytes are not a valid Adler32, decompression must use raw
     // DeflateStream (skipping the 2-byte zlib header and 4-byte trailer) instead of
     // ZLibStream, which would fail Adler32 validation.

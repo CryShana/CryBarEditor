@@ -11,6 +11,13 @@ namespace CryBarEditor;
 
 public partial class MainWindow
 {
+    TriggerDataIndex? TryLoadTriggerData()
+    {
+        if (!string.IsNullOrEmpty(_rootDirectory) && Directory.Exists(_rootDirectory))
+            return TriggerDataIndex.Load(_rootDirectory);
+        return null;
+    }
+
     #region Conversion menu events
     async void MenuItem_ConvertXMLtoXMB(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
@@ -267,6 +274,11 @@ public partial class MainWindow
         var file = await PickFile(sender, "Convert TRG to XS", [new("AoM Trigger Export") { Patterns = ["*.trg"] }]);
         if (file == null) return;
 
+        var dialog = new XsExportDialog(triggerDataMissing: false);
+        await dialog.ShowDialog(this);
+        var lossless = dialog.GetResult();
+        if (lossless == null) return;
+
         var out_file = PickOutFile(file, new_extension: ".xs", overwrite: true);
         try
         {
@@ -276,7 +288,7 @@ public partial class MainWindow
             var trg = new TriggerFile(decompressed.Memory);
             if (!trg.Parsed) throw new InvalidDataException("Failed to parse trigger file");
 
-            var xs = ScenarioFile.ConvertTriggersXmlToXs(trg.ToXml());
+            var xs = ScenarioFile.ConvertTriggersXmlToXs(trg.ToXml(), lossless: lossless.Value);
             await File.WriteAllTextAsync(out_file, xs);
 
             _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file), Path.GetDirectoryName(out_file));
@@ -284,6 +296,73 @@ public partial class MainWindow
         catch (Exception ex)
         {
             _ = ShowError("Failed to convert TRG to XS:\n" + ex.Message);
+        }
+    }
+
+    async void MenuItem_ConvertXStoTRG(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var file = await PickFile(sender, "Convert XS to TRG", [new("XS Script") { Patterns = ["*.xs"] }]);
+        if (file == null) return;
+
+        var out_file = PickOutFile(file, new_extension: ".trg", overwrite: true);
+        try
+        {
+            var xs = await File.ReadAllTextAsync(file);
+            var xml = ScenarioFile.ParseXsToTriggersXml(xs, TryLoadTriggerData(), Path.GetDirectoryName(file));
+            var trg = TriggerFile.FromXml(xml);
+            if (!trg.Parsed) throw new InvalidDataException("Failed to convert XS to TRG");
+
+            await File.WriteAllBytesAsync(out_file, trg.ToBytes());
+            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file), Path.GetDirectoryName(out_file));
+        }
+        catch (Exception ex)
+        {
+            _ = ShowError("Failed to convert XS to TRG:\n" + ex.Message);
+        }
+    }
+
+    async void MenuItem_ConvertXStoXML(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var file = await PickFile(sender, "Convert XS to XML", [new("XS Script") { Patterns = ["*.xs"] }]);
+        if (file == null) return;
+
+        var out_file = PickOutFile(file, new_extension: ".xml", overwrite: true);
+        try
+        {
+            var xs = await File.ReadAllTextAsync(file);
+            var xml = ScenarioFile.ParseXsToTriggersXml(xs, TryLoadTriggerData(), Path.GetDirectoryName(file));
+            await File.WriteAllTextAsync(out_file, xml);
+
+            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file), Path.GetDirectoryName(out_file));
+        }
+        catch (Exception ex)
+        {
+            _ = ShowError("Failed to convert XS to XML:\n" + ex.Message);
+        }
+    }
+
+    async void MenuItem_ConvertXMLtoXS(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var file = await PickFile(sender, "Convert XML to XS", [new("XML file") { Patterns = ["*.xml"] }]);
+        if (file == null) return;
+
+        var dialog = new XsExportDialog(triggerDataMissing: false);
+        await dialog.ShowDialog(this);
+        var lossless = dialog.GetResult();
+        if (lossless == null) return;
+
+        var out_file = PickOutFile(file, new_extension: ".xs", overwrite: true);
+        try
+        {
+            var xml = await File.ReadAllTextAsync(file);
+            var xs = ScenarioFile.ConvertTriggersXmlToXs(xml, lossless: lossless.Value);
+            await File.WriteAllTextAsync(out_file, xs);
+
+            _ = ShowSuccess("Conversion completed, new file:\n" + Path.GetFileName(out_file), Path.GetDirectoryName(out_file));
+        }
+        catch (Exception ex)
+        {
+            _ = ShowError("Failed to convert XML to XS:\n" + ex.Message);
         }
     }
 

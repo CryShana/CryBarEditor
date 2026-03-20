@@ -160,7 +160,7 @@ public partial class ScenarioFile
             scanOff += 6 + (int)sz;
         }
 
-        // Fallback: inline P1 (old format) — first uint32 after EN end is NameIndex
+        // Fallback: inline P1 (old format) - first uint32 after EN end is NameIndex
         if (!protoIndex.HasValue && enEnd + 4 <= h1.Length)
         {
             // Check that the bytes at enEnd are NOT an ASCII section marker (confirming inline format)
@@ -692,7 +692,7 @@ public partial class ScenarioFile
         writer.WriteEndElement();
     }
 
-    // armies attribute is informational only — base64 body is source of truth
+    // armies attribute is informational only - base64 body is source of truth
     static ScenarioSection ReadKBXml(XmlReader reader) => ReadSectionXml(reader);
 
     /// <summary>

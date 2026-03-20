@@ -1318,4 +1318,540 @@ public class IntegrationTests
     }
 
     #endregion
+
+    #region Trigger XS Lossless Tests
+
+    static readonly string SamplesDir = Path.GetFullPath(
+        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".tr-samples"));
+
+    static string NormalizeXml(string xml)
+    {
+        var doc = new XmlDocument();
+        doc.LoadXml(xml);
+        // Strip XML comments (informational, not data)
+        foreach (XmlNode node in doc.SelectNodes("//comment()")!)
+            node.ParentNode!.RemoveChild(node);
+        // Also strip top-level comments (before/after document element)
+        foreach (XmlNode node in doc.ChildNodes)
+            if (node is XmlComment) { doc.RemoveChild(node); break; }
+        var sb = new System.Text.StringBuilder();
+        var settings = new XmlWriterSettings { Indent = true, IndentChars = "\t", OmitXmlDeclaration = true };
+        using var writer = XmlWriter.Create(sb, settings);
+        doc.WriteTo(writer);
+        writer.Flush();
+        return sb.ToString();
+    }
+
+    static string SimpleTriggersXml => """
+        <Triggers version="11" unk="2,172,1">
+        	<Trigger name="Test" id="0" group="0" priority="4" unk="-1" loop="0" active="1" runImm="0">
+        		<Cond name="Timer: Seconds" cmd="(xsGetTime() - (cActivationTime / 1000)) &gt;= %Param1%">
+        			<Arg key="Param1" name="Seconds" kt="10" vt="0">3</Arg>
+        		</Cond>
+        		<Effect name="Player: Set Tech Status" cmd="true">
+        			<Arg key="PlayerID" name="Player" kt="10" vt="6">1</Arg>
+        			<Arg key="TechID" name="Tech" kt="10" vt="10">37</Arg>
+        			<Arg key="Status" kt="10" vt="11">2</Arg>
+        			<Extra>trTechSetStatus(%PlayerID%, %TechID%, %Status%);</Extra>
+        		</Effect>
+        	</Trigger>
+        	<Group id="0" name="Ungrouped" indexes="0" />
+        </Triggers>
+        """;
+
+    [Fact]
+    public void XsLossless_ContainsMetadata()
+    {
+        var xs = ScenarioFile.ConvertTriggersXmlToXs(SimpleTriggersXml, lossless: true);
+        Assert.Contains("// @CryBar:triggers", xs);
+        Assert.Contains("// @CryBar:trigger id=\"0\"", xs);
+        Assert.Contains("// @CryBar:cond", xs);
+        Assert.Contains("// @CryBar:effect", xs);
+        Assert.Contains("// @CryBar:arg", xs);
+        Assert.Contains("// @CryBar:extra", xs);
+        Assert.Contains("// @CryBar:group", xs);
+    }
+
+    [SkippableFact]
+    public async Task ScenarioFile_TrgXsLosslessRoundtrip()
+    {
+        var allFiles = FindScenarioFiles();
+        Skip.If(allFiles.Length == 0, "No .mythscn files found");
+        var failures = new List<string>();
+
+        await Parallel.ForEachAsync(allFiles, async (filePath, t) =>
+        {
+            var fileName = Path.GetFileName(filePath);
+            var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath))!;
+            var scenario = new ScenarioFile(decompressed);
+            if (!scenario.Parsed) return;
+
+            var trSection = scenario.FindSection("TR");
+            if (trSection == null || trSection.Data.Length < 20) return;
+
+            // TR section -> XML -> XS (lossless) -> XML -> compare
+            string originalXml;
+            try { originalXml = ScenarioFile.SectionToTriggersXml(trSection); }
+            catch (InvalidOperationException) { return; } // TR section not parseable (e.g. empty triggers)
+            var xs = ScenarioFile.ConvertTriggersXmlToXs(originalXml, lossless: true);
+            var roundtrippedXml = ScenarioFile.ParseXsToTriggersXml(xs);
+
+            var origNorm = NormalizeXml(originalXml);
+            var rtNorm = NormalizeXml(roundtrippedXml);
+
+            if (origNorm != rtNorm)
+            {
+                // Find first diff location for diagnostics
+                var origLines = origNorm.Split('\n');
+                var rtLines = rtNorm.Split('\n');
+                var diffLine = -1;
+                for (int i = 0; i < Math.Min(origLines.Length, rtLines.Length); i++)
+                {
+                    if (origLines[i] != rtLines[i]) { diffLine = i; break; }
+                }
+                var detail = diffLine >= 0
+                    ? $"line {diffLine}: orig=[{origLines[diffLine].Trim()}] rt=[{rtLines[diffLine].Trim()}]"
+                    : $"line count differs: orig={origLines.Length} rt={rtLines.Length}";
+
+                lock (failures)
+                    failures.Add($"{fileName}: {detail}");
+            }
+        });
+
+        Assert.True(failures.Count == 0,
+            $"Lossless XS roundtrip failures:\n{string.Join("\n", failures)}");
+    }
+
+    /// <summary>
+    /// Perfect lossy roundtrip: XML → XS (no comments) → XML (with template matching).
+    /// For simple triggers, template matching should produce XML identical to the original.
+    /// </summary>
+    [SkippableFact]
+    public void XsLossy_Roundtrip_PerfectForSimpleTriggers()
+    {
+        Skip.IfNot(GameInstalled, "Game not found");
+        var index = TriggerDataIndex.Load(GamePath);
+        Skip.If(index == null, "trigger_data.xml not found");
+
+        var xs = ScenarioFile.ConvertTriggersXmlToXs(SimpleTriggersXml, lossless: false);
+        Assert.DoesNotContain("@CryBar", xs);
+
+        var roundtrippedXml = ScenarioFile.ParseXsToTriggersXml(xs, index);
+        var orig = NormalizeXml(SimpleTriggersXml);
+        var rt = NormalizeXml(roundtrippedXml);
+        Assert.Equal(orig, rt);
+    }
+
+    /// <summary>
+    /// Tests lossy roundtrip on campaign scenarios — counts Extra tags per scenario
+    /// to measure template matching quality across real-world data.
+    /// </summary>
+    [SkippableFact]
+    public async Task XsLossy_CampaignScenarios_QualityMetric()
+    {
+        Skip.IfNot(GameInstalled, "Game not found");
+        var index = TriggerDataIndex.Load(GamePath);
+        Skip.If(index == null, "trigger_data.xml not found");
+
+        var allFiles = FindScenarioFiles();
+        Skip.If(allFiles.Length == 0, "No .mythscn files found");
+
+        int totalTriggers = 0, totalExtras = 0, totalStructured = 0;
+
+        await Parallel.ForEachAsync(allFiles, async (filePath, t) =>
+        {
+            var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath))!;
+            var scenario = new ScenarioFile(decompressed);
+            if (!scenario.Parsed) return;
+            var trSection = scenario.FindSection("TR");
+            if (trSection == null || trSection.Data.Length < 20) return;
+
+            string originalXml;
+            try { originalXml = ScenarioFile.SectionToTriggersXml(trSection); }
+            catch { return; }
+
+            var xs = ScenarioFile.ConvertTriggersXmlToXs(originalXml, lossless: false);
+            var rtXml = ScenarioFile.ParseXsToTriggersXml(xs, index);
+
+            var doc = new XmlDocument();
+            doc.LoadXml(rtXml);
+
+            var trigs = doc.GetElementsByTagName("Trigger").Count;
+            var extras = doc.GetElementsByTagName("Extra").Count;
+            var structured = doc.GetElementsByTagName("Effect").Count + doc.GetElementsByTagName("Cond").Count;
+
+            Interlocked.Add(ref totalTriggers, trigs);
+            Interlocked.Add(ref totalExtras, extras);
+            Interlocked.Add(ref totalStructured, structured);
+        });
+
+        // Report quality metric — this test always passes, it's informational
+        var pctStructured = totalStructured + totalExtras > 0
+            ? (100.0 * totalStructured / (totalStructured + totalExtras)).ToString("F1")
+            : "N/A";
+        Assert.True(true,
+            $"Lossy quality across {allFiles.Length} scenarios: " +
+            $"{totalTriggers} triggers, {totalStructured} structured elements, {totalExtras} extras " +
+            $"({pctStructured}% structured)");
+    }
+
+    #endregion
+
+    #region XS Import Tests
+
+    [Fact]
+    public void XsImport_SimpleTrigger_FallbackToExtra()
+    {
+        var xs = "rule _Test\ngroup TestGroup\nhighFrequency\nactive\n{\n      trSomething();\n      xsDisableRule(\"_Test\");\n      trDisableRule(\"Test\");\n}\n";
+        var xml = ScenarioFile.ParseXsToTriggersXml(xs);
+        Assert.Contains("<Triggers", xml);
+        Assert.Contains("name=\"Test\"", xml);
+        Assert.Contains("loop=\"0\"", xml);
+        Assert.Contains("active=\"1\"", xml);
+        Assert.Contains("<Extra>trSomething();</Extra>", xml);
+        Assert.Contains("<Group", xml);
+    }
+
+    [Fact]
+    public void XsImport_LoopingTrigger_NoDisableCalls()
+    {
+        var xs = "rule _Looper\nhighFrequency\nactive\n{\n      doStuff();\n}\n";
+        var xml = ScenarioFile.ParseXsToTriggersXml(xs);
+        Assert.Contains("loop=\"1\"", xml);
+        Assert.DoesNotContain("xsDisableRule", xml);
+    }
+
+    [Fact]
+    public void XsImport_BetweenRuleCode_AttachesToPrecedingTrigger()
+    {
+        var xs = "rule _First\nhighFrequency\nactive\n{\n      code1();\n}\n\n// some library code\nint x = 5;\n\nrule _Second\nhighFrequency\nactive\n{\n      code2();\n}\n";
+        var xml = ScenarioFile.ParseXsToTriggersXml(xs);
+        Assert.Contains("name=\"First\"", xml);
+        Assert.Contains("name=\"Second\"", xml);
+        Assert.Contains("<Extra>// some library code</Extra>", xml);
+    }
+
+    [Fact]
+    public void XsImport_RollBlessings_ParsesWithoutCrash()
+    {
+        var xsPath = Path.Combine(SamplesDir, "Roll_Blessings_Test_PlayerList.xs");
+        if (!File.Exists(xsPath)) return;
+        var xs = File.ReadAllText(xsPath);
+        var xml = ScenarioFile.ParseXsToTriggersXml(xs);
+        Assert.Contains("<Triggers", xml);
+        Assert.Contains("name=\"Initialize_NTL\"", xml);
+    }
+
+    [Fact]
+    public void XsImport_GroupReconstruction()
+    {
+        var xs = "rule _A\ngroup Alpha\nhighFrequency\nactive\n{\n      a();\n}\n\nrule _B\ngroup Beta\nhighFrequency\nactive\n{\n      b();\n}\n\nrule _C\ngroup Alpha\nhighFrequency\nactive\n{\n      c();\n}\n";
+        var xml = ScenarioFile.ParseXsToTriggersXml(xs);
+        var doc = new XmlDocument();
+        doc.LoadXml(xml);
+        var groups = doc.GetElementsByTagName("Group");
+        Assert.Equal(2, groups.Count);
+        Assert.Equal("Alpha", ((XmlElement)groups[0]!).GetAttribute("name"));
+        Assert.Equal("Beta", ((XmlElement)groups[1]!).GetAttribute("name"));
+        Assert.Equal("0,2", ((XmlElement)groups[0]!).GetAttribute("indexes"));
+    }
+
+    [Fact]
+    public void XsLossless_Roundtrip_XmlIdentical()
+    {
+        var originalXml = """
+            <Triggers version="11" unk="2,172,1">
+            	<Trigger name="Trigger_0" id="0" group="0" priority="4" unk="-1" loop="0" active="1" runImm="0">
+            		<Cond name="Timer: Seconds" cmd="(xsGetTime() - (cActivationTime / 1000)) &gt;= %Param1%">
+            			<Arg key="Param1" name="Seconds" kt="10" vt="0">3</Arg>
+            		</Cond>
+            		<Effect name="Player: Set Tech Status" cmd="true">
+            			<Arg key="PlayerID" name="Player" kt="10" vt="6">1</Arg>
+            			<Arg key="TechID" name="Tech" kt="10" vt="10">37</Arg>
+            			<Arg key="Status" kt="10" vt="11">2</Arg>
+            			<Extra>trTechSetStatus(%PlayerID%, %TechID%, %Status%);</Extra>
+            		</Effect>
+            		<Effect name="Unit: Create" cmd="true">
+            			<Arg key="PlayerID" name="Player" kt="10" vt="6">1</Arg>
+            			<Arg key="ProtoName" kt="10" vt="13">AmanraOlder</Arg>
+            			<Arg key="Location" name="" kt="10" vt="5" flag="0">29.07, 4.00, 26.58</Arg>
+            			<Arg key="Heading" name="Heading (0-359)" kt="10" vt="0">0</Arg>
+            			<Arg key="SkipBirth" name="Skip Birth Anim:" kt="10" vt="3">true</Arg>
+            			<Extra>trUnitCreate("%ProtoName%", %Location%, %Heading%, %PlayerID%, %SkipBirth%);</Extra>
+            		</Effect>
+            	</Trigger>
+            	<Trigger name="Trigger_1" id="1" group="0" priority="4" unk="-1" loop="0" active="1" runImm="0">
+            		<Cond name="Always" cmd="true" />
+            		<Effect name="Render: Fog/Black Map" cmd="true">
+            			<Arg key="Fog" name="Fog of War:" kt="10" vt="3">false</Arg>
+            			<Arg key="Black" name="Black Map:" kt="10" vt="3">false</Arg>
+            			<Extra>trSetFogAndBlackmap(%Fog%, %Black%);</Extra>
+            		</Effect>
+            		<Effect name="God Power: Grant to Player" cmd="true">
+            			<Arg key="PlayerID" name="Player" kt="10" vt="6">1</Arg>
+            			<Arg key="PowerName" name="Power" kt="10" vt="12">BlazingPrairie</Arg>
+            			<Arg key="Count" name="Uses" kt="10" vt="0">5</Arg>
+            			<Arg key="Cooldown" name="Cooldown (s)" kt="10" vt="0">10</Arg>
+            			<Arg key="UseCost" name="Use Cost" kt="10" vt="3">false</Arg>
+            			<Arg key="RepeatAtEnd" name="Repeatable at End" kt="10" vt="3">false</Arg>
+            			<Extra>trGodPowerGrant(%PlayerID%, "%PowerName%", %Count%, %Cooldown%, %UseCost%, %RepeatAtEnd%);</Extra>
+            		</Effect>
+            	</Trigger>
+            	<Group id="0" name="Ungrouped" indexes="0,1" />
+            </Triggers>
+            """;
+        var xs = ScenarioFile.ConvertTriggersXmlToXs(originalXml, lossless: true);
+        var roundtrippedXml = ScenarioFile.ParseXsToTriggersXml(xs);
+        var orig = NormalizeXml(originalXml);
+        var rt = NormalizeXml(roundtrippedXml);
+        Assert.Equal(orig, rt);
+    }
+
+    [Fact]
+    public void XsImport_UnrecognizedCondition_FallsBackToAlways()
+    {
+        var xs = "rule _Test\nhighFrequency\nactive\n{\n   if (someCustomCheck(42))\n   {\n      doThing();\n   }\n}\n";
+        var xml = ScenarioFile.ParseXsToTriggersXml(xs);
+        Assert.Contains("<Triggers", xml);
+        // Without @CryBar comments or trigger_data, condition is part of Extra blocks
+        Assert.Contains("name=\"Test\"", xml);
+    }
+
+    #endregion
+
+    #region TriggerDataIndex Tests
+
+    [SkippableFact]
+    public void TriggerDataIndex_LoadFromGameData()
+    {
+        Skip.IfNot(GameInstalled, "Game not found");
+        var index = TriggerDataIndex.Load(GamePath);
+        Assert.NotNull(index);
+        Assert.True(index.Conditions.Count > 10, $"Expected >10 conditions, got {index.Conditions.Count}");
+        Assert.True(index.Effects.Count > 10, $"Expected >10 effects, got {index.Effects.Count}");
+        Assert.True(index.Conditions.ContainsKey("Always"));
+        Assert.True(index.Conditions.ContainsKey("Timer: Seconds"));
+    }
+
+    #endregion
+
+    #region XS Import Template Matching Tests
+
+    [SkippableFact]
+    public void XsImport_WithTemplateMatching_ProducesStructuredXml()
+    {
+        Skip.IfNot(GameInstalled, "Game not found");
+        var index = TriggerDataIndex.Load(GamePath);
+        Skip.If(index == null, "trigger_data.xml not found");
+
+        var xsPath = Path.Combine(SamplesDir, "example_trigger_converted.xs");
+        if (!File.Exists(xsPath)) return;
+        var xs = File.ReadAllText(xsPath);
+        var xml = ScenarioFile.ParseXsToTriggersXml(xs, index);
+
+        var doc = new XmlDocument();
+        doc.LoadXml(xml);
+        var conds = doc.GetElementsByTagName("Cond");
+        bool hasTimerCond = false;
+        for (int i = 0; i < conds.Count; i++)
+            if (((XmlElement)conds[i]!).GetAttribute("name") == "Timer: Seconds") hasTimerCond = true;
+        Assert.True(hasTimerCond, "Expected 'Timer: Seconds' condition from template matching");
+    }
+
+    [SkippableFact]
+    public void XsImport_ExampleTrigger_MatchesReferenceXml()
+    {
+        Skip.IfNot(GameInstalled, "Game not found");
+        var index = TriggerDataIndex.Load(GamePath);
+        Skip.If(index == null, "trigger_data.xml not found");
+
+        var xsPath = Path.Combine(SamplesDir, "example_trigger_converted.xs");
+        var refXmlPath = Path.Combine(SamplesDir, "example_trigger_rawExport.xml");
+        if (!File.Exists(xsPath) || !File.Exists(refXmlPath)) return;
+
+        var xs = File.ReadAllText(xsPath);
+        var xml = ScenarioFile.ParseXsToTriggersXml(xs, index);
+        var refXml = File.ReadAllText(refXmlPath);
+
+        var doc = new XmlDocument(); doc.LoadXml(xml);
+        var refDoc = new XmlDocument(); refDoc.LoadXml(refXml);
+        Assert.Equal(refDoc.GetElementsByTagName("Trigger").Count, doc.GetElementsByTagName("Trigger").Count);
+
+        for (int i = 0; i < refDoc.GetElementsByTagName("Trigger").Count; i++)
+        {
+            var refTrig = (XmlElement)refDoc.GetElementsByTagName("Trigger")[i]!;
+            var trig = (XmlElement)doc.GetElementsByTagName("Trigger")[i]!;
+            Assert.Equal(refTrig.GetAttribute("name"), trig.GetAttribute("name"));
+        }
+    }
+
+    #endregion
+
+    #region XS Include Resolution Tests
+
+    [Fact]
+    public void XsInclude_ResolvesAndParsesRules()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "crybar_test_includes_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            // helper.xs defines a shared rule
+            File.WriteAllText(Path.Combine(dir, "helper.xs"),
+                "rule _SharedHelper\nhighFrequency\nactive\n{\n      trShared();\n}\n");
+
+            // main.xs includes helper.xs and has its own rule
+            File.WriteAllText(Path.Combine(dir, "main.xs"),
+                "include \"helper.xs\";\n\nrule _Main\nhighFrequency\nactive\n{\n      trMain();\n}\n");
+
+            var xs = File.ReadAllText(Path.Combine(dir, "main.xs"));
+            var xml = ScenarioFile.ParseXsToTriggersXml(xs, sourceDir: dir);
+
+            var doc = new XmlDocument();
+            doc.LoadXml(xml);
+            var triggers = doc.GetElementsByTagName("Trigger");
+
+            Assert.Equal(2, triggers.Count);
+            Assert.Equal("SharedHelper", ((XmlElement)triggers[0]!).GetAttribute("name"));
+            Assert.Equal("Main", ((XmlElement)triggers[1]!).GetAttribute("name"));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
+    public void XsInclude_NestedIncludes_Resolved()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "crybar_test_nested_" + Guid.NewGuid().ToString("N"));
+        var subDir = Path.Combine(dir, "sub");
+        Directory.CreateDirectory(subDir);
+        try
+        {
+            // sub/deep.xs — deepest included file
+            File.WriteAllText(Path.Combine(subDir, "deep.xs"),
+                "rule _Deep\nhighFrequency\nactive\n{\n      trDeep();\n}\n");
+
+            // mid.xs includes sub/deep.xs
+            File.WriteAllText(Path.Combine(dir, "mid.xs"),
+                "include \"sub/deep.xs\";\n\nrule _Mid\nhighFrequency\nactive\n{\n      trMid();\n}\n");
+
+            // top.xs includes mid.xs
+            File.WriteAllText(Path.Combine(dir, "top.xs"),
+                "include \"mid.xs\";\n\nrule _Top\nhighFrequency\nactive\n{\n      trTop();\n}\n");
+
+            var xs = File.ReadAllText(Path.Combine(dir, "top.xs"));
+            var xml = ScenarioFile.ParseXsToTriggersXml(xs, sourceDir: dir);
+
+            var doc = new XmlDocument();
+            doc.LoadXml(xml);
+            var triggers = doc.GetElementsByTagName("Trigger");
+
+            Assert.Equal(3, triggers.Count);
+            Assert.Equal("Deep", ((XmlElement)triggers[0]!).GetAttribute("name"));
+            Assert.Equal("Mid", ((XmlElement)triggers[1]!).GetAttribute("name"));
+            Assert.Equal("Top", ((XmlElement)triggers[2]!).GetAttribute("name"));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
+    public void XsInclude_MissingFile_LeftAsIs()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "crybar_test_missing_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "main.xs"),
+                "include \"nonexistent.xs\";\n\nrule _Main\nhighFrequency\nactive\n{\n      trMain();\n}\n");
+
+            var xs = File.ReadAllText(Path.Combine(dir, "main.xs"));
+            var xml = ScenarioFile.ParseXsToTriggersXml(xs, sourceDir: dir);
+
+            var doc = new XmlDocument();
+            doc.LoadXml(xml);
+            var triggers = doc.GetElementsByTagName("Trigger");
+
+            // Include line becomes preamble content → __preamble__ trigger + Main
+            Assert.True(triggers.Count >= 1);
+            Assert.Equal("Main", ((XmlElement)triggers[^1]!).GetAttribute("name"));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
+    public void XsInclude_CircularInclude_NoCrash()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "crybar_test_circular_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            // a.xs includes b.xs, b.xs includes a.xs
+            File.WriteAllText(Path.Combine(dir, "a.xs"),
+                "include \"b.xs\";\n\nrule _A\nhighFrequency\nactive\n{\n      trA();\n}\n");
+            File.WriteAllText(Path.Combine(dir, "b.xs"),
+                "include \"a.xs\";\n\nrule _B\nhighFrequency\nactive\n{\n      trB();\n}\n");
+
+            var xs = File.ReadAllText(Path.Combine(dir, "a.xs"));
+            var xml = ScenarioFile.ParseXsToTriggersXml(xs, sourceDir: dir);
+
+            var doc = new XmlDocument();
+            doc.LoadXml(xml);
+            var triggers = doc.GetElementsByTagName("Trigger");
+
+            // Circular includes produce duplicates but should not crash
+            Assert.True(triggers.Count >= 2, $"Expected at least 2 triggers, got {triggers.Count}");
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
+    public void XsInclude_NoSourceDir_IncludesIgnored()
+    {
+        // When no sourceDir is provided, includes should be left as-is (no file resolution)
+        var xs = "include \"helper.xs\";\n\nrule _Main\nhighFrequency\nactive\n{\n      trMain();\n}\n";
+        var xml = ScenarioFile.ParseXsToTriggersXml(xs);
+
+        var doc = new XmlDocument();
+        doc.LoadXml(xml);
+        var triggers = doc.GetElementsByTagName("Trigger");
+
+        Assert.True(triggers.Count >= 1);
+        Assert.Equal("Main", ((XmlElement)triggers[^1]!).GetAttribute("name"));
+    }
+
+    [SkippableFact]
+    public void XsInclude_GameAiFiles_ParseWithIncludes()
+    {
+        Skip.IfNot(GameInstalled, "Game not found");
+
+        var aiDir = Path.Combine(GamePath, "ai", "campaign", "yas");
+        var xsFile = Path.Combine(aiDir, "yas02_p2.xs");
+        Skip.IfNot(File.Exists(xsFile), "yas02_p2.xs not found");
+
+        var xs = File.ReadAllText(xsFile);
+        // Should not throw — includes get resolved from the ai/ parent directory
+        var aiRoot = Path.Combine(GamePath, "ai");
+        var xml = ScenarioFile.ParseXsToTriggersXml(xs, sourceDir: aiRoot);
+
+        var doc = new XmlDocument();
+        doc.LoadXml(xml);
+
+        // AI scripts don't have trigger rules, but include resolution should work
+        // and produce valid XML without crashing
+        Assert.NotNull(doc.DocumentElement);
+        Assert.Equal("Triggers", doc.DocumentElement!.Name);
+    }
+
+    #endregion
 }

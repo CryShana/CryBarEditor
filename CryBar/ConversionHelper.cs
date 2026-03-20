@@ -11,8 +11,7 @@ using System.Text;
 namespace CryBar;
 
 /// <summary>
-/// Centralizes common file conversion operations (XMB→XML, DDT→TGA)
-/// that were previously duplicated across preview, export, and standalone tool code paths.
+/// Common file conversion operations (XMB→XML, DDT→TGA, DDT→PNG, TMM→OBJ/GLB).
 /// </summary>
 public static class ConversionHelper
 {

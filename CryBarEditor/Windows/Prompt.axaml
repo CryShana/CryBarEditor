@@ -3,14 +3,14 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 		xmlns:micons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
-        mc:Ignorable="d" d:DesignWidth="350" d:DesignHeight="160"
+        mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="160"
         x:Class="CryBarEditor.Prompt" WindowStartupLocation="CenterOwner"
 		ExtendClientAreaChromeHints="NoChrome"
 		ExtendClientAreaToDecorationsHint="True"
 		Foreground="#d9d9d9"
 		Background="#141414"
 		DataContext="{Binding RelativeSource={RelativeSource Self}}"
-		CanResize="False" Width="350" Height="160"
+		CanResize="False" Width="400" Height="160"
         Title="Prompt">
 	<Border Padding="5" BorderThickness="2" BorderBrush="#d9d9d9">
 		<Grid>
@@ -87,10 +87,12 @@
 				</DockPanel>
 
 			</DockPanel>
-			<DockPanel Grid.Row="1" Margin="5,0,5,0" LastChildFill="False">
-				<ProgressBar x:Name="progressBar" Minimum="0" Maximum="100" Value="50"
-							 DockPanel.Dock="Left" IsIndeterminate="True"
-							 Width="255" Height="9"
+			<Grid Grid.Row="1" Margin="5,0,5,0" ColumnDefinitions="Auto,*,Auto,Auto">
+				<ProgressBar x:Name="progressBar" Grid.Column="0"
+							 Minimum="0" Maximum="100" Value="50"
+							 IsIndeterminate="True"
+							 Height="9" Width="100" Margin="0,0,5,0"
+							 VerticalAlignment="Center"
 							 Classes.Finished="{Binding ProgressFinished}"
 							 IsVisible="{Binding PromptIsProgress}">
 					<ProgressBar.Styles>
@@ -100,16 +102,16 @@
 					</ProgressBar.Styles>
 				</ProgressBar>
 
-				<Button DockPanel.Dock="Right" Content="Close"
+				<Button Grid.Column="2" Content="Open Folder"
+						Click="OpenFolder_Click"
+						IsVisible="{Binding HasOpenFolder}"
+						Margin="0,0,5,0" />
+				<Button Grid.Column="3" Content="Close"
 						Click="CloseButtonClick"
 						IsCancel="True"
 						IsEnabled="{Binding CanClose}"
 						IsDefault="True" />
-				<Button DockPanel.Dock="Right" Content="Open Folder"
-						Click="OpenFolder_Click"
-						IsVisible="{Binding HasOpenFolder}"
-						Margin="0,0,5,0" />
-			</DockPanel>
+			</Grid>
 		</Grid>
 	</Border>
 </Window>

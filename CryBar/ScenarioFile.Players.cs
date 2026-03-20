@@ -217,7 +217,7 @@ public partial class ScenarioFile
             off = p6End;
             writer.WriteEndElement();
 
-            // P7 (constant values, no section_length — just magic + pad + float)
+            // P7 (constant values, no section_length - just magic + pad + float)
             off += 2; // "P7" marker
             var p7Magic = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(off)); off += 4;
             off += 5; // Pad0<5>

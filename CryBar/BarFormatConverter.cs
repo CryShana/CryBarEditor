@@ -152,8 +152,7 @@ public static class BarFormatConverter
     }
 
     /// <summary>
-    /// Reads binary XMB and writes directly to XmlWriter, producing formatted XML.
-    /// Single pass: binary → formatted XML string. No intermediate XmlDocument.
+    /// Converts binary XMB data to a formatted XML string.
     /// </summary>
     public static string? XMBtoFormattedXmlString(ReadOnlySpan<byte> xmb_data)
     {

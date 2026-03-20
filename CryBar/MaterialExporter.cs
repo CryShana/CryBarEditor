@@ -11,7 +11,6 @@ public class MaterialInfo
 
 /// <summary>
 /// Parses AoM:Retold .material XML files and generates Wavefront .mtl output.
-/// AOT-safe: uses XmlReader instead of XmlDocument/XPath to avoid reflection.
 /// </summary>
 public static class MaterialExporter
 {

@@ -12,6 +12,7 @@ public static partial class XStoRM
     [GeneratedRegex("""[^a-zA-Z]""")]
     public static partial Regex GetSafeClassNameRgx();
 
+    // NOTE: CryBar library has its own copy of this regex (XsIncludeRegex) since it can't reference CryBarEditor
     [GeneratedRegex("""include "([^"]+)"\;""")]
     public static partial Regex GetIncludeRgx();
 

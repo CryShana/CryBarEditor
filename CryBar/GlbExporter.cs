@@ -7,7 +7,6 @@ namespace CryBar;
 
 /// <summary>
 /// Exports TMM game model data to glTF 2.0 binary (GLB) format.
-/// AOT-safe: uses Utf8JsonWriter for JSON generation, no reflection.
 /// </summary>
 public static class GlbExporter
 {

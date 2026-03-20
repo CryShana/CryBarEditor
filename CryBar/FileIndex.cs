@@ -158,7 +158,7 @@ public class FileIndex
         var nameResult = exactName ?? extMatch;
         if (nameResult == null)
         {
-            // Stem matched but no filename-level match — only return candidates whose filename
+            // Stem matched but no filename-level match - only return candidates whose filename
             // starts with the query filename (handles extensionless queries like "proto" → "proto.xml.XMB")
             var prefixMatches = new List<FileIndexEntry>();
             foreach (var entry in candidates)
