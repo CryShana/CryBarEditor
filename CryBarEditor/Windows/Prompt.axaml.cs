@@ -6,6 +6,7 @@ using CryBarEditor.Classes;
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace CryBarEditor.Windows;
 
@@ -109,8 +110,11 @@ public partial class Prompt : SimpleWindow
         if (_openFolderPath == null) return;
         var dir = Directory.Exists(_openFolderPath) ? _openFolderPath : Path.GetDirectoryName(_openFolderPath);
         if (dir == null) return;
-        try { Process.Start(new ProcessStartInfo(dir) { UseShellExecute = true }); }
-        catch { }
+
+        // I have to close first, if I do it after opening, our window gets focus
+        Close();
+
+        _ = Task.Run(() => Process.Start(new ProcessStartInfo(dir) { UseShellExecute = true }));
     }
 
     protected override void OnClosing(WindowClosingEventArgs e)
