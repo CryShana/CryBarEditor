@@ -25,24 +25,24 @@ public static class OutputHelper
     public static void Success(string message)
     {
         if (Quiet) return;
-        AnsiConsole.MarkupLine($"[green]✓[/] {message}");
+        AnsiConsole.MarkupLine($"[green]>[/] {message}");
     }
 
     public static void Info(string message)
     {
         if (Quiet) return;
-        AnsiConsole.MarkupLine($"[blue]ℹ[/] {message}");
+        AnsiConsole.MarkupLine($"[blue]*[/] {message}");
     }
 
     public static void Error(string message)
     {
-        AnsiConsole.MarkupLine($"[red]✗[/] {message}");
+        AnsiConsole.MarkupLine($"[red]x[/] {message}");
     }
 
     public static void Warn(string message)
     {
         if (Quiet) return;
-        AnsiConsole.MarkupLine($"[yellow]⚠[/] {message}");
+        AnsiConsole.MarkupLine($"[yellow]![/] {message}");
     }
 
     public static string FormatPath(string path)
@@ -89,7 +89,7 @@ public static class OutputHelper
         var config = Config.CliConfig.Load();
         if (!config.SetupCompleted && !config.HintShown)
         {
-            AnsiConsole.MarkupLine("[blue]ℹ[/] First run detected. Run [bold]crybar setup[/] to enable tab completions.");
+            AnsiConsole.MarkupLine("[blue]*[/] First run detected. Run [bold]crybar setup[/] to enable tab completions.");
             config.HintShown = true;
             Config.CliConfig.Save(config);
         }
