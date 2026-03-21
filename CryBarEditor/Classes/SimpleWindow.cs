@@ -2,12 +2,26 @@
 using Avalonia.Interactivity;
 
 using System.ComponentModel;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 
 namespace CryBarEditor.Classes;
 
 public abstract class SimpleWindow : Window, INotifyPropertyChanged
 {
+    static readonly WindowIcon? _appIcon = LoadAppIcon();
+
+    static WindowIcon? LoadAppIcon()
+    {
+        var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("crybar.ico");
+        return stream != null ? new WindowIcon(stream) : null;
+    }
+
+    public SimpleWindow()
+    {
+        if (_appIcon != null) Icon = _appIcon;
+    }
+
     public new event PropertyChangedEventHandler? PropertyChanged;
     public void OnPropertyChanged(string propertyName) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     public void OnSelfChanged([CallerMemberName] string propertyName = "") => OnPropertyChanged(propertyName);
