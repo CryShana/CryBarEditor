@@ -11,7 +11,7 @@
 		mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="450"
         x:Class="CryBarEditor.MainWindow"
 		DataContext="{Binding RelativeSource={RelativeSource Self}}"
-        Title="CryBarEditor" x:DataType="ce:MainWindow"
+        Title="CryBarEditor" Icon="avares://CryBarEditor/crybar.ico" x:DataType="ce:MainWindow"
 		Foreground="#d9d9d9"
 		Background="#141414"
 		x:Name="mainWindow">
