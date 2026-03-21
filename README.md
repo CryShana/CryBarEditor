@@ -102,6 +102,10 @@ If you are writing XS scripts, you can also checkout my personal reference I wro
 ![CryBarEditor_10](https://assets.cryshana.me/9vougwHtzSd9.avif)
 ### XML <-> XS conversion (Lossy)
 ![CryBarEditor_11](https://assets.cryshana.me/fYJTyJ4ODeAN.avif)
+### Extra CLI tool
+Not part of editor, but a separate tool download. The CLI `crybar.exe` implements most of the functions that the editor supports. Can be used for scripting.
+
+![CryBarEditor_12](https://assets.cryshana.me/uPLZuSBT5Eaq.avif)
 
 ## Thanks
 I wish to thank the developers of AoE3 Resource Manager, their code helped me with decoding of XMB and DDT files.

@@ -17,7 +17,7 @@ public static class DepsCommands
 {
     public static Command Create()
     {
-        var depsCommand = new Command("deps", "Dependency analysis (requires root)");
+        var depsCommand = new Command("deps", "Dependency analysis (requires root dir set)");
 
         depsCommand.Add(CreateFindCommand());
         depsCommand.Add(CreateTreeCommand());
