@@ -1,4 +1,6 @@
-namespace CryBar;
+using CryBar.Indexing;
+
+namespace CryBar.Sound;
 
 /// <summary>
 /// Entry in the soundset index: links a soundset name to its source file and FMOD bank.

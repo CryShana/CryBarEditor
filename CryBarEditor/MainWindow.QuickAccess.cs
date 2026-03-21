@@ -1,4 +1,7 @@
+using CryBar.Bar;
+using CryBar.Indexing;
 using CryBarEditor.Classes;
+using CryBarEditor.Windows;
 
 using System.Collections.Generic;
 using System.IO;

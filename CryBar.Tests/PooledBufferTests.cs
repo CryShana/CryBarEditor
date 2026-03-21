@@ -1,5 +1,6 @@
 using CryBar;
-using CryBar.Classes;
+using CryBar.Bar;
+using CryBar.Utilities;
 
 namespace CryBar.Tests;
 

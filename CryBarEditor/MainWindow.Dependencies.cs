@@ -1,6 +1,10 @@
-using CryBar;
-using CryBar.Classes;
+using CryBar.Bar;
+using CryBar.Dependencies;
+using CryBar.Indexing;
+using CryBar.Sound;
+using CryBar.Utilities;
 using CryBarEditor.Classes;
+using CryBarEditor.Windows;
 
 using System;
 using System.IO;

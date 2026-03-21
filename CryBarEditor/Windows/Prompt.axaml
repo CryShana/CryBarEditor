@@ -4,7 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 		xmlns:micons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="160"
-        x:Class="CryBarEditor.Prompt" WindowStartupLocation="CenterOwner"
+        x:Class="CryBarEditor.Windows.Prompt" WindowStartupLocation="CenterOwner"
 		ExtendClientAreaChromeHints="NoChrome"
 		ExtendClientAreaToDecorationsHint="True"
 		Foreground="#d9d9d9"

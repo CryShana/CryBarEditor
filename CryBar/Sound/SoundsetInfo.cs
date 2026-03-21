@@ -1,4 +1,4 @@
-namespace CryBar;
+namespace CryBar.Sound;
 
 /// <summary>
 /// Represents a single sound file reference within a soundset.

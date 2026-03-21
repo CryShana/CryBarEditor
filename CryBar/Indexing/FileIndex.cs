@@ -1,4 +1,4 @@
-namespace CryBar;
+namespace CryBar.Indexing;
 
 /// <summary>
 /// Index of files across root directories and BAR archives.

@@ -2,7 +2,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 
-namespace CryBar;
+namespace CryBar.Scenario;
 
 // XS trigger script -> trigger XML conversion (reverse of ConvertTriggersXmlToXs).
 // With @CryBar: metadata (lossless mode), reconstructs full typed XML.

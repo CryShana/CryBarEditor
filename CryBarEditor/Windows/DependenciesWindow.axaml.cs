@@ -2,7 +2,8 @@ using Avalonia.Controls;
 using Avalonia.Data.Converters;
 using Avalonia.Interactivity;
 
-using CryBar;
+using CryBar.Dependencies;
+using CryBar.Indexing;
 using CryBarEditor.Classes;
 
 using System;
@@ -11,7 +12,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace CryBarEditor;
+namespace CryBarEditor.Windows;
 
 public partial class DependenciesWindow : SimpleWindow
 {

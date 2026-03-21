@@ -1,8 +1,9 @@
 using Avalonia.Media;
 
+using CryBar.Scenario;
 using CryBarEditor.Classes;
 
-namespace CryBarEditor;
+namespace CryBarEditor.Windows;
 
 public partial class XsExportDialog : SimpleWindow
 {

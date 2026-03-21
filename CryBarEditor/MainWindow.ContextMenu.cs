@@ -1,4 +1,6 @@
 using Avalonia.Controls;
+using CryBar.Bar;
+using CryBarEditor.Windows;
 
 using System;
 using System.Collections.Generic;

@@ -7,8 +7,12 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 
 using CryBar;
-using CryBar.Classes;
+using CryBar.Bar;
+using CryBar.Dependencies;
+using CryBar.Indexing;
+using CryBar.Sound;
 using CryBar.TMM;
+using CryBar.Utilities;
 using CryBarEditor.Classes;
 
 using Material.Icons;
@@ -28,7 +32,7 @@ using System.Threading.Tasks;
 
 using IOPath = System.IO.Path;
 
-namespace CryBarEditor;
+namespace CryBarEditor.Windows;
 
 public partial class DependencyGraphWindow : SimpleWindow
 {

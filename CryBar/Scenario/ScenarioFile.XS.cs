@@ -2,7 +2,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 
-namespace CryBar;
+namespace CryBar.Scenario;
 
 // Trigger XML -> XS script conversion.
 // Substitutes %Param% placeholders in cmd/Extra templates with actual argument values.

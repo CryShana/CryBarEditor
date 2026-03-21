@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.Text;
 using System.Xml;
 
-namespace CryBar;
+namespace CryBar.Scenario;
 
 public partial class ScenarioFile
 {

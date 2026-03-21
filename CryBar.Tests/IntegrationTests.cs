@@ -2,6 +2,9 @@ using System.Diagnostics;
 using System.Xml;
 
 using CryBar;
+using CryBar.Bar;
+using CryBar.Export;
+using CryBar.Scenario;
 using CryBar.TMM;
 
 using SixLabors.ImageSharp;

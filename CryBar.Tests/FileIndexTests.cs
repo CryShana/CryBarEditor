@@ -1,6 +1,8 @@
 using System.IO;
 
 using CryBar;
+using CryBar.Dependencies;
+using CryBar.Indexing;
 
 namespace CryBar.Tests;
 

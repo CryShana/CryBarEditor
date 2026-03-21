@@ -3,6 +3,8 @@ using System.Text;
 using System.Text.Json;
 
 using CryBar;
+using CryBar.Bar;
+using CryBar.Export;
 using CryBar.TMM;
 
 namespace CryBar.Tests;

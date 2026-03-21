@@ -3,7 +3,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 		xmlns:ae="clr-namespace:AvaloniaEdit;assembly=AvaloniaEdit"
-		xmlns:cb="using:CryBar"
+		xmlns:cbar="using:CryBar.Bar"
 		xmlns:ce="using:CryBarEditor"
 		xmlns:cc="using:CryBarEditor.Classes"
 		xmlns:converters="using:CryBarEditor.Converters"
@@ -302,7 +302,7 @@
 								SelectedItem="{Binding SelectedBarEntry, Mode=TwoWay}"
 								ContextMenu="{StaticResource SharedContextMenu}">
 							<ListBox.ItemTemplate>
-								<DataTemplate x:DataType="cb:BarFileEntry">
+								<DataTemplate x:DataType="cbar:BarFileEntry">
 									<StackPanel Orientation="Horizontal" Height="19">
 										<TextBlock Text="{Binding DirectoryPath}" Foreground="#808080" VerticalAlignment="Center"/>
 										<TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
@@ -363,7 +363,7 @@
 								SelectedItems="{Binding SelectedBankEntries, Mode=TwoWay}"
 								SelectedItem="{Binding SelectedBankEntry, Mode=TwoWay}">
 							<ListBox.ItemTemplate>
-								<DataTemplate x:DataType="ce:FMODEvent">
+								<DataTemplate x:DataType="cc:FMODEvent">
 									<StackPanel Orientation="Horizontal" Height="19">
 										<micons:MaterialIcon Kind="MusicNote" Width="16" Height="16" 
 														Margin="0,0,5,0" Foreground="#6f96bf" 

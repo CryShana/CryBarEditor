@@ -3,7 +3,7 @@ using System.Text.Json;
 
 using CryBar.TMM;
 
-namespace CryBar;
+namespace CryBar.Export;
 
 /// <summary>
 /// Exports TMM game model data to glTF 2.0 binary (GLB) format.

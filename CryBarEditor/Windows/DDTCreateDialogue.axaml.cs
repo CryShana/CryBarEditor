@@ -13,7 +13,7 @@ using System.IO;
 
 using Image = SixLabors.ImageSharp.Image;
 
-namespace CryBarEditor;
+namespace CryBarEditor.Windows;
 
 public partial class DDTCreateDialogue : SimpleWindow
 {

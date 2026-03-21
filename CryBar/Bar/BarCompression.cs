@@ -1,11 +1,11 @@
-using CryBar.Classes;
+using CryBar.Utilities;
 using System.Buffers;
 using System.Buffers.Binary;
 using System.IO.Compression;
 
 using K4os.Compression.LZ4;
 
-namespace CryBar;
+namespace CryBar.Bar;
 
 public static class BarCompression
 {

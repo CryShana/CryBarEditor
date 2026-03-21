@@ -1,10 +1,13 @@
-using CryBar.Classes;
+using CryBar.Bar;
+using CryBar.Sound;
+using CryBar.Utilities;
+using CryBar.Indexing;
 
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 
-namespace CryBar;
+namespace CryBar.Dependencies;
 
 /// <summary>
 /// Scans file content for dependency references (file paths, STR_ keys, soundset names)

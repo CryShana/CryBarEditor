@@ -1,8 +1,12 @@
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using CryBar;
-using CryBar.Classes;
+using CryBar.Bar;
+using CryBar.Export;
+using CryBar.Indexing;
+using CryBar.Utilities;
 using CryBarEditor.Classes;
+using CryBarEditor.Windows;
 using SixLabors.ImageSharp.PixelFormats;
 using System;
 using System.Collections.Generic;

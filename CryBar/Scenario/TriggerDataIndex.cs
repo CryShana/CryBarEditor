@@ -1,7 +1,9 @@
+using CryBar.Bar;
+using CryBar.Utilities;
 using System.Text.RegularExpressions;
 using System.Xml;
 
-namespace CryBar;
+namespace CryBar.Scenario;
 
 /// <summary>
 /// Loads and indexes the trigger_data.xml template database from Data.bar.

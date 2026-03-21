@@ -1,4 +1,4 @@
-﻿namespace CryBar.Classes;
+﻿namespace CryBar.Utilities;
 
 public class ActualMemoryStream : Stream
 {

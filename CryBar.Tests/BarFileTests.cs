@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Text;
 
 using CryBar;
+using CryBar.Bar;
 
 namespace CryBar.Tests;
 

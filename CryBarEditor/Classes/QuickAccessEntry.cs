@@ -1,3 +1,5 @@
+using CryBar.Bar;
+
 using System;
 using System.IO;
 using System.Text.Json.Serialization;
@@ -64,7 +66,7 @@ public class QuickAccessEntry
         };
     }
 
-    public static QuickAccessEntry FromBarEntry(CryBar.BarFileEntry barEntry, string barArchiveRelativePath)
+    public static QuickAccessEntry FromBarEntry(BarFileEntry barEntry, string barArchiveRelativePath)
     {
         return new QuickAccessEntry
         {

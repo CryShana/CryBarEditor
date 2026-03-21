@@ -1,4 +1,4 @@
-namespace CryBar;
+namespace CryBar.Indexing;
 
 public enum FileIndexSource { RootFile, BarEntry }
 

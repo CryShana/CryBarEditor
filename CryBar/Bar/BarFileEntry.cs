@@ -1,8 +1,8 @@
 using System.Buffers;
 using CommunityToolkit.HighPerformance.Buffers;
-using CryBar.Classes;
+using CryBar.Utilities;
 
-namespace CryBar;
+namespace CryBar.Bar;
 
 public class BarFileEntry
 {

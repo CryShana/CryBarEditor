@@ -2,6 +2,7 @@ using Avalonia.Data.Converters;
 using Avalonia.Media;
 
 using CryBar;
+using CryBar.Dependencies;
 
 using Material.Icons;
 

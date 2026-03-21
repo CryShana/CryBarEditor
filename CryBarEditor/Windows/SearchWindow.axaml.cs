@@ -1,7 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Threading;
 
-using CryBar;
+using CryBar.Bar;
 
 using CryBarEditor.Classes;
 
@@ -20,7 +20,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using Avalonia.Interactivity;
 
-namespace CryBarEditor;
+namespace CryBarEditor.Windows;
 
 public partial class SearchWindow : SimpleWindow
 {

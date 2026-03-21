@@ -1,4 +1,5 @@
 using CryBar;
+using CryBar.Dependencies;
 
 using System.Collections.Generic;
 using System.ComponentModel;

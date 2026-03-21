@@ -1,6 +1,6 @@
 using System.Buffers;
 
-namespace CryBar.Classes;
+namespace CryBar.Utilities;
 
 /// <summary>
 /// Buffer that utilizes ArrayPool to minimize allocations.

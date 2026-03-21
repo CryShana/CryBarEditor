@@ -1,4 +1,5 @@
 using CryBar;
+using CryBar.Indexing;
 
 namespace CryBar.Tests;
 

@@ -7,7 +7,7 @@ using CommunityToolkit.HighPerformance;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace CryBar;
+namespace CryBar.Bar;
 
 public static class BarFormatConverter
 {

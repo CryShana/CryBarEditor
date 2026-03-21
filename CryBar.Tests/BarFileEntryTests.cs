@@ -1,4 +1,5 @@
 using CryBar;
+using CryBar.Bar;
 
 namespace CryBar.Tests;
 

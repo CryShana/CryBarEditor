@@ -4,7 +4,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 
-namespace CryBar;
+namespace CryBar.Scenario;
 
 /// <summary>
 /// Parses .mythscn scenario files (Age of Mythology: Retold).

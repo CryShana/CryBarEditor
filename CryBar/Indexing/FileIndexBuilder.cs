@@ -1,4 +1,6 @@
-namespace CryBar;
+using CryBar.Bar;
+
+namespace CryBar.Indexing;
 
 /// <summary>
 /// Discovers supplemental BAR files in parent directories and indexes their entries.

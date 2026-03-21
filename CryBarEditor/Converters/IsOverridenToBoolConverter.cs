@@ -1,6 +1,6 @@
 using Avalonia.Data.Converters;
 
-using CryBar;
+using CryBar.Bar;
 
 using CryBarEditor.Classes;
 

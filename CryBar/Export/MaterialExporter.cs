@@ -1,7 +1,7 @@
 using System.Text;
 using System.Xml;
 
-namespace CryBar;
+namespace CryBar.Export;
 
 public class MaterialInfo
 {

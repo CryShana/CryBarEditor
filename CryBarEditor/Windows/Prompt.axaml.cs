@@ -7,7 +7,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 
-namespace CryBarEditor;
+namespace CryBarEditor.Windows;
 
 public partial class Prompt : SimpleWindow
 {

@@ -1,6 +1,6 @@
 using Avalonia.Controls;
 
-using CryBar;
+using CryBar.Bar;
 using CryBarEditor.Classes;
 
 using System;
@@ -8,7 +8,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace CryBarEditor;
+namespace CryBarEditor.Windows;
 
 public partial class AdvancedExportWindow : SimpleWindow
 {

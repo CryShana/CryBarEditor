@@ -1,7 +1,9 @@
 using Avalonia.Controls;
-using CryBar;
-using CryBar.Classes;
+using CryBar.Bar;
+using CryBar.Scenario;
+using CryBar.Utilities;
 using CryBarEditor.Classes;
+using CryBarEditor.Windows;
 using System;
 using System.IO;
 using System.Threading.Tasks;

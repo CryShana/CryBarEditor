@@ -1,12 +1,12 @@
 <Window
-	x:Class="CryBarEditor.DependenciesWindow"
+	x:Class="CryBarEditor.Windows.DependenciesWindow"
 	xmlns="https://github.com/avaloniaui"
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-	xmlns:ce="using:CryBarEditor"
+	xmlns:ce="using:CryBarEditor.Windows"
 	xmlns:cc="using:CryBarEditor.Classes"
-	xmlns:cb="using:CryBar"
+	xmlns:cdep="using:CryBar.Dependencies"
 	xmlns:converters="using:CryBarEditor.Converters"
 	xmlns:micons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
 	Title="{Binding WindowTitle}"
@@ -146,7 +146,7 @@
 								</ItemsPanelTemplate>
 							</ListBox.ItemsPanel>
 							<ListBox.ItemTemplate>
-								<DataTemplate x:DataType="cb:DependencyReference">
+								<DataTemplate x:DataType="cdep:DependencyReference">
 									<DockPanel Margin="0,1">
 										<!-- Navigate button on right (hidden when unresolved, disabled when all external) -->
 										<Button DockPanel.Dock="Right" Padding="4"

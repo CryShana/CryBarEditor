@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Xml;
 
-namespace CryBar;
+namespace CryBar.Scenario;
 
 /// <summary>
 /// Parses .trg trigger export files (Age of Mythology: Retold).

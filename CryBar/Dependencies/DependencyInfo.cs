@@ -1,4 +1,6 @@
-namespace CryBar;
+using CryBar.Indexing;
+
+namespace CryBar.Dependencies;
 
 public enum DependencyRefType
 {

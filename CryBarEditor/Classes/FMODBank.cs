@@ -7,7 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Bank = FMOD.Studio.Bank;
 
-namespace CryBarEditor;
+namespace CryBarEditor.Classes;
 
 public class FMODBank : IDisposable
 {

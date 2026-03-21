@@ -1,4 +1,7 @@
 using CryBar;
+using CryBar.Dependencies;
+using CryBar.Indexing;
+using CryBar.Sound;
 
 namespace CryBar.Tests;
 

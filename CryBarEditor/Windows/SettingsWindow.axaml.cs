@@ -1,7 +1,7 @@
 using Avalonia.Controls;
 using CryBarEditor.Classes;
 
-namespace CryBarEditor;
+namespace CryBarEditor.Windows;
 
 public partial class SettingsWindow : SimpleWindow
 {

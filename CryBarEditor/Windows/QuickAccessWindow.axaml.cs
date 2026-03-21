@@ -8,7 +8,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 
-namespace CryBarEditor;
+namespace CryBarEditor.Windows;
 
 public partial class QuickAccessWindow : SimpleWindow
 {

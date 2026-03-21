@@ -1,10 +1,10 @@
 <Window
-	x:Class="CryBarEditor.DependencyGraphWindow"
+	x:Class="CryBarEditor.Windows.DependencyGraphWindow"
 	xmlns="https://github.com/avaloniaui"
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-	xmlns:ce="using:CryBarEditor"
+	xmlns:ce="using:CryBarEditor.Windows"
 	xmlns:micons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
 	Title="{Binding WindowTitle}"
 	Width="900"

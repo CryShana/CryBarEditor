@@ -1,3 +1,4 @@
+using CryBar.Export;
 using CryBar.TMM;
 
 using SixLabors.ImageSharp;
@@ -8,7 +9,7 @@ using SixLabors.ImageSharp.PixelFormats;
 using System.Globalization;
 using System.Text;
 
-namespace CryBar;
+namespace CryBar.Bar;
 
 /// <summary>
 /// Common file conversion operations (XMB→XML, DDT→TGA, DDT→PNG, TMM→OBJ/GLB).

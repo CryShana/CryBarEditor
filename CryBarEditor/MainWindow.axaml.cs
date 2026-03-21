@@ -4,8 +4,11 @@ using Avalonia.Threading;
 using AvaloniaEdit.Document;
 using AvaloniaEdit.Folding;
 using AvaloniaEdit.TextMate;
-using CryBar;
+using CryBar.Bar;
+using CryBar.Indexing;
+using CryBar.Utilities;
 using CryBarEditor.Classes;
+using CryBarEditor.Windows;
 using System;
 using System.IO;
 using System.Net.Http;
@@ -19,7 +22,6 @@ using CryBarEditor.Controls;
 using TextMateSharp.Grammars;
 using Configuration = CryBarEditor.Classes.Configuration;
 using System.Linq;
-using CryBar.Classes;
 
 namespace CryBarEditor;
 

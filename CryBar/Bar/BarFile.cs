@@ -4,7 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 
 using CommunityToolkit.HighPerformance.Buffers;
 
-namespace CryBar;
+namespace CryBar.Bar;
 
 public enum BarFileLoadError
 {

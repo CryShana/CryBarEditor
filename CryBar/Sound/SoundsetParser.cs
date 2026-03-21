@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Xml;
 
-namespace CryBar;
+namespace CryBar.Sound;
 
 /// <summary>
 /// Parses soundset definition XML files and sound manifest XML files.

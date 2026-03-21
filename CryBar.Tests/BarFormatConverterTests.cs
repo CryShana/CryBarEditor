@@ -2,6 +2,7 @@ using System.Text;
 using System.Xml;
 
 using CryBar;
+using CryBar.Bar;
 
 namespace CryBar.Tests;
 

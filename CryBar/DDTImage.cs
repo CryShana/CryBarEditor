@@ -12,7 +12,7 @@ using System.Text;
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using System.Diagnostics.CodeAnalysis;
-using CryBar.Classes;
+using CryBar.Utilities;
 
 namespace CryBar;
 
