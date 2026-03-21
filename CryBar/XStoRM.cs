@@ -24,7 +24,6 @@ public static partial class XStoRM
     public static bool Convert(string input_path, string output_path, string class_name)
     {
         class_name = class_name.Length > 0 ? class_name : "ExportedClass";
-        if (class_name.Length == 0) class_name = "ExportedClass";
 
         if (!File.Exists(input_path))
             return false;
