@@ -97,7 +97,7 @@ public class BarCompressionTests
         byte[] original = "Hello, World! This is test data for L33t compression."u8.ToArray();
 
         var compressed = BarCompression.CompressL33t(original);
-        var decompressed = BarCompression.DecompressL33t(compressed.Span);
+        var decompressed = BarCompression.DecompressL33t(compressed);
 
         Assert.NotNull(decompressed);
         Assert.Equal(original, decompressed);
@@ -111,7 +111,7 @@ public class BarCompressionTests
             original[i] = (byte)(i % 251);
 
         var compressed = BarCompression.CompressL33t(original);
-        var decompressed = BarCompression.DecompressL33t(compressed.Span);
+        var decompressed = BarCompression.DecompressL33t(compressed);
 
         Assert.NotNull(decompressed);
         Assert.Equal(original, decompressed);
@@ -125,7 +125,7 @@ public class BarCompressionTests
 
         var compressed = BarCompression.CompressL33t(original);
         var output = new byte[original.Length];
-        int bytesWritten = BarCompression.DecompressL33t(compressed.Span, output);
+        int bytesWritten = BarCompression.DecompressL33t(compressed, output);
 
         Assert.Equal(original.Length, bytesWritten);
         Assert.Equal(original, output);
@@ -282,7 +282,7 @@ public class BarCompressionTests
 
         var tooSmall = new byte[10];
         Assert.Throws<InvalidDataException>(() =>
-            BarCompression.DecompressL33t(compressed.Span, tooSmall));
+            BarCompression.DecompressL33t(compressed, tooSmall));
     }
 
     #endregion

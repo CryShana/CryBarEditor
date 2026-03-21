@@ -1000,7 +1000,7 @@ public class IntegrationTests
             }
 
             // Decompress the recompressed output and verify content matches
-            var roundtripped = BarCompression.DecompressL33t(recompSpan);
+            var roundtripped = BarCompression.DecompressL33t(recompressed);
             if (roundtripped == null)
             {
                 lock (failures) failures.Add($"{fileName}: roundtrip decompression returned null");

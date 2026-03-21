@@ -204,7 +204,7 @@ public class BarFormatConverterTests
 
         var xmb = BarFormatConverter.XMLtoXMB(xml, CompressionType.L33t);
 
-        var decompressed = BarCompression.DecompressL33t(xmb.Span);
+        var decompressed = BarCompression.DecompressL33t(xmb);
         Assert.NotNull(decompressed);
 
         var restored = BarFormatConverter.XMBtoXML(decompressed);
