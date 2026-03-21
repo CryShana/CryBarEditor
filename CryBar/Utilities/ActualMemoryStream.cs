@@ -6,7 +6,7 @@ public class ActualMemoryStream : Stream
     public override bool CanSeek => true;
     public override bool CanWrite => true;
     public override long Length => _buffer.Length;
-    public override long Position { get => _position; set => Seek(_position, SeekOrigin.Begin); }
+    public override long Position { get => _position; set => Seek(value, SeekOrigin.Begin); }
     public Memory<byte> Buffer => _buffer;
 
     int _position = 0;
@@ -34,7 +34,7 @@ public class ActualMemoryStream : Stream
                 _position += o;
                 break;
             case SeekOrigin.End:
-                _position = (_buffer.Length - 1) - o;
+                _position = _buffer.Length - o;
                 break;
         }
 
@@ -73,10 +73,38 @@ public class ActualMemoryStream : Stream
         if (count <= 0)
             return 0;
 
-        var dst = buffer.AsMemory(offset, count);
-        bfr.Slice(pos, count).CopyTo(dst);
+        bfr.Span.Slice(pos, count).CopyTo(buffer.AsSpan(offset, count));
 
         _position += count;
         return count;
+    }
+
+    public override int Read(Span<byte> buffer)
+    {
+        var bfr = _buffer;
+        var pos = _position;
+        var count = Math.Min(bfr.Length - pos, buffer.Length);
+
+        if (count <= 0)
+            return 0;
+
+        bfr.Span.Slice(pos, count).CopyTo(buffer);
+
+        _position += count;
+        return count;
+    }
+
+    public override void Write(ReadOnlySpan<byte> buffer)
+    {
+        var bfr = _buffer;
+        var pos = _position;
+        var count = Math.Min(bfr.Length - pos, buffer.Length);
+
+        if (count <= 0)
+            return;
+
+        buffer.Slice(0, count).CopyTo(bfr.Span.Slice(pos));
+
+        _position += count;
     }
 }

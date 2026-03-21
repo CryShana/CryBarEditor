@@ -207,29 +207,30 @@ public class DDTImage
     public static Image<Rgba32> PixelsToImage(Memory2D<ColorRgba32> colors)
     {
         var output = new Image<Rgba32>(colors.Width, colors.Height);
-        for (var y = 0; y < colors.Height; y++)
-        {
-            var yPixels = output.Frames.RootFrame.PixelBuffer.DangerousGetRowSpan(y);
-            var yColors = colors.Span.GetRowSpan(y);
 
-            MemoryMarshal.Cast<ColorRgba32, Rgba32>(yColors).CopyTo(yPixels);
+        if (colors.TryGetMemory(out var srcMemory))
+        {
+            // contiguous — single bulk copy
+            var dest = output.GetPixelMemoryGroup()[0].Span;
+            MemoryMarshal.Cast<ColorRgba32, Rgba32>(srcMemory.Span).CopyTo(dest);
+        }
+        else
+        {
+            for (var y = 0; y < colors.Height; y++)
+            {
+                var yPixels = output.Frames.RootFrame.PixelBuffer.DangerousGetRowSpan(y);
+                var yColors = colors.Span.GetRowSpan(y);
+                MemoryMarshal.Cast<ColorRgba32, Rgba32>(yColors).CopyTo(yPixels);
+            }
         }
         return output;
     }
 
     public static Memory2D<ColorRgba32> ImageToPixels(Image<Rgba32> inputImage)
     {
+        // Rgba32 and ColorRgba32 are layout-identical — reinterpret the image's pixel buffer directly
         var pixels = inputImage.GetPixelMemoryGroup()[0];
-        var colors = new ColorRgba32[inputImage.Width * inputImage.Height];
-        for (var y = 0; y < inputImage.Height; y++)
-        {
-            var yPixels = inputImage.Frames.RootFrame.PixelBuffer.DangerousGetRowSpan(y);
-            var yColors = colors.AsSpan(y * inputImage.Width, inputImage.Width);
-
-            MemoryMarshal.Cast<Rgba32, ColorRgba32>(yPixels).CopyTo(yColors);
-        }
-        var memory = colors.AsMemory().AsMemory2D(inputImage.Height, inputImage.Width);
-        return memory;
+        return pixels.Cast<Rgba32, ColorRgba32>().AsMemory2D(inputImage.Height, inputImage.Width);
     }
 
     public static async Task<Memory<byte>> EncodeImageToDDT(Image<Rgba32> image, 

@@ -153,7 +153,7 @@ public class BarFileEntry
             return SizeInArchive;
         }
 
-        using var raw_data = SpanOwner<byte>.Allocate(SizeInArchive);
+        using var raw_data = MemoryOwner<byte>.Allocate(SizeInArchive);
         var raw = raw_data.Span;
         stream.ReadExactly(raw);
 
@@ -163,7 +163,7 @@ public class BarFileEntry
         }
         else if (raw.IsL33t())
         {
-            return BarCompression.DecompressL33t(raw, read_data);
+            return BarCompression.DecompressL33t(raw_data.Memory, read_data);
         }
 
         return -1;
