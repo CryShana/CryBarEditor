@@ -26,6 +26,10 @@ jobs:
         working-directory: CryBarEditor
         run: dotnet publish -c Release -o out
 
+      - name: Publish CryBar CLI
+        working-directory: CryBar.Cli
+        run: dotnet publish -c Release -o out
+
       - name: Parse version from csproj
         id: version
         shell: pwsh
@@ -39,19 +43,29 @@ jobs:
         run: |
           Remove-Item CryBarEditor/out/*.pdb -ErrorAction SilentlyContinue
           Remove-Item CryBarEditor/out/*.json -ErrorAction SilentlyContinue
+          Remove-Item CryBar.Cli/out/*.pdb -ErrorAction SilentlyContinue
+          Remove-Item CryBar.Cli/out/*.json -ErrorAction SilentlyContinue
+          Rename-Item CryBar.Cli/out/CryBar.Cli.exe crybar.exe
 
-      - name: Zip release
+      - name: Zip releases
         shell: pwsh
         run: |
           Compress-Archive -Path CryBarEditor/out/* -DestinationPath "CryBarEditor-${{ steps.version.outputs.VERSION }}.zip"
+          Compress-Archive -Path CryBar.Cli/out/* -DestinationPath "CryBar.Cli-${{ steps.version.outputs.VERSION }}.zip"
 
-      - name: Upload artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
           name: CryBarEditor-${{ steps.version.outputs.VERSION }}
           path: CryBarEditor/out/
 
-      - name: Find draft release and attach zip
+      - name: Upload CLI artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: CryBar.Cli-${{ steps.version.outputs.VERSION }}
+          path: CryBar.Cli/out/
+
+      - name: Find draft release and attach zips
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -67,4 +81,6 @@ jobs:
             exit 0
           fi
           echo "Attaching to draft release: $DRAFT_TAG"
-          gh release upload "$DRAFT_TAG" "CryBarEditor-${{ steps.version.outputs.VERSION }}.zip"
+          gh release upload "$DRAFT_TAG" \
+            "CryBarEditor-${{ steps.version.outputs.VERSION }}.zip" \
+            "CryBar.Cli-${{ steps.version.outputs.VERSION }}.zip"

@@ -2,4 +2,5 @@
   <Project Path="CryBar/CryBar.csproj" />
   <Project Path="CryBarEditor/CryBarEditor.csproj" />
   <Project Path="CryBar.Tests/CryBar.Tests.csproj" />
+  <Project Path="CryBar.Cli/CryBar.Cli.csproj" />
 </Solution>
