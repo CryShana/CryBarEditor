@@ -27,7 +27,7 @@ public static class DepsCommands
 
     static Command CreateFindCommand()
     {
-        var fileArg = new Argument<string>("file") { Description = "Relative file path to analyze (e.g. \"art/units/greek/hoplite.xml\")" };
+        var fileArg = new Argument<string>("file") { Description = "Relative file path (to root directory) to analyze (e.g. \"art/units/greek/hoplite.xml\")" };
 
         var cmd = new Command("find", "List dependencies of a file") { fileArg };
 
