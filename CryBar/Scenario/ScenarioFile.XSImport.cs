@@ -15,9 +15,6 @@ public partial class ScenarioFile
     [GeneratedRegex(@"^group\s+(.+)$")]
     private static partial Regex XsGroupRegex();
 
-    [GeneratedRegex("""include "([^"]+)"\;""")]
-    private static partial Regex XsIncludeRegex();
-
     [GeneratedRegex(@"^// @CryBar:(\w+)\s*(.*)$")]
     private static partial Regex CryBarCommentRegex();
 
@@ -241,7 +238,7 @@ public partial class ScenarioFile
     static string ResolveIncludes(string xsText, string sourceDir, HashSet<string>? visited = null)
     {
         visited ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var regex = XsIncludeRegex();
+        var regex = XStoRM.GetIncludeRgx();
         return regex.Replace(xsText, match =>
         {
             var relativePath = match.Groups[1].Value;

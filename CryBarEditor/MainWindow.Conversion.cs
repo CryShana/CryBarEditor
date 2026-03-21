@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using CryBar;
 using CryBar.Bar;
 using CryBar.Scenario;
 using CryBar.Utilities;
