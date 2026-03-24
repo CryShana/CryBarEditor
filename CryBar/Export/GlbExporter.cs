@@ -497,7 +497,7 @@ public static class GlbExporter
             w.WriteString("name", attachments[i].Name);
 
             // Convert row-major 3×4 attachment transform to column-major 4×4 for glTF
-            WriteZNegatedMatrixJson(w, RowMajor3x4ToColumnMajor4x4(attachments[i].TransformMatrix1));
+            WriteZNegatedMatrixJson(w, RowMajor3x4ToColumnMajor4x4(attachments[i].AdjustmentTransformMatrix));
 
             w.WriteEndObject();
         }

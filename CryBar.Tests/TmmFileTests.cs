@@ -1,7 +1,8 @@
 using System.Buffers.Binary;
-using System.Text;
 
 using CryBar.TMM;
+
+using static CryBar.Tests.TmmTestHelpers;
 
 namespace CryBar.Tests;
 
@@ -98,7 +99,9 @@ public class TmmFileTests
         var data = CreateSyntheticTmm(
             numMeshGroups: 2,
             materials: ["stone", "wood"],
-            submodels: ["default"]);
+            submodels: ["default"],
+            numVertices: 200,
+            numTriangleVerts: 600);
 
         var tmm = new TmmFile(data);
         Assert.True(tmm.Parsed);
@@ -190,6 +193,79 @@ public class TmmFileTests
         Assert.Contains("attach_0", summary);
     }
 
+    [Fact]
+    public void Parse_AttachmentWithSpecificAnimations()
+    {
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+
+        WriteHeader(w, 35);
+        WriteImportMetadata(w, []);
+        WriteBoundingBoxes(w);
+        w.Write(3.0f); // bounds radius
+
+        w.Write(0u); // meshGroups
+        w.Write(0u); // materials
+        w.Write(0u); // submodels
+        w.Write(1u); // bones
+        w.Write(0u); // SharedAnimationBucketCount
+        w.Write(1u); // attachments
+        w.Write(0u); // vertices
+        w.Write(0u); // triangleVerts
+
+        for (int i = 0; i < 14; i++) w.Write(0u); // data block layout
+        w.Write((byte)0); w.Write((byte)0); // 2 bool bytes
+
+        // Main matrix (identity 4x3)
+        w.Write(1.0f); w.Write(0.0f); w.Write(0.0f); w.Write(0.0f);
+        w.Write(0.0f); w.Write(1.0f); w.Write(0.0f); w.Write(0.0f);
+        w.Write(0.0f); w.Write(0.0f); w.Write(1.0f); w.Write(0.0f);
+
+        // Attachment
+        w.Write(0u); // TypeFlag
+        w.Write(0); // ParentBoneId
+        WriteUTF16String(w, "test_attach");
+        for (int j = 0; j < 24; j++) w.Write(0.0f); // two 4x3 matrices
+        w.Write(0u); // DummyBoneMode
+        w.Write(4u); // DummyBoneTransformMode = AllFrames
+        WriteUTF16String(w, ""); // ForcedDummyBoneName
+        w.Write(10); // FrameLimit
+        w.Write(0.5f); // FramePosition
+        w.Write(3u); // DummyBoneAnimationFilter = OnlySpecificAnimations
+        w.Write(2u); // DummySpecificAnimationsCount
+        WriteUTF16String(w, "anims/walk.tma");
+        WriteUTF16String(w, "anims/run.tma");
+
+        // Mesh groups (0), Materials (0), Submodels (0)
+
+        // Bone
+        WriteUTF16String(w, "root");
+        w.Write(-1);
+        w.Write(0.0f); w.Write(0.0f); w.Write(0.0f);
+        w.Write(0.5f);
+        for (int m = 0; m < 3; m++)
+        {
+            w.Write(1.0f); w.Write(0.0f); w.Write(0.0f); w.Write(0.0f);
+            w.Write(0.0f); w.Write(1.0f); w.Write(0.0f); w.Write(0.0f);
+            w.Write(0.0f); w.Write(0.0f); w.Write(1.0f); w.Write(0.0f);
+            w.Write(0.0f); w.Write(0.0f); w.Write(0.0f); w.Write(1.0f);
+        }
+
+        var tmm = new TmmFile(ms.ToArray());
+        Assert.True(tmm.Parsed);
+        Assert.Single(tmm.Attachments);
+
+        var att = tmm.Attachments[0];
+        Assert.Equal("test_attach", att.Name);
+        Assert.Equal(4u, att.DummyBoneTransformMode);
+        Assert.Equal(10, att.FrameLimit);
+        Assert.Equal(0.5f, att.FramePosition);
+        Assert.Equal(3u, att.DummyBoneAnimationFilter);
+        Assert.Equal(2, att.DummySpecificAnimations.Length);
+        Assert.Equal("anims/walk.tma", att.DummySpecificAnimations[0]);
+        Assert.Equal("anims/run.tma", att.DummySpecificAnimations[1]);
+    }
+
     #endregion
 
     #region Helper Methods
@@ -203,142 +279,8 @@ public class TmmFileTests
         return data;
     }
 
-    static byte[] CreateSyntheticTmm(
-        uint version = 35,
-        string[]? importNames = null,
-        uint numMeshGroups = 0,
-        string[]? materials = null,
-        string[]? submodels = null,
-        uint numBones = 0,
-        uint numAttachments = 0,
-        uint numVertices = 0,
-        uint numTriangleVerts = 0)
-    {
-        importNames ??= [];
-        materials ??= [];
-        submodels ??= [];
-
-        using var ms = new MemoryStream();
-        using var w = new BinaryWriter(ms);
-
-        WriteHeader(w, version);
-        WriteImportMetadata(w, importNames);
-        WriteBoundingBoxes(w);
-        w.Write(3.0f); // bounds radius
-
-        // Section counts
-        w.Write(numMeshGroups);
-        w.Write((uint)materials.Length);
-        w.Write((uint)submodels.Length);
-        w.Write(numBones);
-        w.Write(0u); // reserved
-        w.Write(numAttachments);
-        w.Write(numVertices);
-        w.Write(numTriangleVerts);
-
-        // Data block layout (all zeroed for synthetic)
-        for (int i = 0; i < 14; i++) w.Write(0u); // 7 pairs of offset+length
-
-        // 2 unknown bytes
-        w.Write((byte)0); w.Write((byte)1);
-
-        // Main matrix (identity 4x3)
-        w.Write(1.0f); w.Write(0.0f); w.Write(0.0f); w.Write(0.0f);
-        w.Write(0.0f); w.Write(1.0f); w.Write(0.0f); w.Write(0.0f);
-        w.Write(0.0f); w.Write(0.0f); w.Write(1.0f); w.Write(0.0f);
-
-        // Attachments
-        for (int i = 0; i < numAttachments; i++)
-        {
-            w.Write(0u); // type flag
-            w.Write(i < numBones ? i : -1); // parent bone id
-            WriteUTF16String(w, $"attach_{i}");
-            for (int j = 0; j < 24; j++) w.Write(0.0f); // two 4x3 matrices
-            w.Write(0u); // flag1
-            w.Write(0u); // flag2
-            WriteUTF16String(w, ""); // second name
-            w.Write(-1); w.Write(0); w.Write(0); w.Write(0); // terminator
-        }
-
-        // Mesh groups
-        for (int i = 0; i < numMeshGroups; i++)
-        {
-            w.Write(0u); // vertex start
-            w.Write(0u); // index start
-            w.Write(100u); // vertex count
-            w.Write(300u); // index count (100 triangles)
-            w.Write((uint)(i < materials.Length ? i : 0)); // material index
-            w.Write(0u); // shader index
-        }
-
-        // Materials
-        foreach (var mat in materials)
-            WriteUTF16String(w, mat);
-
-        // Shader techniques
-        foreach (var tech in submodels)
-            WriteUTF16String(w, tech);
-
-        // Bones
-        for (int i = 0; i < numBones; i++)
-        {
-            WriteUTF16String(w, $"bone_{i}");
-            w.Write(i == 0 ? -1 : i - 1); // parent id
-            w.Write(0.0f); w.Write(0.0f); w.Write(0.0f); // collision offset
-            w.Write(0.5f); // radius
-            // Three 4x4 identity matrices
-            for (int m = 0; m < 3; m++)
-            {
-                w.Write(1.0f); w.Write(0.0f); w.Write(0.0f); w.Write(0.0f);
-                w.Write(0.0f); w.Write(1.0f); w.Write(0.0f); w.Write(0.0f);
-                w.Write(0.0f); w.Write(0.0f); w.Write(1.0f); w.Write(0.0f);
-                w.Write(0.0f); w.Write(0.0f); w.Write(0.0f); w.Write(1.0f);
-            }
-        }
-
-        return ms.ToArray();
-    }
-
-    static void WriteHeader(BinaryWriter w, uint version)
-    {
-        w.Write((byte)0x42); w.Write((byte)0x54);
-        w.Write((byte)0x4d); w.Write((byte)0x4d);
-        w.Write(version);
-        w.Write((byte)0x44); w.Write((byte)0x50);
-    }
-
-    static void WriteImportMetadata(BinaryWriter w, string[] names)
-    {
-        // Calculate block byte length: 4 (count) + per name: 4 (len) + chars*2 + 16 (unknown)
-        int blockSize = 4;
-        foreach (var name in names)
-            blockSize += 4 + name.Length * 2 + 16;
-        w.Write(blockSize);
-        w.Write(names.Length);
-        foreach (var name in names)
-        {
-            w.Write(name.Length);
-            w.Write(Encoding.Unicode.GetBytes(name));
-            w.Write(0); w.Write(0); w.Write(0); w.Write(0); // 16 bytes unknown
-        }
-    }
-
-    static void WriteBoundingBoxes(BinaryWriter w)
-    {
-        // Tight bounding box
-        w.Write(-1.0f); w.Write(-2.0f); w.Write(-3.0f);
-        w.Write(1.0f); w.Write(2.0f); w.Write(3.0f);
-        // Extended bounding box
-        w.Write(-5.0f); w.Write(-5.0f); w.Write(-5.0f);
-        w.Write(5.0f); w.Write(5.0f); w.Write(5.0f);
-    }
-
-    static void WriteUTF16String(BinaryWriter w, string value)
-    {
-        w.Write(value.Length);
-        if (value.Length > 0)
-            w.Write(Encoding.Unicode.GetBytes(value));
-    }
+    // CreateMinimalTmmHeader is unique to this test class (used for invalid-signature tests)
+    // All other TMM builders are in TmmTestHelpers
 
     #endregion
 }

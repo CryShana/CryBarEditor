@@ -6,6 +6,7 @@ using CryBar.Indexing;
 using CryBar.Utilities;
 using CryBarEditor.Classes;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -499,37 +500,146 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// From a list of BAR entries, pick the one whose directory path best matches
+    /// the preferred directory (longest trailing segment match). Returns first match
+    /// if no preference given or no path matches.
+    /// </summary>
+    internal static BarFileEntry? BestMatchByDirectorySuffix(
+        IEnumerable<BarFileEntry> candidates, string? preferredRelativeDir)
+    {
+        BarFileEntry? best = null;
+        int bestScore = -1;
+
+        string[]? prefSegs = null;
+        if (preferredRelativeDir != null)
+        {
+            var prefDir = preferredRelativeDir.Replace('\\', '/').TrimEnd('/');
+            prefSegs = prefDir.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        }
+
+        foreach (var entry in candidates)
+        {
+            if (best == null) { best = entry; bestScore = 0; }
+            if (prefSegs == null) continue;
+
+            var entryDir = entry.DirectoryPath.Replace('\\', '/').TrimEnd('/');
+            var entrySegs = entryDir.Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+            int score = 0;
+            int ei = entrySegs.Length - 1, pi = prefSegs.Length - 1;
+            while (ei >= 0 && pi >= 0 &&
+                   entrySegs[ei].Equals(prefSegs[pi], StringComparison.OrdinalIgnoreCase))
+            {
+                score++;
+                ei--;
+                pi--;
+            }
+
+            if (score > bestScore)
+            {
+                best = entry;
+                bestScore = score;
+            }
+        }
+
+        return best;
+    }
+
+    /// <summary>
     /// Searches all .bar files in the same directory as the given BAR file for an entry matching the given name.
     /// Skips the current BAR file. Returns the result of the factory function, or default if not found.
+    /// When preferredRelativeDir is provided and multiple matches exist, picks the best directory match.
     /// </summary>
     static async ValueTask<T?> FindCompanionInSiblingBars<T>(string currentBarPath, string entryName,
-        Func<BarFileEntry, FileStream, ValueTask<T?>> factory)
+        Func<BarFileEntry, FileStream, ValueTask<T?>> factory,
+        string? preferredRelativeDir = null)
     {
         var barDir = Path.GetDirectoryName(currentBarPath);
         if (barDir == null) return default;
 
         try
         {
-            foreach (var siblingBarPath in Directory.GetFiles(barDir, "*.bar"))
+            if (preferredRelativeDir == null)
             {
-                if (siblingBarPath.Equals(currentBarPath, StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                try
+                // Fast path: no disambiguation needed, return first match
+                foreach (var siblingBarPath in Directory.GetFiles(barDir, "*.bar"))
                 {
-                    using var sibStream = File.OpenRead(siblingBarPath);
+                    if (siblingBarPath.Equals(currentBarPath, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    try
+                    {
+                        using var sibStream = File.OpenRead(siblingBarPath);
+                        var sibBar = new BarFile(sibStream);
+                        if (!sibBar.Load(out _)) continue;
+
+                        var entry = sibBar.Entries?.FirstOrDefault(e =>
+                            e.Name.Equals(entryName, StringComparison.OrdinalIgnoreCase));
+                        if (entry != null)
+                        {
+                            var result = await factory(entry, sibStream);
+                            if (result != null) return result;
+                        }
+                    }
+                    catch { /* skip unreadable BAR files */ }
+                }
+            }
+            else
+            {
+                // Collect all matches across sibling BARs for disambiguation
+                var matches = new List<(BarFileEntry Entry, string BarPath)>();
+
+                foreach (var siblingBarPath in Directory.GetFiles(barDir, "*.bar"))
+                {
+                    if (siblingBarPath.Equals(currentBarPath, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    try
+                    {
+                        using var sibStream = File.OpenRead(siblingBarPath);
+                        var sibBar = new BarFile(sibStream);
+                        if (!sibBar.Load(out _)) continue;
+
+                        if (sibBar.Entries == null) continue;
+                        foreach (var e in sibBar.Entries)
+                        {
+                            if (e.Name.Equals(entryName, StringComparison.OrdinalIgnoreCase))
+                                matches.Add((e, siblingBarPath));
+                        }
+                    }
+                    catch { /* skip unreadable BAR files */ }
+                }
+
+                if (matches.Count == 0) return default;
+
+                if (matches.Count == 1)
+                {
+                    using var sibStream = File.OpenRead(matches[0].BarPath);
                     var sibBar = new BarFile(sibStream);
-                    if (!sibBar.Load(out _)) continue;
+                    if (!sibBar.Load(out _)) return default;
 
                     var entry = sibBar.Entries?.FirstOrDefault(e =>
                         e.Name.Equals(entryName, StringComparison.OrdinalIgnoreCase));
                     if (entry != null)
-                    {
-                        var result = await factory(entry, sibStream);
-                        if (result != null) return result;
-                    }
+                        return await factory(entry, sibStream);
+
+                    return default;
                 }
-                catch { /* skip unreadable BAR files */ }
+
+                // Multiple matches: pick best by directory suffix
+                var bestEntry = BestMatchByDirectorySuffix(
+                    matches.Select(m => m.Entry), preferredRelativeDir);
+                if (bestEntry == null) return default;
+
+                var bestBarPath = matches.First(m => m.Entry == bestEntry).BarPath;
+                using var bestStream = File.OpenRead(bestBarPath);
+                var bestBar = new BarFile(bestStream);
+                if (!bestBar.Load(out _)) return default;
+
+                var reloadedEntry = bestBar.Entries?.FirstOrDefault(e =>
+                    e.RelativePath.Equals(bestEntry.RelativePath, StringComparison.OrdinalIgnoreCase));
+                if (reloadedEntry != null)
+                    return await factory(reloadedEntry, bestStream);
             }
         }
         catch { /* ignore directory enumeration errors */ }

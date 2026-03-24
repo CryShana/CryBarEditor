@@ -117,8 +117,10 @@ public partial class MainWindow
                         // TMM->OBJ/glTF: find companion .tmm.data
                         if (ext == ".tmm")
                         {
-                            var tmmFileName = Path.GetFileName(getFullRelPath(f));
-                            using var companionData = await ResolveCompanionDataAsync(tmmFileName + ".data");
+                            var tmmFullRelPath = getFullRelPath(f);
+                            var tmmFileName = Path.GetFileName(tmmFullRelPath);
+                            var tmmRelativeDir = Path.GetDirectoryName(tmmFullRelPath);
+                            using var companionData = await ResolveCompanionDataAsync(tmmFileName + ".data", tmmRelativeDir);
                             if (companionData != null)
                             {
                                 byte[]? convertedBytes;
@@ -191,14 +193,17 @@ public partial class MainWindow
     /// <summary>
     /// Finds and decompresses a companion file (e.g. .tmm.data) by searching
     /// the current BAR, sibling BARs, and the file index.
+    /// When preferredRelativeDir is provided, disambiguates among multiple name matches.
     /// </summary>
-    async ValueTask<PooledBuffer?> ResolveCompanionDataAsync(string dataFileName)
+    async ValueTask<PooledBuffer?> ResolveCompanionDataAsync(string dataFileName,
+        string? preferredRelativeDir = null)
     {
         // Check current BAR first
         if (_barFile?.Entries != null && _barStream != null)
         {
-            var barDataEntry = _barFile.Entries.FirstOrDefault(e =>
-                e.Name.Equals(dataFileName, StringComparison.OrdinalIgnoreCase));
+            var candidates = _barFile.Entries
+                .Where(e => e.Name.Equals(dataFileName, StringComparison.OrdinalIgnoreCase));
+            var barDataEntry = BestMatchByDirectorySuffix(candidates, preferredRelativeDir);
 
             if (barDataEntry != null)
             {
@@ -216,10 +221,11 @@ public partial class MainWindow
                 {
                     using var data = await entry.ReadDataRawPooledAsync(stream);
                     return BarCompression.EnsureDecompressedPooled(data, out _);
-                }
+                },
+                preferredRelativeDir
             );
 
-            if (found?.Length > 0) 
+            if (found?.Length > 0)
                 return found;
         }
 

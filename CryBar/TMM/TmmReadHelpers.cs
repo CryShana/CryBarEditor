@@ -60,4 +60,29 @@ internal static class TmmReadHelpers
         }
         return result;
     }
+
+    internal static bool TryReadBool(ReadOnlySpan<byte> data, ref int offset, out bool value)
+    {
+        value = false;
+        if (offset + 1 > data.Length) return false;
+        value = data[offset] != 0;
+        offset += 1;
+        return true;
+    }
+
+    internal static bool TryReadVector4(ReadOnlySpan<byte> data, ref int offset, out float[] value)
+    {
+        value = [];
+        if (offset + 16 > data.Length) return false;
+        value = ReadFloats(data, ref offset, 4);
+        return true;
+    }
+
+    internal static bool TryReadMatrix4x4(ReadOnlySpan<byte> data, ref int offset, out float[] value)
+    {
+        value = [];
+        if (offset + 64 > data.Length) return false;
+        value = ReadFloats(data, ref offset, 16);
+        return true;
+    }
 }

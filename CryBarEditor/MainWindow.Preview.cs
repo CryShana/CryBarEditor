@@ -246,8 +246,9 @@ public partial class MainWindow
                     ShowTmmPreview(tmm.GetSummary(relative_path));
 
                     var tmmFileName = Path.GetFileName(relative_path);
+                    var tmmRelativeDir = Path.GetDirectoryName(relative_path);
                     // Copy: LoadTmm3DPreview is fire-and-forget but data's PooledBuffer is disposed on return
-                    _ = LoadTmm3DPreview(tmmFileName, data.Memory.ToArray(), token);
+                    _ = LoadTmm3DPreview(tmmFileName, data.Memory.ToArray(), tmmRelativeDir, token);
                     return;
                 }
                 else if (ext == ".tma")
@@ -268,13 +269,15 @@ public partial class MainWindow
                     // Try to find the companion .tmm file
                     // TMM.DATA files are in ArtModelCacheModelData*.bar but TMMs are in ArtModelCacheMeta.bar
                     var tmmBaseName = Path.GetFileName(relative_path[..^5]); // e.g. "petrobolos.tmm"
+                    var dataRelativeDir = Path.GetDirectoryName(relative_path);
                     TmmFile? companionTmm = null;
 
                     // First: check current BAR
                     if (_barFile?.Entries != null && _barStream != null)
                     {
-                        var tmmEntry = _barFile.Entries.FirstOrDefault(
+                        var candidates = _barFile.Entries.Where(
                             e => e.Name.Equals(tmmBaseName, StringComparison.OrdinalIgnoreCase));
+                        var tmmEntry = BestMatchByDirectorySuffix(candidates, dataRelativeDir);
                         if (tmmEntry != null)
                         {
                             using var tmmData = await tmmEntry.ReadDataRawPooledAsync(_barStream);
@@ -295,14 +298,13 @@ public partial class MainWindow
                                 using var data = BarCompression.EnsureDecompressedPooled(rawData, out _);
                                 var tmm = new TmmFile(data.Memory);
                                 return tmm.Parsed ? tmm : null;
-                            });
+                            },
+                            dataRelativeDir);
                     }
 
                     if (companionTmm != null)
                     {
-                        var dataFile = new TmmDataFile(data.Memory,
-                            companionTmm.NumVertices, companionTmm.NumTriangleVerts,
-                            companionTmm.NumBones > 0);
+                        var dataFile = new TmmDataFile(data.Memory, companionTmm);
 
                         if (dataFile.Parsed)
                         {
@@ -654,7 +656,8 @@ public partial class MainWindow
         Dispatcher.UIThread.Post(() => _3dStatusText.Text = text);
     }
 
-    async Task LoadTmm3DPreview(string tmmFileName, Memory<byte> tmmData, CancellationToken token)
+    async Task LoadTmm3DPreview(string tmmFileName, Memory<byte> tmmData,
+        string? preferredRelativeDir, CancellationToken token)
     {
         var oldCts = _meshConversionCts;
         _meshConversionCts = CancellationTokenSource.CreateLinkedTokenSource(token);
@@ -666,7 +669,7 @@ public partial class MainWindow
 
         if (!_meshCache.TryGet(tmmFileName, out var meshData))
         {
-            using var companionData = await ResolveCompanionDataAsync(tmmFileName + ".data");
+            using var companionData = await ResolveCompanionDataAsync(tmmFileName + ".data", preferredRelativeDir);
             if (companionData == null) { Update3DStatus("No .tmm.data found"); return; }
             if (ct.IsCancellationRequested) return;
 

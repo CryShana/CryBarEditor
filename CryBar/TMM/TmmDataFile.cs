@@ -4,79 +4,99 @@ namespace CryBar.TMM;
 
 /// <summary>
 /// Parses .tmm.data files containing vertex, index, skinning, and height buffers.
-/// Requires section counts from the companion TmmFile.
+/// Uses offset/size pairs from the companion TmmFile header to locate each buffer.
 /// </summary>
 public class TmmDataFile
 {
-    public bool Parsed { get; }
+    public bool Parsed { get; private set; }
 
     public TmmVertex[]? Vertices { get; private set; }
     public ushort[]? Indices { get; private set; }
     public TmmSkinWeight[]? SkinWeights { get; private set; }
     public Half[]? Heights { get; private set; }
+    public TmmDestructionVertex[]? DestructionVertices { get; private set; }
+    public byte[]? VertexColors { get; private set; }
+    public TmmSpeedTreeVertex[]? SpeedTreeVertices { get; private set; }
 
-    readonly uint _numVertices;
-    readonly uint _numTriangleVerts;
-    readonly bool _hasSkinning;
+    readonly TmmFile _tmm;
 
     /// <param name="data">Raw .tmm.data file bytes.</param>
-    /// <param name="numVertices">Total vertex count from TmmFile.</param>
-    /// <param name="numTriangleVerts">Total triangle index count from TmmFile.</param>
-    /// <param name="hasSkinning">True if the model has bones (skinning buffer present).</param>
-    public TmmDataFile(ReadOnlyMemory<byte> data, uint numVertices, uint numTriangleVerts, bool hasSkinning)
+    /// <param name="tmm">Parsed companion TmmFile providing buffer layout.</param>
+    public TmmDataFile(ReadOnlyMemory<byte> data, TmmFile tmm)
     {
-        _numVertices = numVertices;
-        _numTriangleVerts = numTriangleVerts;
-        _hasSkinning = hasSkinning;
+        _tmm = tmm;
+        if (!tmm.Parsed) { Parsed = false; return; }
         Parsed = Parse(data.Span);
     }
 
     bool Parse(ReadOnlySpan<byte> data)
     {
-        var offset = 0;
+        var numVertices = _tmm.NumVertices;
+        var numTriangleVerts = _tmm.NumTriangleVerts;
+        bool hasSkinning = _tmm.NumBones > 0;
 
-        // Vertex buffer: 16 bytes per vertex
-        var vertexByteSize = (int)_numVertices * TmmVertex.SizeInBytes;
-        if (offset + vertexByteSize > data.Length) return false;
-
-        var vertices = new TmmVertex[_numVertices];
-        for (int i = 0; i < _numVertices; i++)
+        // Vertex buffer
+        if (_tmm.VerticesByteLength > 0)
         {
-            vertices[i] = new TmmVertex
+            var vertByteSize = (int)numVertices * TmmVertex.SizeInBytes;
+            var vertStart = (int)_tmm.VerticesStart;
+            if (vertStart + vertByteSize > data.Length) return false;
+
+            var vertices = new TmmVertex[numVertices];
+            var offset = vertStart;
+            for (int i = 0; i < numVertices; i++)
             {
-                PosX = BinaryPrimitives.ReadHalfLittleEndian(data.Slice(offset, 2)),
-                PosY = BinaryPrimitives.ReadHalfLittleEndian(data.Slice(offset + 2, 2)),
-                PosZ = BinaryPrimitives.ReadHalfLittleEndian(data.Slice(offset + 4, 2)),
-                U = BinaryPrimitives.ReadHalfLittleEndian(data.Slice(offset + 6, 2)),
-                V = BinaryPrimitives.ReadHalfLittleEndian(data.Slice(offset + 8, 2)),
-                TbnX = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset + 10, 2)),
-                TbnY = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset + 12, 2)),
-                TbnZ = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset + 14, 2))
-            };
-            offset += TmmVertex.SizeInBytes;
+                vertices[i] = new TmmVertex
+                {
+                    PosX = BinaryPrimitives.ReadHalfLittleEndian(data.Slice(offset, 2)),
+                    PosY = BinaryPrimitives.ReadHalfLittleEndian(data.Slice(offset + 2, 2)),
+                    PosZ = BinaryPrimitives.ReadHalfLittleEndian(data.Slice(offset + 4, 2)),
+                    U = BinaryPrimitives.ReadHalfLittleEndian(data.Slice(offset + 6, 2)),
+                    V = BinaryPrimitives.ReadHalfLittleEndian(data.Slice(offset + 8, 2)),
+                    TbnX = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset + 10, 2)),
+                    TbnY = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset + 12, 2)),
+                    TbnZ = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset + 14, 2))
+                };
+                offset += TmmVertex.SizeInBytes;
+            }
+            Vertices = vertices;
         }
-        Vertices = vertices;
-
-        // Index buffer: 2 bytes per index (u16)
-        var indexByteSize = (int)_numTriangleVerts * 2;
-        if (offset + indexByteSize > data.Length) return false;
-
-        var indices = new ushort[_numTriangleVerts];
-        for (int i = 0; i < _numTriangleVerts; i++)
+        else if (numVertices == 0)
         {
-            indices[i] = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset, 2));
-            offset += 2;
+            Vertices = [];
         }
-        Indices = indices;
 
-        // Skinning buffer: 8 bytes per vertex (only present if model has bones)
-        if (_hasSkinning)
+        // Index buffer
+        if (_tmm.TrianglesByteLength > 0)
         {
-            var skinByteSize = (int)_numVertices * TmmSkinWeight.SizeInBytes;
-            if (offset + skinByteSize > data.Length) return false;
+            var indexByteSize = (int)numTriangleVerts * 2;
+            var idxStart = (int)_tmm.TrianglesStart;
+            if (idxStart + indexByteSize > data.Length) return false;
 
-            var skinWeights = new TmmSkinWeight[_numVertices];
-            for (int i = 0; i < _numVertices; i++)
+            var indices = new ushort[numTriangleVerts];
+            var offset = idxStart;
+            for (int i = 0; i < numTriangleVerts; i++)
+            {
+                indices[i] = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset, 2));
+                offset += 2;
+            }
+            Indices = indices;
+        }
+        else if (numTriangleVerts == 0)
+        {
+            Indices = [];
+        }
+
+        // Skinning buffer
+        if (hasSkinning && _tmm.WeightsByteLength > 0)
+        {
+            var skinByteSize = (int)numVertices * TmmSkinWeight.SizeInBytes;
+            var skinStart = (int)_tmm.WeightsStart;
+            if (skinStart + skinByteSize > data.Length) return false;
+
+            var skinWeights = new TmmSkinWeight[numVertices];
+            var offset = skinStart;
+            for (int i = 0; i < numVertices; i++)
             {
                 skinWeights[i] = new TmmSkinWeight
                 {
@@ -94,20 +114,85 @@ public class TmmDataFile
             SkinWeights = skinWeights;
         }
 
-        // Height buffer: 2 bytes per vertex (f16)
-        var heightByteSize = (int)_numVertices * 2;
-        if (offset + heightByteSize <= data.Length)
+        // Height buffer
+        if (_tmm.HeightsByteLength > 0)
         {
-            var heights = new Half[_numVertices];
-            for (int i = 0; i < _numVertices; i++)
+            var heightByteSize = (int)numVertices * 2;
+            var heightStart = (int)_tmm.HeightsStart;
+            if (heightStart + heightByteSize <= data.Length)
             {
-                heights[i] = BinaryPrimitives.ReadHalfLittleEndian(data.Slice(offset, 2));
-                offset += 2;
+                var heights = new Half[numVertices];
+                var offset = heightStart;
+                for (int i = 0; i < numVertices; i++)
+                {
+                    heights[i] = BinaryPrimitives.ReadHalfLittleEndian(data.Slice(offset, 2));
+                    offset += 2;
+                }
+                Heights = heights;
             }
-            Heights = heights;
         }
 
-        return true;
+        // Destruction buffer
+        if (_tmm.DestructionBufferByteLength > 0)
+        {
+            var destByteSize = (int)numVertices * TmmDestructionVertex.SizeInBytes;
+            var destStart = (int)_tmm.DestructionBufferStart;
+            if (destStart + destByteSize <= data.Length)
+            {
+                var destVerts = new TmmDestructionVertex[numVertices];
+                var offset = destStart;
+                for (int i = 0; i < numVertices; i++)
+                {
+                    var packed = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset, 2));
+                    destVerts[i] = new TmmDestructionVertex
+                    {
+                        BurntInteriorColor = (byte)(packed >> 10),
+                        DestructionBoneIndex = (ushort)(packed & 0x3FF)
+                    };
+                    offset += TmmDestructionVertex.SizeInBytes;
+                }
+                DestructionVertices = destVerts;
+            }
+        }
+
+        // Color buffer
+        if (_tmm.ColorBufferByteLength > 0)
+        {
+            var colorByteSize = (int)numVertices * 4;
+            var colorStart = (int)_tmm.ColorBufferStart;
+            if (colorStart + colorByteSize <= data.Length)
+            {
+                VertexColors = data.Slice(colorStart, colorByteSize).ToArray();
+            }
+        }
+
+        // SpeedTree buffer
+        if (_tmm.SpeedTreeBufferByteLength > 0)
+        {
+            var stByteSize = (int)numVertices * TmmSpeedTreeVertex.SizeInBytes;
+            var stStart = (int)_tmm.SpeedTreeBufferStart;
+            if (stStart + stByteSize <= data.Length)
+            {
+                var stVerts = new TmmSpeedTreeVertex[numVertices];
+                var offset = stStart;
+                for (int i = 0; i < numVertices; i++)
+                {
+                    stVerts[i] = new TmmSpeedTreeVertex
+                    {
+                        AnchorX = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset, 2)),
+                        AnchorY = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset + 2, 2)),
+                        AnchorZ = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset + 4, 2)),
+                        GeometryType = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset + 6, 2)),
+                        WindDataX = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset + 8, 2)),
+                        WindDataY = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset + 10, 2))
+                    };
+                    offset += TmmSpeedTreeVertex.SizeInBytes;
+                }
+                SpeedTreeVertices = stVerts;
+            }
+        }
+
+        return Vertices != null && Indices != null;
     }
 
     /// <summary>
@@ -129,6 +214,15 @@ public class TmmDataFile
 
         if (Heights != null)
             lines.Add($"Height values: {Heights.Length} entries");
+
+        if (DestructionVertices != null)
+            lines.Add($"Destruction vertices: {DestructionVertices.Length} entries");
+
+        if (VertexColors != null)
+            lines.Add($"Vertex colors: {VertexColors.Length / 4} entries");
+
+        if (SpeedTreeVertices != null)
+            lines.Add($"SpeedTree vertices: {SpeedTreeVertices.Length} entries");
 
         return string.Join("\n", lines);
     }

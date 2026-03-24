@@ -25,7 +25,7 @@ public static class MeshDataBuilder
         var tmm = new TmmFile(tmmBytes);
         if (!tmm.Parsed) return null;
 
-        var dataFile = new TmmDataFile(tmmDataBytes, tmm.NumVertices, tmm.NumTriangleVerts, tmm.NumBones > 0);
+        var dataFile = new TmmDataFile(tmmDataBytes, tmm);
         if (!dataFile.Parsed) return null;
 
         var srcVerts = dataFile.Vertices!;

@@ -98,7 +98,7 @@ public static class ConversionHelper
         if (!tmm.Parsed) 
             return false;
 
-        dataFile = new TmmDataFile(tmmDataData, tmm.NumVertices, tmm.NumTriangleVerts, tmm.NumBones > 0);
+        dataFile = new TmmDataFile(tmmDataData, tmm);
         return dataFile.Parsed && dataFile.Vertices != null && dataFile.Indices != null;
     }
 

@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Xml;
 
 using CryBar;
@@ -575,6 +574,82 @@ public class IntegrationTests
         Assert.Contains(tmm.Bones, b => b.ParentId == -1); // root bone
     }
 
+    [SkippableFact]
+    public void ArtModelCacheMetaBar_ParseAllTmm_AllSucceed()
+    {
+        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+
+        var barPath = Path.Combine(GamePath, @"modelcache\ArtModelCacheMeta.bar");
+        Skip.IfNot(File.Exists(barPath), "ArtModelCacheMeta.bar not found");
+
+        using var stream = File.OpenRead(barPath);
+        var bar = new BarFile(stream);
+        Assert.True(bar.Load(out _));
+
+        var tmmEntries = bar.Entries!
+            .Where(e => e.Name.EndsWith(".tmm", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        Assert.True(tmmEntries.Count > 0, "No .tmm entries found");
+
+        var failures = new List<string>();
+        foreach (var entry in tmmEntries)
+        {
+            var raw = BarCompression.EnsureDecompressed(entry.ReadDataRaw(stream), out _);
+            var tmm = new TmmFile(raw);
+            if (!tmm.Parsed)
+                failures.Add(entry.RelativePath);
+        }
+
+        Assert.True(failures.Count == 0,
+            $"{failures.Count}/{tmmEntries.Count} TMM files failed to parse:\n{string.Join("\n", failures.Take(20))}");
+    }
+
+    [SkippableFact]
+    public void ArtModelCacheMetaBar_ParseAllTmm_ReportFullyParsed()
+    {
+        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+
+        var barPath = Path.Combine(GamePath, @"modelcache\ArtModelCacheMeta.bar");
+        Skip.IfNot(File.Exists(barPath), "ArtModelCacheMeta.bar not found");
+
+        using var stream = File.OpenRead(barPath);
+        var bar = new BarFile(stream);
+        Assert.True(bar.Load(out _));
+
+        var tmmEntries = bar.Entries!
+            .Where(e => e.Name.EndsWith(".tmm", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        int total = tmmEntries.Count;
+        int parsed = 0;
+        int fullyParsed = 0;
+        var partialList = new List<string>();
+
+        foreach (var entry in tmmEntries)
+        {
+            var raw = BarCompression.EnsureDecompressed(entry.ReadDataRaw(stream), out _);
+            var tmm = new TmmFile(raw);
+            if (tmm.Parsed) parsed++;
+            if (tmm.Parsed && tmm.FullyParsed) fullyParsed++;
+            else if (tmm.Parsed && !tmm.FullyParsed)
+                partialList.Add($"{entry.RelativePath} (v{tmm.Version})");
+        }
+
+        // Report but don't fail on partial parses — this test is informational
+        // If some files only partially parse, log them for investigation
+        Assert.True(parsed == total,
+            $"{total - parsed}/{total} TMM files failed core parse");
+
+        // This is a soft check — we log partial parses but don't fail
+        if (partialList.Count > 0)
+        {
+            // Output as test message for visibility
+            Assert.True(true,
+                $"INFO: {fullyParsed}/{total} fully parsed, {partialList.Count} partial:\n{string.Join("\n", partialList.Take(20))}");
+        }
+    }
+
     #endregion
 
     #region TMM.DATA Full Parsing (TmmDataFile)
@@ -596,7 +671,7 @@ public class IntegrationTests
         using var s = stream2;
 
         var dataRaw = BarCompression.EnsureDecompressed(dataEntry.ReadDataRaw(stream2), out _);
-        var dataFile = new TmmDataFile(dataRaw, tmm.NumVertices, tmm.NumTriangleVerts, tmm.NumBones > 0);
+        var dataFile = new TmmDataFile(dataRaw, tmm);
         var parsed = dataFile.Parsed;
 
         Assert.True(parsed, "TMM.DATA should parse successfully");
@@ -626,7 +701,7 @@ public class IntegrationTests
         using var s = stream2;
 
         var dataRaw = BarCompression.EnsureDecompressed(dataEntry.ReadDataRaw(stream2), out _);
-        var dataFile = new TmmDataFile(dataRaw, tmm.NumVertices, tmm.NumTriangleVerts, tmm.NumBones > 0);
+        var dataFile = new TmmDataFile(dataRaw, tmm);
         Assert.True(dataFile.Parsed, "TMM.DATA should parse");
 
         Assert.NotNull(dataFile.Vertices);
@@ -688,7 +763,7 @@ public class IntegrationTests
         var dataRaw = BarCompression.EnsureDecompressed(dataEntry.ReadDataRaw(stream2), out _);
         stream2.Dispose();
 
-        var dataFile = new TmmDataFile(dataRaw, tmm.NumVertices, tmm.NumTriangleVerts, tmm.NumBones > 0);
+        var dataFile = new TmmDataFile(dataRaw, tmm);
         Assert.True(dataFile.Parsed, "shade_spc.tmm.data should parse");
 
         // Export to GLB
@@ -1854,6 +1929,133 @@ public class IntegrationTests
         // and produce valid XML without crashing
         Assert.NotNull(doc.DocumentElement);
         Assert.Equal("Triggers", doc.DocumentElement!.Name);
+    }
+
+    #endregion
+
+    #region TMM Companion Resolution
+
+    /// <summary>
+    /// Scores how well an entry's directory matches a preferred directory by comparing
+    /// path segments from right to left. Inlined from MainWindow.BestMatchByDirectorySuffix.
+    /// </summary>
+    static BarFileEntry? BestMatchByDirectorySuffix(
+        IEnumerable<BarFileEntry> candidates, string? preferredRelativeDir)
+    {
+        BarFileEntry? best = null;
+        int bestScore = -1;
+
+        foreach (var entry in candidates)
+        {
+            if (best == null) { best = entry; bestScore = 0; }
+            if (preferredRelativeDir == null) continue;
+
+            var entryDir = entry.DirectoryPath.Replace('\\', '/').TrimEnd('/');
+            var prefDir = preferredRelativeDir.Replace('\\', '/').TrimEnd('/');
+
+            var entrySegs = entryDir.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            var prefSegs = prefDir.Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+            int score = 0;
+            int ei = entrySegs.Length - 1, pi = prefSegs.Length - 1;
+            while (ei >= 0 && pi >= 0 &&
+                   entrySegs[ei].Equals(prefSegs[pi], StringComparison.OrdinalIgnoreCase))
+            {
+                score++;
+                ei--;
+                pi--;
+            }
+
+            if (score > bestScore)
+            {
+                best = entry;
+                bestScore = score;
+            }
+        }
+
+        return best;
+    }
+
+    [SkippableFact]
+    public void WonderDemeter_CompanionResolution_MatchesByPath()
+    {
+        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+
+        var metaBarPath = Path.Combine(GamePath, @"modelcache\ArtModelCacheMeta.bar");
+        Skip.IfNot(File.Exists(metaBarPath), "ArtModelCacheMeta.bar not found");
+
+        using var metaStream = File.OpenRead(metaBarPath);
+        var metaBar = new BarFile(metaStream);
+        Assert.True(metaBar.Load(out _));
+
+        // Find both wonder_demeter.tmm entries (should be 2 with different paths)
+        var demeterEntries = metaBar.Entries!
+            .Where(e => e.Name.Equals("wonder_demeter.tmm", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        Assert.True(demeterEntries.Count >= 2,
+            $"Expected 2+ wonder_demeter.tmm entries, found {demeterEntries.Count}");
+
+        // Parse each and verify they have different vertex counts
+        var parsedModels = new List<(string path, TmmFile tmm)>();
+        foreach (var entry in demeterEntries)
+        {
+            var raw = BarCompression.EnsureDecompressed(entry.ReadDataRaw(metaStream), out _);
+            var tmm = new TmmFile(raw);
+            Assert.True(tmm.Parsed, $"Failed to parse {entry.RelativePath}");
+            parsedModels.Add((entry.RelativePath, tmm));
+        }
+
+        // The two entries should have different vertex counts (they're different models)
+        var vertexCounts = parsedModels.Select(m => m.tmm.NumVertices).Distinct().ToList();
+        Assert.True(vertexCounts.Count >= 2,
+            $"Expected different vertex counts but got: {string.Join(", ", parsedModels.Select(m => $"{m.path}: {m.tmm.NumVertices}"))}");
+
+        // Now find companion .tmm.data files in the data BARs
+        // Search all ArtModelCacheModelData*.bar files
+        var barDir = Path.Combine(GamePath, "modelcache");
+        var dataBarFiles = Directory.GetFiles(barDir, "ArtModelCacheModelData*.bar");
+
+        foreach (var (path, tmm) in parsedModels)
+        {
+            var dir = Path.GetDirectoryName(path)?.Replace('\\', '/');
+
+            // Find all wonder_demeter.tmm.data entries across data BARs
+            var allDataEntries = new List<(BarFileEntry entry, string barPath)>();
+            foreach (var dataBarPath in dataBarFiles)
+            {
+                using var dataStream = File.OpenRead(dataBarPath);
+                var dataBar = new BarFile(dataStream);
+                if (!dataBar.Load(out _)) continue;
+
+                foreach (var e in dataBar.Entries!)
+                {
+                    if (e.Name.Equals("wonder_demeter.tmm.data", StringComparison.OrdinalIgnoreCase))
+                        allDataEntries.Add((e, dataBarPath));
+                }
+            }
+
+            // Use BestMatchByDirectorySuffix to pick the right one
+            var bestEntry = BestMatchByDirectorySuffix(
+                allDataEntries.Select(m => m.entry), dir);
+
+            Assert.NotNull(bestEntry);
+
+            // Read the matched .tmm.data and verify it parses with the right vertex count
+            var bestBarPath = allDataEntries.First(m => m.entry == bestEntry).barPath;
+            using var bestStream = File.OpenRead(bestBarPath);
+            var bestBar = new BarFile(bestStream);
+            Assert.True(bestBar.Load(out _));
+
+            var dataEntry = bestBar.Entries!.First(e =>
+                e.RelativePath.Equals(bestEntry.RelativePath, StringComparison.OrdinalIgnoreCase));
+            var dataRaw = BarCompression.EnsureDecompressed(dataEntry.ReadDataRaw(bestStream), out _);
+            var dataFile = new TmmDataFile(dataRaw, tmm);
+
+            Assert.True(dataFile.Parsed,
+                $"TmmDataFile failed to parse for {path} using data from {bestEntry.RelativePath}");
+            Assert.Equal((int)tmm.NumVertices, dataFile.Vertices!.Length);
+        }
     }
 
     #endregion

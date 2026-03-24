@@ -7,6 +7,8 @@ using CryBar.Bar;
 using CryBar.Export;
 using CryBar.TMM;
 
+using static CryBar.Tests.TmmTestHelpers;
+
 namespace CryBar.Tests;
 
 public class GlbExporterTests
@@ -17,7 +19,7 @@ public class GlbExporterTests
     public void ExportGlb_UnparsedTmm_ReturnsNull()
     {
         var tmm = new TmmFile(ReadOnlyMemory<byte>.Empty);
-        var dataFile = new TmmDataFile(ReadOnlyMemory<byte>.Empty, 0, 0, false);
+        var dataFile = new TmmDataFile(ReadOnlyMemory<byte>.Empty, tmm);
         var result = GlbExporter.ExportGlb(tmm, dataFile);
         Assert.Null(result);
     }
@@ -25,12 +27,11 @@ public class GlbExporterTests
     [Fact]
     public void ExportGlb_NoVertices_ReturnsNull()
     {
-        var tmmBytes = CreateSyntheticTmm(numVertices: 0, numTriangleVerts: 0);
-        var tmm = new TmmFile(tmmBytes);
+        var tmm = CreateSyntheticTmmFile(0, 0, false);
         Assert.True(tmm.Parsed);
 
         var dataBytes = CreateSyntheticData(numVertices: 0, numTriangleVerts: 0, hasSkinning: false);
-        var dataFile = new TmmDataFile(dataBytes, 0, 0, false);
+        var dataFile = new TmmDataFile(dataBytes, tmm);
         Assert.True(dataFile.Parsed);
 
         var result = GlbExporter.ExportGlb(tmm, dataFile);
@@ -192,21 +193,14 @@ public class GlbExporterTests
     [Fact]
     public void ExportGlb_WithAttachments_HasAttachmentNodes()
     {
-        var tmmBytes = CreateSyntheticTmm(
-            numMeshGroups: 1,
-            materials: ["default_mat"],
-            submodels: ["default"],
-            numBones: 2,
-            numAttachments: 2,
-            numVertices: 3,
-            numTriangleVerts: 3);
-
-        var tmm = new TmmFile(tmmBytes);
+        var tmm = CreateSyntheticTmmFile(3, 3, true,
+            numMeshGroups: 1, materials: ["default_mat"], submodels: ["default"],
+            numBones: 2, numAttachments: 2);
         Assert.True(tmm.Parsed);
         Assert.Equal(2, tmm.Attachments!.Length);
 
         var dataBytes = CreateSyntheticData(numVertices: 3, numTriangleVerts: 3, hasSkinning: true);
-        var dataFile = new TmmDataFile(dataBytes, 3, 3, true);
+        var dataFile = new TmmDataFile(dataBytes, tmm);
         Assert.True(dataFile.Parsed);
 
         var glb = GlbExporter.ExportGlb(tmm, dataFile)!;
@@ -324,9 +318,13 @@ public class GlbExporterTests
     [Fact]
     public void ConvertTmmToGlbBytes_ValidInput_ReturnsGlb()
     {
-        var tmmBytes = CreateSyntheticTmm(numMeshGroups: 1, numVertices: 3, numTriangleVerts: 3,
-            materials: ["mat1"], submodels: ["default"]);
-        var dataBytes = CreateSyntheticData(numVertices: 3, numTriangleVerts: 3, hasSkinning: false);
+        uint nv = 3, nt = 3;
+        uint vbl = nv * (uint)TmmVertex.SizeInBytes;
+        var tmmBytes = CreateSyntheticTmm(numMeshGroups: 1, numVertices: nv, numTriangleVerts: nt,
+            materials: ["mat1"], submodels: ["default"],
+            verticesStart: 0, verticesByteLength: vbl,
+            trianglesStart: vbl, trianglesByteLength: nt * 2);
+        var dataBytes = CreateSyntheticData(numVertices: nv, numTriangleVerts: nt, hasSkinning: false);
 
         var result = ConversionHelper.ConvertTmmToGlbBytes(tmmBytes, dataBytes);
         Assert.NotNull(result);
@@ -346,9 +344,13 @@ public class GlbExporterTests
     [Fact]
     public void ConvertTmmToGlbBytes_WithMaterials_ReturnsGlb()
     {
-        var tmmBytes = CreateSyntheticTmm(numMeshGroups: 1, numVertices: 3, numTriangleVerts: 3,
-            materials: ["mat1"], submodels: ["default"]);
-        var dataBytes = CreateSyntheticData(numVertices: 3, numTriangleVerts: 3, hasSkinning: false);
+        uint nv = 3, nt = 3;
+        uint vbl = nv * (uint)TmmVertex.SizeInBytes;
+        var tmmBytes = CreateSyntheticTmm(numMeshGroups: 1, numVertices: nv, numTriangleVerts: nt,
+            materials: ["mat1"], submodels: ["default"],
+            verticesStart: 0, verticesByteLength: vbl,
+            trianglesStart: vbl, trianglesByteLength: nt * 2);
+        var dataBytes = CreateSyntheticData(numVertices: nv, numTriangleVerts: nt, hasSkinning: false);
 
         var materials = new List<GlbExporter.GlbMaterial>
         {
@@ -380,18 +382,12 @@ public class GlbExporterTests
         uint numVerts = 3;
         uint numTris = 3; // 1 triangle = 3 indices
 
-        var tmmBytes = CreateSyntheticTmm(
-            numMeshGroups: 1,
-            materials: ["default_mat"],
-            submodels: ["default"],
-            numVertices: numVerts,
-            numTriangleVerts: numTris);
-
-        var tmm = new TmmFile(tmmBytes);
+        var tmm = CreateSyntheticTmmFile(numVerts, numTris, false,
+            numMeshGroups: 1, materials: ["default_mat"], submodels: ["default"]);
         Assert.True(tmm.Parsed);
 
         var dataBytes = CreateSyntheticData(numVertices: numVerts, numTriangleVerts: numTris, hasSkinning: false);
-        var dataFile = new TmmDataFile(dataBytes, numVerts, numTris, false);
+        var dataFile = new TmmDataFile(dataBytes, tmm);
         Assert.True(dataFile.Parsed);
 
         return (tmm, dataFile);
@@ -402,163 +398,19 @@ public class GlbExporterTests
         uint numVerts = 3;
         uint numTris = 3;
 
-        var tmmBytes = CreateSyntheticTmm(
-            numMeshGroups: 1,
-            materials: ["default_mat"],
-            submodels: ["default"],
-            numBones: 2,
-            numVertices: numVerts,
-            numTriangleVerts: numTris);
-
-        var tmm = new TmmFile(tmmBytes);
+        var tmm = CreateSyntheticTmmFile(numVerts, numTris, true,
+            numMeshGroups: 1, materials: ["default_mat"], submodels: ["default"],
+            numBones: 2);
         Assert.True(tmm.Parsed);
 
         var dataBytes = CreateSyntheticData(numVertices: numVerts, numTriangleVerts: numTris, hasSkinning: true);
-        var dataFile = new TmmDataFile(dataBytes, numVerts, numTris, true);
+        var dataFile = new TmmDataFile(dataBytes, tmm);
         Assert.True(dataFile.Parsed);
 
         return (tmm, dataFile);
     }
 
-    static byte[] CreateSyntheticTmm(
-        uint version = 35,
-        string[]? importNames = null,
-        uint numMeshGroups = 0,
-        string[]? materials = null,
-        string[]? submodels = null,
-        uint numBones = 0,
-        uint numAttachments = 0,
-        uint numVertices = 0,
-        uint numTriangleVerts = 0)
-    {
-        importNames ??= [];
-        materials ??= [];
-        submodels ??= [];
-
-        using var ms = new MemoryStream();
-        using var w = new BinaryWriter(ms);
-
-        WriteHeader(w, version);
-        WriteImportMetadata(w, importNames);
-        WriteBoundingBoxes(w);
-        w.Write(3.0f); // bounds radius
-
-        // Section counts
-        w.Write(numMeshGroups);
-        w.Write((uint)materials.Length);
-        w.Write((uint)submodels.Length);
-        w.Write(numBones);
-        w.Write(0u); // reserved
-        w.Write(numAttachments);
-        w.Write(numVertices);
-        w.Write(numTriangleVerts);
-
-        // Data block layout (all zeroed for synthetic)
-        for (int i = 0; i < 14; i++) w.Write(0u);
-
-        // 2 unknown bytes
-        w.Write((byte)0); w.Write((byte)1);
-
-        // Main matrix (identity 4x3)
-        w.Write(1.0f); w.Write(0.0f); w.Write(0.0f); w.Write(0.0f);
-        w.Write(0.0f); w.Write(1.0f); w.Write(0.0f); w.Write(0.0f);
-        w.Write(0.0f); w.Write(0.0f); w.Write(1.0f); w.Write(0.0f);
-
-        // Attachments
-        for (int i = 0; i < numAttachments; i++)
-        {
-            w.Write(0u);
-            w.Write(i < numBones ? i : -1);
-            WriteUTF16String(w, $"attach_{i}");
-            for (int j = 0; j < 24; j++) w.Write(0.0f);
-            w.Write(0u); w.Write(0u);
-            WriteUTF16String(w, "");
-            w.Write(-1); w.Write(0); w.Write(0); w.Write(0);
-        }
-
-        // Mesh groups
-        uint vertexOffset = 0;
-        uint indexOffset = 0;
-        uint vertsPerGroup = numMeshGroups > 0 ? numVertices / numMeshGroups : 0;
-        uint indicesPerGroup = numMeshGroups > 0 ? numTriangleVerts / numMeshGroups : 0;
-        for (uint i = 0; i < numMeshGroups; i++)
-        {
-            uint vc = (i == numMeshGroups - 1) ? numVertices - vertexOffset : vertsPerGroup;
-            uint ic = (i == numMeshGroups - 1) ? numTriangleVerts - indexOffset : indicesPerGroup;
-            w.Write(vertexOffset);
-            w.Write(indexOffset);
-            w.Write(vc);
-            w.Write(ic);
-            w.Write((uint)(i < materials.Length ? i : 0));
-            w.Write(0u);
-            vertexOffset += vc;
-            indexOffset += ic;
-        }
-
-        // Materials
-        foreach (var mat in materials)
-            WriteUTF16String(w, mat);
-
-        // Submodels
-        foreach (var sub in submodels)
-            WriteUTF16String(w, sub);
-
-        // Bones
-        for (int i = 0; i < numBones; i++)
-        {
-            WriteUTF16String(w, $"bone_{i}");
-            w.Write(i == 0 ? -1 : i - 1);
-            w.Write(0.0f); w.Write(0.0f); w.Write(0.0f);
-            w.Write(0.5f);
-            for (int m = 0; m < 3; m++)
-            {
-                w.Write(1.0f); w.Write(0.0f); w.Write(0.0f); w.Write(0.0f);
-                w.Write(0.0f); w.Write(1.0f); w.Write(0.0f); w.Write(0.0f);
-                w.Write(0.0f); w.Write(0.0f); w.Write(1.0f); w.Write(0.0f);
-                w.Write(0.0f); w.Write(0.0f); w.Write(0.0f); w.Write(1.0f);
-            }
-        }
-
-        return ms.ToArray();
-    }
-
-    static byte[] CreateSyntheticData(uint numVertices, uint numTriangleVerts, bool hasSkinning)
-    {
-        using var ms = new MemoryStream();
-        using var w = new BinaryWriter(ms);
-
-        for (int i = 0; i < numVertices; i++)
-        {
-            w.Write((Half)1.5f);    // PosX
-            w.Write((Half)2.5f);    // PosY
-            w.Write((Half)(-0.5f)); // PosZ
-            w.Write((Half)0.5f);    // U
-            w.Write((Half)0.25f);   // V
-            w.Write((ushort)16384); // TbnX
-            w.Write((ushort)16384); // TbnY
-            w.Write((ushort)16384); // TbnZ
-        }
-
-        for (int i = 0; i < numTriangleVerts; i++)
-            w.Write((ushort)(i % Math.Max(numVertices, 1)));
-
-        if (hasSkinning)
-        {
-            for (int i = 0; i < numVertices; i++)
-            {
-                w.Write((byte)200);
-                w.Write((byte)55);
-                w.Write((byte)0);
-                w.Write((byte)0);
-                w.Write((byte)0);
-                w.Write((byte)1);
-                w.Write((byte)0);
-                w.Write((byte)0);
-            }
-        }
-
-        return ms.ToArray();
-    }
+    // TMM builders (CreateSyntheticTmm, CreateSyntheticTmmFile, CreateSyntheticData) are in TmmTestHelpers
 
     /// <summary>
     /// Creates a minimal valid PNG file (1x1 transparent pixel).
@@ -669,44 +521,6 @@ public class GlbExporterTests
         int binStart = 20 + (int)jsonChunkLength;
         uint binChunkLength = BinaryPrimitives.ReadUInt32LittleEndian(glb.AsSpan(binStart, 4));
         return glb.AsSpan(binStart + 8, (int)binChunkLength).ToArray();
-    }
-
-    static void WriteHeader(BinaryWriter w, uint version)
-    {
-        w.Write((byte)0x42); w.Write((byte)0x54);
-        w.Write((byte)0x4d); w.Write((byte)0x4d);
-        w.Write(version);
-        w.Write((byte)0x44); w.Write((byte)0x50);
-    }
-
-    static void WriteImportMetadata(BinaryWriter w, string[] names)
-    {
-        int blockSize = 4;
-        foreach (var name in names)
-            blockSize += 4 + name.Length * 2 + 16;
-        w.Write(blockSize);
-        w.Write(names.Length);
-        foreach (var name in names)
-        {
-            w.Write(name.Length);
-            w.Write(Encoding.Unicode.GetBytes(name));
-            w.Write(0); w.Write(0); w.Write(0); w.Write(0);
-        }
-    }
-
-    static void WriteBoundingBoxes(BinaryWriter w)
-    {
-        w.Write(-1.0f); w.Write(-2.0f); w.Write(-3.0f);
-        w.Write(1.0f); w.Write(2.0f); w.Write(3.0f);
-        w.Write(-5.0f); w.Write(-5.0f); w.Write(-5.0f);
-        w.Write(5.0f); w.Write(5.0f); w.Write(5.0f);
-    }
-
-    static void WriteUTF16String(BinaryWriter w, string value)
-    {
-        w.Write(value.Length);
-        if (value.Length > 0)
-            w.Write(Encoding.Unicode.GetBytes(value));
     }
 
     #endregion
