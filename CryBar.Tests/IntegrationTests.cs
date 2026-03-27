@@ -999,6 +999,66 @@ public class IntegrationTests
             $"{failures.Count}/{tmaEntries.Count} TMA files failed:\n{string.Join("\n", failures.Take(20))}");
     }
 
+    [SkippableFact]
+    public void TmaDecoder_AllTracksDecodeWithUnitQuaternions()
+    {
+        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+
+        var barPath = Path.Combine(GamePath, @"modelcache\ArtModelCacheAnimationData.bar");
+        Skip.IfNot(File.Exists(barPath), "Animation BAR not found");
+
+        using var stream = File.OpenRead(barPath);
+        var bar = new BarFile(stream);
+        bar.Load(out _);
+
+        var tmaEntries = bar.Entries!
+            .Where(e => e.Name.EndsWith(".tma", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        int totalTracks = 0;
+        int totalDecoded = 0;
+        var failures = new List<string>();
+
+        foreach (var entry in tmaEntries)
+        {
+            var raw = BarCompression.EnsureDecompressed(entry.ReadDataRaw(stream), out _);
+            var tma = new TmaFile(raw);
+            if (!tma.Parsed || tma.Tracks == null) continue;
+
+            var decoded = TmaDecoder.DecodeAllTracks(tma);
+            Assert.NotNull(decoded);
+            Assert.Equal(tma.Tracks.Length, decoded.Length);
+
+            foreach (var dt in decoded)
+            {
+                totalTracks++;
+
+                // Validate all rotation quaternions have magnitude ~1.0
+                for (int qi = 0; qi < dt.Rotations.Length; qi++)
+                {
+                    var q = dt.Rotations[qi];
+                    var mag = MathF.Sqrt(q.X * q.X + q.Y * q.Y + q.Z * q.Z + q.W * q.W);
+                    if (MathF.Abs(mag - 1.0f) > 0.01f)
+                    {
+                        // Show raw data for the failing keyframe
+                        var srcTrack = tma.Tracks[Array.IndexOf(decoded, dt)];
+                        ulong rawPacked = 0;
+                        if (srcTrack.RotationEncoding == TmaEncoding.Quat64 && qi * 8 + 8 <= srcTrack.RotationData.Length)
+                            rawPacked = BitConverter.ToUInt64(srcTrack.RotationData, qi * 8);
+                        failures.Add($"{entry.Name}/{dt.Name} kf{qi}: mag={mag:F6} q=[{q.X:F4},{q.Y:F4},{q.Z:F4},{q.W:F4}] raw=0x{rawPacked:X16}");
+                        break;
+                    }
+                }
+
+                totalDecoded++;
+            }
+        }
+
+        Assert.True(failures.Count == 0,
+            $"{failures.Count}/{totalTracks} tracks had bad quaternion magnitudes:\n{string.Join("\n", failures.Take(20))}");
+        Assert.True(totalDecoded > 0, "Should have decoded some tracks");
+    }
+
     #endregion
 
     #region FMOD Bank - File Exists

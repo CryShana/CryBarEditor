@@ -26,12 +26,12 @@ public sealed class TmaTrack
     public TmaEncoding ScaleEncoding { get; init; }
     public int KeyframeCount { get; init; }
 
-    /// <summary>Number of bytes consumed by the translation data block.</summary>
-    public int TranslationDataBytes { get; init; }
+    /// <summary>Raw bytes of the translation data block.</summary>
+    public byte[] TranslationData { get; init; } = [];
 
-    /// <summary>Number of bytes consumed by the rotation data block.</summary>
-    public int RotationDataBytes { get; init; }
+    /// <summary>Raw bytes of the rotation data block.</summary>
+    public byte[] RotationData { get; init; } = [];
 
-    /// <summary>Number of bytes consumed by the scale data block.</summary>
-    public int ScaleDataBytes { get; init; }
+    /// <summary>Raw bytes of the scale data block.</summary>
+    public byte[] ScaleData { get; init; } = [];
 }

@@ -179,21 +179,21 @@ public class TmaFile
             if (keyframeCount < 0 || keyframeCount > MaxKeyframes) return false;
 
             // Each encoding block: Constant = 16 bytes inline; others = 4-byte size prefix + data
-            if (!TryReadEncodingBlock(data, ref offset, translationEncoding, out var tBytes)) return false;
-            if (!TryReadEncodingBlock(data, ref offset, rotationEncoding, out var rBytes)) return false;
-            if (!TryReadEncodingBlock(data, ref offset, scaleEncoding, out var sBytes)) return false;
+            if (!TryReadEncodingBlock(data, ref offset, translationEncoding, out var tData)) return false;
+            if (!TryReadEncodingBlock(data, ref offset, rotationEncoding, out var rData)) return false;
+            if (!TryReadEncodingBlock(data, ref offset, scaleEncoding, out var sData)) return false;
 
             tracks[i] = new TmaTrack
             {
-                Name                 = trackName,
-                TrackVersion         = trackVersion,
-                TranslationEncoding  = translationEncoding,
-                RotationEncoding     = rotationEncoding,
-                ScaleEncoding        = scaleEncoding,
-                KeyframeCount        = keyframeCount,
-                TranslationDataBytes = tBytes,
-                RotationDataBytes    = rBytes,
-                ScaleDataBytes       = sBytes,
+                Name                = trackName,
+                TrackVersion        = trackVersion,
+                TranslationEncoding = translationEncoding,
+                RotationEncoding    = rotationEncoding,
+                ScaleEncoding       = scaleEncoding,
+                KeyframeCount       = keyframeCount,
+                TranslationData     = tData,
+                RotationData        = rData,
+                ScaleData           = sData,
             };
         }
         Tracks = tracks;
@@ -318,7 +318,7 @@ public class TmaFile
             sb.AppendLine($"Animation Tracks ({Tracks.Length}):");
             foreach (var t in Tracks)
             {
-                var totalBytes = t.TranslationDataBytes + t.RotationDataBytes + t.ScaleDataBytes;
+                var totalBytes = t.TranslationData.Length + t.RotationData.Length + t.ScaleData.Length;
                 sb.AppendLine($"  {t.Name}  [{t.KeyframeCount} kf]  " +
                               $"T:{t.TranslationEncoding} R:{t.RotationEncoding} S:{t.ScaleEncoding}  " +
                               $"({totalBytes:N0}B)");
@@ -370,22 +370,23 @@ public class TmaFile
     /// <summary>
     /// Reads one encoding data block. Constant = 16 bytes inline (__m128).
     /// All other encodings are prefixed with a uint32 byte-count, then that many bytes of data.
+    /// Returns a copy of the raw data bytes.
     /// </summary>
-    static bool TryReadEncodingBlock(ReadOnlySpan<byte> data, ref int offset, TmaEncoding enc, out int dataBytes)
+    static bool TryReadEncodingBlock(ReadOnlySpan<byte> data, ref int offset, TmaEncoding enc, out byte[] blockData)
     {
-        dataBytes = 0;
+        blockData = [];
         if (enc == TmaEncoding.Constant)
         {
-            dataBytes = 16;
             if (offset + 16 > data.Length) return false;
+            blockData = data.Slice(offset, 16).ToArray();
             offset += 16;
             return true;
         }
 
-        // Non-constant: read 4-byte size prefix, then skip the data
+        // Non-constant: read 4-byte size prefix, then copy the data
         if (!TryReadInt32(data, ref offset, out var blockSize)) return false;
         if (blockSize < 0 || offset + blockSize > data.Length) return false;
-        dataBytes = blockSize;
+        blockData = data.Slice(offset, blockSize).ToArray();
         offset += blockSize;
         return true;
     }
