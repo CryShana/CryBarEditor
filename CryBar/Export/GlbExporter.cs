@@ -514,10 +514,10 @@ public static class GlbExporter
     }
 
     /// <summary>
-    /// TMA rotations are deltas from bind pose in bone-local frame.
-    /// Compose: final = bindR * animR (apply delta in local frame, then bind to parent).
-    /// Z-axis mirror for LH->RH: q' = (-x, -y, z, w).
-    /// Ensures quaternion sign consistency across frames to prevent interpolation flipping.
+    /// TMA rotation deltas composed with bind pose in bone-local frame.
+    /// Game uses conjugated quaternion convention - conj(delta) applied after bind.
+    /// Z-mirror for LH->RH: q' = (-x, -y, z, w).
+    /// Hemisphere consistency prevents SLERP flipping between frames.
     /// </summary>
     static void WriteAnimationRotations(byte[] buf, int offset,
         Quaternion[] rotations, Quaternion bindR, int frameCount)
@@ -525,10 +525,9 @@ public static class GlbExporter
         var prev = Quaternion.Identity;
         for (int i = 0; i < frameCount; i++)
         {
-            var finalR = Quaternion.Normalize(Quaternion.Multiply(bindR, rotations[i]));
-            // Z-mirror
+            var finalR = Quaternion.Normalize(
+                Quaternion.Multiply(bindR, Quaternion.Conjugate(rotations[i])));
             finalR = new Quaternion(-finalR.X, -finalR.Y, finalR.Z, finalR.W);
-            // Ensure same hemisphere as previous frame to prevent SLERP/LINEAR flipping
             if (i > 0 && Quaternion.Dot(prev, finalR) < 0)
                 finalR = Quaternion.Negate(finalR);
             prev = finalR;
