@@ -117,12 +117,12 @@ public partial class MainWindow : SimpleWindow
 
     // 3D preview
     GlPreviewControl? _glPreview;
-    readonly LruCache<PreviewMeshData> _meshCache = new(maxItems: 6);
+    readonly LruCache<PreviewMeshData> _meshCache = new(maxItems: 4);
     int _tmmSelectedTabIndex = 0;
     CancellationTokenSource? _meshConversionCts;
 
     // Text document cache + async load cancellation
-    readonly LruCache<TextDocument> _docCache = new(maxItems: 6);
+    readonly LruCache<TextDocument> _docCache = new(maxItems: 4);
     CancellationTokenSource? _docLoadCts;
     internal Task _docReadyTask = Task.CompletedTask;
 
