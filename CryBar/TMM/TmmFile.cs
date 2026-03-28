@@ -55,7 +55,7 @@ public class TmmFile
     public uint HeightsStart { get; private set; }
     public uint HeightsByteLength { get; private set; }
 
-    // Buffer layout — currently unnamed
+    // Buffer layout - currently unnamed
     public uint DestructionBufferStart { get; private set; }
     public uint DestructionBufferByteLength { get; private set; }
     public uint ColorBufferStart { get; private set; }
@@ -477,7 +477,7 @@ public class TmmFile
             ModifiedBones = modBones;
         }
 
-        // 5.6 Auto Burn Mode (1 byte, not a bool — read raw)
+        // 5.6 Auto Burn Mode (1 byte, not a bool - read raw)
         if (offset >= data.Length) return false;
         AutoBurnMode = data[offset++];
 

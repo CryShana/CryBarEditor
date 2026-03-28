@@ -16,7 +16,7 @@ public class FileIndex
     static string Normalize(string path) => path.Replace('\\', '/');
 
     /// <summary>
-    /// Strips all extensions from a filename: "proto.xml.XMB" → "proto", "hoplite_iron.tmm.data" → "hoplite_iron"
+    /// Strips all extensions from a filename: "proto.xml.XMB" -> "proto", "hoplite_iron.tmm.data" -> "hoplite_iron"
     /// </summary>
     static string GetStem(string fileName)
     {
@@ -159,7 +159,7 @@ public class FileIndex
         if (nameResult == null)
         {
             // Stem matched but no filename-level match - only return candidates whose filename
-            // starts with the query filename (handles extensionless queries like "proto" → "proto.xml.XMB")
+            // starts with the query filename (handles extensionless queries like "proto" -> "proto.xml.XMB")
             var prefixMatches = new List<FileIndexEntry>();
             foreach (var entry in candidates)
             {

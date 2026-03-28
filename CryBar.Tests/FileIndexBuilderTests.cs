@@ -22,7 +22,7 @@ public class FileIndexBuilderTests : IDisposable
     [Fact]
     public void FindSupplemental_RootContainsBars_ReturnsEmpty()
     {
-        // Root itself has .bar files — supplemental scan should return empty
+        // Root itself has .bar files - supplemental scan should return empty
         // because the root's BARs are already indexed by the main scan.
         var root = Path.Combine(_tempRoot, "parent", "child");
         Directory.CreateDirectory(root);
@@ -69,7 +69,7 @@ public class FileIndexBuilderTests : IDisposable
     [Fact]
     public void FindSupplemental_ExcludesFilesUnderRoot()
     {
-        // BARs exist both in parent and inside root — only parent ones should be returned
+        // BARs exist both in parent and inside root - only parent ones should be returned
         var parent = Path.Combine(_tempRoot, "parent");
         var root = Path.Combine(parent, "child");
         Directory.CreateDirectory(root);
@@ -97,10 +97,10 @@ public class FileIndexBuilderTests : IDisposable
             // returns empty and doesn't throw when the parent IS the drive root
             // Use maxDepth=1 with root = directChild (whose parent is drive root)
             // Since directChild likely doesn't exist, but we only need to test
-            // that drive root is skipped — create it temporarily
+            // that drive root is skipped - create it temporarily
             Directory.CreateDirectory(directChild);
             var result = FileIndexBuilder.FindSupplementalBarFiles(directChild, maxDepth: 1);
-            // Should be empty — drive root is skipped
+            // Should be empty - drive root is skipped
             Assert.Empty(result);
         }
         finally
@@ -113,7 +113,7 @@ public class FileIndexBuilderTests : IDisposable
     [Fact]
     public void FindSupplemental_SkipsParentWithTooManySubdirs()
     {
-        // Parent has 60+ subdirectories — should be skipped
+        // Parent has 60+ subdirectories - should be skipped
         var parent = Path.Combine(_tempRoot, "crowded_parent");
         var root = Path.Combine(parent, "child");
         Directory.CreateDirectory(root);
@@ -136,7 +136,7 @@ public class FileIndexBuilderTests : IDisposable
     [Fact]
     public void FindSupplemental_RespectsMaxFiles()
     {
-        // Parent has many BARs — only maxFiles should be returned
+        // Parent has many BARs - only maxFiles should be returned
         var parent = Path.Combine(_tempRoot, "bar_parent");
         var root = Path.Combine(parent, "child");
         var sibling = Path.Combine(parent, "sibling");
@@ -153,7 +153,7 @@ public class FileIndexBuilderTests : IDisposable
     [Fact]
     public void FindSupplemental_ShortCircuitsWhenBarsFound()
     {
-        // BARs at level 1 — should not scan level 2
+        // BARs at level 1 - should not scan level 2
         var grandparent = Path.Combine(_tempRoot, "grandparent");
         var parent = Path.Combine(grandparent, "parent");
         var root = Path.Combine(parent, "child");

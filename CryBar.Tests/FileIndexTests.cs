@@ -162,7 +162,7 @@ public class FileIndexTests
         index.Add(MakeEntry(@"game\art\armory_a_age2.fbximport"));
         index.Add(MakeEntry(@"game\art\armory_a_age2.composite"));
 
-        // No known ext matches → fallback to prefix matching
+        // No known ext matches -> fallback to prefix matching
         var results = index.Find("armory_a_age2");
         Assert.Equal(2, results.Count);
     }
@@ -258,7 +258,7 @@ public class FileIndexTests
         var index = new FileIndex();
         index.Add(MakeEntry(@"game\art\effects\impacts\hack.impacteffect.XMB"));
 
-        // No directory segments — should match by stem alone
+        // No directory segments - should match by stem alone
         var results = index.FindByPartialPath("hack");
         Assert.Single(results);
     }
@@ -313,7 +313,7 @@ public class FileIndexTests
         index.Add(MakeEntry(@"intermediate\modelcache\armory_a_age2.tmm", "modelcache.bar"));
         index.Add(MakeEntry(@"intermediate\modelcache\armory_a_age2.tmm.data", "modelcache_data.bar"));
 
-        // Material resolution FAILS — proves the bug
+        // Material resolution FAILS - proves the bug
         var materialResults = index.Find("armory_a_age2.material.XMB");
         Assert.Empty(materialResults);
         var textureResults = index.Find("armory_a_age2_basecolor.ddt");

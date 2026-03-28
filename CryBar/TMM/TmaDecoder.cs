@@ -174,7 +174,7 @@ public static class TmaDecoder
     {
         // Layout: [2-bit index][10-bit C2][10-bit C1][10-bit C0]
         // Each 10-bit: bit 9 = sign, bits 8-0 = magnitude
-        // Extraction order: low→high = C0, C1, C2
+        // Extraction order: low->high = C0, C1, C2
         // Index: 0=X, 1=Y, 2=Z, 3=W is reconstructed
         int idx = (int)(packed >> 30) & 3;
 
@@ -199,7 +199,7 @@ public static class TmaDecoder
     {
         // Layout: [4-bit index][20-bit C2][20-bit C1][20-bit C0]
         // Each 20-bit: bit 19 = sign, bits 18-0 = magnitude (max 524287)
-        // Extraction order: low→high = C0, C1, C2
+        // Extraction order: low->high = C0, C1, C2
         // Index: 0=X, 1=Y, 2=Z, 3=W is reconstructed
         int idx = (int)(packed >> 60) & 0xF;
         if (idx > 3) idx = 3; // safety clamp

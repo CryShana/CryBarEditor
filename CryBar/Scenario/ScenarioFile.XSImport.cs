@@ -605,7 +605,7 @@ public partial class ScenarioFile
 
     /// <summary>
     /// Removes surrounding quotes and unescapes a quoted value from @CryBar metadata.
-    /// Handles: \" → ", \\ → \, \n → newline, \r → carriage return.
+    /// Handles: \" -> ", \\ -> \, \n -> newline, \r -> carriage return.
     /// </summary>
     static string UnquoteValue(string text)
     {
@@ -1107,7 +1107,7 @@ public partial class ScenarioFile
 
     /// <summary>
     /// Strips the outermost layer of parentheses from an expression if they are balanced.
-    /// Handles cases like <c>((expr >= val))</c> → <c>(expr >= val)</c> → <c>expr >= val</c>.
+    /// Handles cases like <c>((expr >= val))</c> -> <c>(expr >= val)</c> -> <c>expr >= val</c>.
     /// </summary>
     static string StripOuterParens(string expr)
     {

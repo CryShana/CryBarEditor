@@ -102,7 +102,7 @@ public partial class DependencyGraphWindow : SimpleWindow
     // Transform resolved after InitializeComponent
     MatrixTransform _graphTransform = null!;
 
-    // Colors — declare base colors first, then derived aliases
+    // Colors - declare base colors first, then derived aliases
     static readonly Color SelectionColor = Color.Parse("#6f96bf");
     static readonly Color FbxImportColor = Color.Parse("#90a4ae");
 
@@ -429,7 +429,7 @@ public partial class DependencyGraphWindow : SimpleWindow
         var contentStack = new StackPanel { Spacing = 1 };
         stack.Children.Add(contentStack);
 
-        // Value text — trim from left to keep filename visible
+        // Value text - trim from left to keep filename visible
         var displayText = reference.RawValue;
         if (displayText.Length > 50)
             displayText = "..." + displayText[^47..];
@@ -522,7 +522,7 @@ public partial class DependencyGraphWindow : SimpleWindow
             stack.Children.Add(playBtn);
         }
 
-        // Preview button for image/TMM references (single resolved only — multi has sub-nodes)
+        // Preview button for image/TMM references (single resolved only - multi has sub-nodes)
         if (reference.Resolved.Count == 1)
         {
             var resolved = reference.Resolved[0];
@@ -626,7 +626,7 @@ public partial class DependencyGraphWindow : SimpleWindow
         };
 
         var matchTooltip = match.IsExternal
-            ? $"{match.FullRelativePath} (external — {match.BarFilePath})"
+            ? $"{match.FullRelativePath} (external - {match.BarFilePath})"
             : match.FullRelativePath;
         ToolTip.SetTip(border, matchTooltip);
         border.DoubleTapped += Node_DoubleTapped;
@@ -987,7 +987,7 @@ public partial class DependencyGraphWindow : SimpleWindow
             }
         }
 
-        // Remove new nodes from displacements — they were already snapped in place above
+        // Remove new nodes from displacements - they were already snapped in place above
         foreach (var node in newNodes)
             displacements.Remove(node);
 
@@ -1399,7 +1399,7 @@ public partial class DependencyGraphWindow : SimpleWindow
 
         if (entry != null)
         {
-            // Skip external entries — try to find a non-external match
+            // Skip external entries - try to find a non-external match
             if (entry.IsExternal && depRef != null)
             {
                 entry = depRef.Resolved.FirstOrDefault(e => !e.IsExternal);
@@ -1659,8 +1659,8 @@ public partial class DependencyGraphWindow : SimpleWindow
         // Stop any previous playback immediately (allows re-clicking to restart)
         StopPlayback();
 
-        // Find the bank file for this soundset — DependencyFinder already resolves
-        // soundset → soundset file + bank file via ResolveSoundsetName, so check resolved entries first
+        // Find the bank file for this soundset - DependencyFinder already resolves
+        // soundset -> soundset file + bank file via ResolveSoundsetName, so check resolved entries first
         FileIndexEntry? bankEntry = reference.Resolved.FirstOrDefault(
             r => r.FileName.EndsWith(".bank", StringComparison.OrdinalIgnoreCase));
 

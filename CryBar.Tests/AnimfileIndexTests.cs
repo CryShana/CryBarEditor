@@ -60,7 +60,7 @@ public class AnimfileIndexTests
         var entry = MakeEntry(@"game\art\armory.xml.XMB");
         index.Add("armory", entry);
 
-        // "armory_a_age2" → "armory_a" → "armory"
+        // "armory_a_age2" -> "armory_a" -> "armory"
         Assert.Same(entry, index.Find("armory_a_age2"));
     }
 

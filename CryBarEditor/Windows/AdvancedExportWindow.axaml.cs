@@ -215,7 +215,7 @@ public partial class AdvancedExportWindow : SimpleWindow
 
             HasFilenameConflict = conflictCount > 0;
             FilenameConflictWarning = conflictCount > 0
-                ? $"{conflictCount} filename(s) appear more than once — only the last file will be kept."
+                ? $"{conflictCount} filename(s) appear more than once - only the last file will be kept."
                 : "";
         }
 
@@ -282,7 +282,7 @@ public partial class AdvancedExportWindow : SimpleWindow
             }
             else if (!DoCopy)
             {
-                // Not convertible, but Convert is the only mode — still show output (same as copy)
+                // Not convertible, but Convert is the only mode - still show output (same as copy)
                 parts.Add(name + _singleFileSourceExt);
             }
         }

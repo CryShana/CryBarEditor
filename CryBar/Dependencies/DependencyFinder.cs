@@ -654,7 +654,7 @@ public static partial class DependencyFinder
     /// <param name="index">File index for resolving references.</param>
     /// <param name="soundsetIndex">Soundset index for resolving soundset names.</param>
     /// <param name="stringTableLanguage">Preferred language for string table resolution.</param>
-    /// <param name="readFileAsync">Delegate to read a file from a FileIndexEntry (for bank→soundset redirect). Caller must dispose the returned buffer.</param>
+    /// <param name="readFileAsync">Delegate to read a file from a FileIndexEntry (for bank->soundset redirect). Caller must dispose the returned buffer.</param>
     /// <param name="filterEntityName">When set, only return the group matching this entity name.</param>
     public static async Task<DependencyResult> FindDependenciesForFileAsync(
         string entryPath,
@@ -684,7 +684,7 @@ public static partial class DependencyFinder
 
     /// <summary>
     /// Handles .bank files by finding and reading the associated soundset file.
-    /// E.g. "greek.bank" → reads "soundsets_greek.soundset.XMB" and parses its dependencies.
+    /// E.g. "greek.bank" -> reads "soundsets_greek.soundset.XMB" and parses its dependencies.
     /// </summary>
     static async Task<DependencyResult> FindDependenciesForBankAsync(
         string entryPath,

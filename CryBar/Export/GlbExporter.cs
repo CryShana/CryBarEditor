@@ -36,7 +36,7 @@ public static class GlbExporter
     const uint ChunkTypeBin = 0x004E4942;
 
     /// <summary>
-    /// Column-major 4x4 matrix indices that get negated for LH→RH Z-flip.
+    /// Column-major 4x4 matrix indices that get negated for LH->RH Z-flip.
     /// </summary>
     static readonly int[] ZNegateIndices = [2, 6, 8, 9, 14];
 
@@ -359,9 +359,9 @@ public static class GlbExporter
             BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), tangent.y); offset += 4;
             BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), -tangent.z); offset += 4;
 
-            // Z-negate (LH→RH) flips the TBN determinant, so tangent.w is inverted:
-            //   hand=0 (det=+1 in game) → det=-1 in glTF → w = -1
-            //   hand=1 (det=-1 in game) → det=+1 in glTF → w = +1
+            // Z-negate (LH->RH) flips the TBN determinant, so tangent.w is inverted:
+            //   hand=0 (det=+1 in game) -> det=-1 in glTF -> w = -1
+            //   hand=1 (det=-1 in game) -> det=+1 in glTF -> w = +1
             float w = handedness == 0 ? -1.0f : 1.0f;
             BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), w); offset += 4;
         }
@@ -516,7 +516,7 @@ public static class GlbExporter
     /// <summary>
     /// TMA rotations are deltas from bind pose in bone-local frame.
     /// Compose: final = bindR * animR (apply delta in local frame, then bind to parent).
-    /// Z-axis mirror for LH→RH: q' = (-x, -y, z, w).
+    /// Z-axis mirror for LH->RH: q' = (-x, -y, z, w).
     /// Ensures quaternion sign consistency across frames to prevent interpolation flipping.
     /// </summary>
     static void WriteAnimationRotations(byte[] buf, int offset,
@@ -1093,7 +1093,7 @@ public static class GlbExporter
 
     /// <summary>
     /// Decomposes a column-major parent-space matrix to TRS and writes as glTF
-    /// "translation", "rotation", "scale" properties with Z-mirror for LH→RH.
+    /// "translation", "rotation", "scale" properties with Z-mirror for LH->RH.
     /// Required for nodes targeted by animation (glTF spec forbids "matrix" on animated nodes).
     /// </summary>
     static void WriteBoneTrsJson(Utf8JsonWriter w, float[] matrix)
@@ -1122,7 +1122,7 @@ public static class GlbExporter
 
     /// <summary>
     /// Writes a column-major 4×4 matrix as a glTF "matrix" JSON array,
-    /// negating the Z-axis components for LH→RH conversion.
+    /// negating the Z-axis components for LH->RH conversion.
     /// </summary>
     static void WriteZNegatedMatrixJson(Utf8JsonWriter w, float[] matrix)
     {

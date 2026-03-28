@@ -272,7 +272,7 @@ public partial class MainWindow
 
     /// <summary>
     /// Builds the AnimfileIndex by scanning BAR files for animfile XMLs.
-    /// Parses each to extract the TMModel reference and maps TMM stem → animfile entry.
+    /// Parses each to extract the TMModel reference and maps TMM stem -> animfile entry.
     /// </summary>
     async Task RebuildAnimfileIndexAsync(CancellationToken ct)
     {

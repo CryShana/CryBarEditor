@@ -210,7 +210,7 @@ public class DDTImage
 
         if (colors.TryGetMemory(out var srcMemory))
         {
-            // contiguous — single bulk copy
+            // contiguous - single bulk copy
             var dest = output.GetPixelMemoryGroup()[0].Span;
             MemoryMarshal.Cast<ColorRgba32, Rgba32>(srcMemory.Span).CopyTo(dest);
         }
@@ -228,7 +228,7 @@ public class DDTImage
 
     public static Memory2D<ColorRgba32> ImageToPixels(Image<Rgba32> inputImage)
     {
-        // Rgba32 and ColorRgba32 are layout-identical — reinterpret the image's pixel buffer directly
+        // Rgba32 and ColorRgba32 are layout-identical - reinterpret the image's pixel buffer directly
         var pixels = inputImage.GetPixelMemoryGroup()[0];
         return pixels.Cast<Rgba32, ColorRgba32>().AsMemory2D(inputImage.Height, inputImage.Width);
     }

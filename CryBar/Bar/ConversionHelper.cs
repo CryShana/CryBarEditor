@@ -12,7 +12,7 @@ using System.Text;
 namespace CryBar.Bar;
 
 /// <summary>
-/// Common file conversion operations (XMB→XML, DDT→TGA, DDT→PNG, TMM→OBJ/GLB).
+/// Common file conversion operations (XMB->XML, DDT->TGA, DDT->PNG, TMM->OBJ/GLB).
 /// </summary>
 public static class ConversionHelper
 {
@@ -202,7 +202,7 @@ public static class ConversionHelper
     {
         return extension.ToLower() switch
         {
-            ".xmb" => null, // XMB extension is removed, revealing the underlying extension (e.g. .xml.xmb → .xml)
+            ".xmb" => null, // XMB extension is removed, revealing the underlying extension (e.g. .xml.xmb -> .xml)
             ".ddt" => ".tga",
             ".tmm" => tmmToGltf ? ".glb" : ".obj",
             _ => null

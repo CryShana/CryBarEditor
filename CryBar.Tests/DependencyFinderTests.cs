@@ -295,12 +295,12 @@ public class DependencyFinderTests
         Assert.Single(dataRef.Resolved);
         Assert.Equal("armory_a_age2.tmm.data", dataRef.Resolved[0].FileName);
 
-        // Material: .tmm is stripped → searches for armory_a_age2.material.XMB
+        // Material: .tmm is stripped -> searches for armory_a_age2.material.XMB
         var matRef = result.Groups[0].References.First(r => r.SourceTag == "material");
         Assert.Single(matRef.Resolved);
         Assert.Equal("armory_a_age2.material.XMB", matRef.Resolved[0].FileName);
 
-        // No animfile ref — armory_a_age2.xml.XMB doesn't exist in index
+        // No animfile ref - armory_a_age2.xml.XMB doesn't exist in index
         Assert.DoesNotContain(result.Groups[0].References, r => r.SourceTag == "animfile");
     }
 
@@ -611,7 +611,7 @@ public class DependencyFinderTests
 
         var result = DependencyFinder.FindDependencies(content, "game\\data\\ringmenu.xml");
 
-        // 3 unique-tag children → 3 groups named by tag
+        // 3 unique-tag children -> 3 groups named by tag
         Assert.Equal(3, result.Groups.Count);
         Assert.Equal("greekbuildings", result.Groups[0].EntityName);
         Assert.Equal("greekunits", result.Groups[1].EntityName);

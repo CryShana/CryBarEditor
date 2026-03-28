@@ -105,7 +105,7 @@ public partial class MainWindow
     {
         const int MAX_DATA_SIZE = 1_500_000_000;    // 1.5 GB
         const int MAX_DATA_TEXT_SIZE = 100_000_000; // 100 MB
-        const int LOADING_INDICATOR_THRESHOLD = 500_000; // 500 KB — skip "Loading..." for small files to avoid flicker
+        const int LOADING_INDICATOR_THRESHOLD = 500_000; // 500 KB - skip "Loading..." for small files to avoid flicker
 
         var relative_path = get_rel_path(entry);
         var ext = Path.GetExtension(relative_path).ToLower();
@@ -120,7 +120,7 @@ public partial class MainWindow
         _docLoadCts?.Dispose();
         _docLoadCts = null;
 
-        // Uninstall folding before replacing document — it holds references to the old document
+        // Uninstall folding before replacing document - it holds references to the old document
         if (_foldingManager != null)
         {
             _foldingManager.Clear();
@@ -130,7 +130,7 @@ public partial class MainWindow
 
         var data_size = get_read_size(entry);
 
-        // Only show loading indicator for larger files — small files load fast
+        // Only show loading indicator for larger files - small files load fast
         // enough that the "Loading..." flash causes more flicker than it helps
         if (data_size > LOADING_INDICATOR_THRESHOLD)
         {
@@ -139,7 +139,7 @@ public partial class MainWindow
             _textMateInstallation.SetGrammar(null);
         }
 
-        // Mark document as not ready — SearchWindow awaits this before highlighting
+        // Mark document as not ready - SearchWindow awaits this before highlighting
         var previewTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _docReadyTask = previewTcs.Task;
 
@@ -572,7 +572,7 @@ public partial class MainWindow
             return;
         }
 
-        // Small document — build synchronously, no snippet needed
+        // Small document - build synchronously, no snippet needed
         _docReadyTask = Task.CompletedTask;
         var doc = new TextDocument(text);
         _txtEditor.Document = doc;
@@ -827,7 +827,7 @@ public partial class MainWindow
 
                 if (isLast && !isDir)
                 {
-                    // File leaf — store size
+                    // File leaf - store size
                     current[parts[i]] = entry.Length;
                     fileCount++;
                 }

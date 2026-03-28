@@ -163,7 +163,7 @@ public class DependencyFinderIntegrationTests
         return soundsetIndex;
     }
 
-    // Shared index — built once for all tests in this class
+    // Shared index - built once for all tests in this class
     static FileIndex? _sharedIndex;
     static readonly Lock _indexLock = new();
 
@@ -188,7 +188,7 @@ public class DependencyFinderIntegrationTests
         var xml = ReadXmlFromBar(@"data\Data.bar", @"gameplay\proto.xml.XMB");
         var result = DependencyFinder.FindDependencies(xml, @"game\data\gameplay\proto.xml.XMB", index);
 
-        // proto has hundreds of <unit> entities — should be grouped
+        // proto has hundreds of <unit> entities - should be grouped
         Assert.True(result.Groups.Count > 100, $"Expected many entity groups, got {result.Groups.Count}");
 
         // Find the Hoplite entity
@@ -257,7 +257,7 @@ public class DependencyFinderIntegrationTests
         var xml = ReadXmlFromBar(@"data\Data.bar", "powers.xml.XMB");
         var result = DependencyFinder.FindDependencies(xml, @"game\data\gameplay\powers.xml.XMB", index);
 
-        // powers.xml has <include> children — no name attr, so should be ungrouped
+        // powers.xml has <include> children - no name attr, so should be ungrouped
         var allPaths = result.GetAllReferences().Where(r => r.Type == DependencyRefType.FilePath).ToList();
         Assert.True(allPaths.Count >= 10, $"Expected many include paths, got {allPaths.Count}");
 
@@ -511,7 +511,7 @@ public class DependencyFinderIntegrationTests
         var matRef = refs.First(r => r.SourceTag == "material");
         Assert.True(matRef.Resolved.Count >= 1, $"material should resolve, got {matRef.Resolved.Count}");
 
-        // animfile should resolve via AnimfileIndex (hoplite_iron → strips _iron → hoplite)
+        // animfile should resolve via AnimfileIndex (hoplite_iron -> strips _iron -> hoplite)
         var animRef = refs.FirstOrDefault(r => r.SourceTag == "animfile");
         Assert.NotNull(animRef);
         Assert.True(animRef.Resolved.Count >= 1, "animfile should resolve via AnimfileIndex");
@@ -632,7 +632,7 @@ public class DependencyFinderIntegrationTests
 
         var entry = hopliteEntries[0];
 
-        // Step 3: decompress and convert XMB→XML
+        // Step 3: decompress and convert XMB->XML
         var raw = entry.ReadDataDecompressed(stream);
         Assert.True(raw.Length > 0, "Decompressed data is empty");
 

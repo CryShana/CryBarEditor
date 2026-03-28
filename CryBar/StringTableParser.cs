@@ -16,7 +16,7 @@ public static partial class StringTableParser
     private static partial Regex EntryStartPattern();
 
     /// <summary>
-    /// Parses a string_table.txt file and returns a dictionary of ID → string content.
+    /// Parses a string_table.txt file and returns a dictionary of ID -> string content.
     /// Handles multi-line values (content continues until closing quote before next ID or EOF).
     /// </summary>
     public static Dictionary<string, string> Parse(string content)

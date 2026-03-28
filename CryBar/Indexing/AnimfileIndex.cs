@@ -24,7 +24,7 @@ public class AnimfileIndex
     /// <summary>
     /// Finds the animfile entry for a TMM stem. Tries exact match first,
     /// then progressively strips trailing _segments to find a base model match.
-    /// e.g. "hoplite_iron" → "hoplite", "armory_a_age2" → "armory_a" → "armory"
+    /// e.g. "hoplite_iron" -> "hoplite", "armory_a_age2" -> "armory_a" -> "armory"
     /// </summary>
     public FileIndexEntry? Find(string tmmStem)
     {
