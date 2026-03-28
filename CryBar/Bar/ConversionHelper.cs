@@ -12,7 +12,7 @@ using System.Text;
 namespace CryBar.Bar;
 
 /// <summary>
-/// Common file conversion operations (XMB→XML, DDT→TGA, DDT→PNG, TMM→OBJ/GLB).
+/// Common file conversion operations (XMB->XML, DDT->TGA, DDT->PNG, TMM->OBJ/GLB).
 /// </summary>
 public static class ConversionHelper
 {
@@ -174,22 +174,14 @@ public static class ConversionHelper
     }
 
     /// <summary>
-    /// Converts TMM+TMM.DATA pair to GLB (glTF binary) format. Geometry only.
-    /// </summary>
-    public static byte[]? ConvertTmmToGlbBytes(ReadOnlyMemory<byte> tmmData, ReadOnlyMemory<byte> tmmDataData)
-    {
-        if (!TryParseTmmPair(tmmData, tmmDataData, out var tmm, out var dataFile)) return null;
-        return GlbExporter.ExportGlb(tmm, dataFile);
-    }
-
-    /// <summary>
-    /// Converts TMM+TMM.DATA pair to GLB (glTF binary) format with materials.
+    /// Converts TMM+TMM.DATA pair to GLB (glTF binary) format with optional materials and animations.
     /// </summary>
     public static byte[]? ConvertTmmToGlbBytes(ReadOnlyMemory<byte> tmmData, ReadOnlyMemory<byte> tmmDataData,
-        IReadOnlyList<GlbExporter.GlbMaterial>? materials)
+        IReadOnlyList<GlbExporter.GlbMaterial>? materials = null,
+        IReadOnlyList<GlbExporter.GlbAnimation>? animations = null)
     {
         if (!TryParseTmmPair(tmmData, tmmDataData, out var tmm, out var dataFile)) return null;
-        return GlbExporter.ExportGlb(tmm, dataFile, materials);
+        return GlbExporter.ExportGlb(tmm, dataFile, materials, animations);
     }
 
     /// <summary>
@@ -210,7 +202,7 @@ public static class ConversionHelper
     {
         return extension.ToLower() switch
         {
-            ".xmb" => null, // XMB extension is removed, revealing the underlying extension (e.g. .xml.xmb → .xml)
+            ".xmb" => null, // XMB extension is removed, revealing the underlying extension (e.g. .xml.xmb -> .xml)
             ".ddt" => ".tga",
             ".tmm" => tmmToGltf ? ".glb" : ".obj",
             _ => null

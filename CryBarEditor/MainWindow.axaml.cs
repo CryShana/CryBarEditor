@@ -513,7 +513,7 @@ public partial class MainWindow : SimpleWindow
 
         var dir = Path.GetDirectoryName(relative_path_full) ?? "";
 
-        // Check known mappings first (handles special cases like string_table.txt → stringmods.txt)
+        // Check known mappings first (handles special cases like string_table.txt -> stringmods.txt)
         if (AdditiveModding.IsSupportedFor(relative_path_full, out var format))
         {
             var knownPath = Path.Combine(_exportRootDirectory, dir, format.FileName);
@@ -672,6 +672,7 @@ public partial class MainWindow : SimpleWindow
         _lastConfiguration.ExportDoDecompress = options.Decompress;
         _lastConfiguration.ExportDoExportMaterials = options.ExportMaterials;
         _lastConfiguration.ExportTmmToGltf = options.TmmToGltf;
+        _lastConfiguration.ExportAnimations = options.ExportAnimations;
         _lastConfiguration.ExportOpenInEditor = options.OpenInEditor;
         SaveConfiguration();
     }

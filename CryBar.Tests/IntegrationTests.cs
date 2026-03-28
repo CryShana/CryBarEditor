@@ -1,11 +1,10 @@
-using System.Xml;
+﻿using System.Xml;
 
 using CryBar;
 using CryBar.Bar;
 using CryBar.Export;
 using CryBar.Scenario;
 using CryBar.TMM;
-
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
@@ -575,7 +574,7 @@ public class IntegrationTests
     }
 
     [SkippableFact]
-    public void ArtModelCacheMetaBar_ParseAllTmm_AllSucceed()
+    public void ArtModelCacheMetaBar_ParseAllTmm_AllSucceedAndFullyParsed()
     {
         Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
 
@@ -593,61 +592,24 @@ public class IntegrationTests
         Assert.True(tmmEntries.Count > 0, "No .tmm entries found");
 
         var failures = new List<string>();
-        foreach (var entry in tmmEntries)
-        {
-            var raw = BarCompression.EnsureDecompressed(entry.ReadDataRaw(stream), out _);
-            var tmm = new TmmFile(raw);
-            if (!tmm.Parsed)
-                failures.Add(entry.RelativePath);
-        }
-
-        Assert.True(failures.Count == 0,
-            $"{failures.Count}/{tmmEntries.Count} TMM files failed to parse:\n{string.Join("\n", failures.Take(20))}");
-    }
-
-    [SkippableFact]
-    public void ArtModelCacheMetaBar_ParseAllTmm_ReportFullyParsed()
-    {
-        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
-
-        var barPath = Path.Combine(GamePath, @"modelcache\ArtModelCacheMeta.bar");
-        Skip.IfNot(File.Exists(barPath), "ArtModelCacheMeta.bar not found");
-
-        using var stream = File.OpenRead(barPath);
-        var bar = new BarFile(stream);
-        Assert.True(bar.Load(out _));
-
-        var tmmEntries = bar.Entries!
-            .Where(e => e.Name.EndsWith(".tmm", StringComparison.OrdinalIgnoreCase))
-            .ToList();
-
-        int total = tmmEntries.Count;
-        int parsed = 0;
-        int fullyParsed = 0;
         var partialList = new List<string>();
 
         foreach (var entry in tmmEntries)
         {
             var raw = BarCompression.EnsureDecompressed(entry.ReadDataRaw(stream), out _);
             var tmm = new TmmFile(raw);
-            if (tmm.Parsed) parsed++;
-            if (tmm.Parsed && tmm.FullyParsed) fullyParsed++;
-            else if (tmm.Parsed && !tmm.FullyParsed)
+            if (!tmm.Parsed)
+                failures.Add(entry.RelativePath);
+            else if (!tmm.FullyParsed)
                 partialList.Add($"{entry.RelativePath} (v{tmm.Version})");
         }
 
-        // Report but don't fail on partial parses — this test is informational
-        // If some files only partially parse, log them for investigation
-        Assert.True(parsed == total,
-            $"{total - parsed}/{total} TMM files failed core parse");
-
-        // This is a soft check — we log partial parses but don't fail
-        if (partialList.Count > 0)
-        {
-            // Output as test message for visibility
-            Assert.True(true,
-                $"INFO: {fullyParsed}/{total} fully parsed, {partialList.Count} partial:\n{string.Join("\n", partialList.Take(20))}");
-        }
+        Assert.True(failures.Count == 0,
+            $"{failures.Count}/{tmmEntries.Count} TMM files failed to parse:\n{string.Join("\n", failures.Take(20))}");
+        // many v37 TMM files don't fully parse yet - track count but don't fail
+        int fullyParsed = tmmEntries.Count - failures.Count - partialList.Count;
+        Assert.True(fullyParsed > 0,
+            $"No TMM files fully parsed out of {tmmEntries.Count}");
     }
 
     #endregion
@@ -660,14 +622,14 @@ public class IntegrationTests
         Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
 
         // Load the companion .tmm first
-        var (bar, tmmEntry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "petrobolos.tmm");
+        var (_, tmmEntry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "petrobolos.tmm");
         var tmmRaw = BarCompression.EnsureDecompressed(tmmEntry.ReadDataRaw(stream), out _);
         var tmm = new TmmFile(tmmRaw);
         Assert.True(tmm.Parsed, "Companion TMM should parse");
         stream.Dispose();
 
         // Load the .tmm.data
-        var (bar2, dataEntry, stream2) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheModelDataGreek.bar", "petrobolos.tmm.data");
+        var (_, dataEntry, stream2) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheModelDataGreek.bar", "petrobolos.tmm.data");
         using var s = stream2;
 
         var dataRaw = BarCompression.EnsureDecompressed(dataEntry.ReadDataRaw(stream2), out _);
@@ -690,14 +652,14 @@ public class IntegrationTests
         Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
 
         // Load companion .tmm
-        var (bar, tmmEntry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "shuten_doji.tmm");
+        var (_, tmmEntry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "shuten_doji.tmm");
         var tmmRaw = BarCompression.EnsureDecompressed(tmmEntry.ReadDataRaw(stream), out _);
         var tmm = new TmmFile(tmmRaw);
         Assert.True(tmm.Parsed, "Companion TMM should parse");
         stream.Dispose();
 
         // Load .tmm.data
-        var (bar2, dataEntry, stream2) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheModelDataJapanese.bar", "shuten_doji.tmm.data");
+        var (_, dataEntry, stream2) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheModelDataJapanese.bar", "shuten_doji.tmm.data");
         using var s = stream2;
 
         var dataRaw = BarCompression.EnsureDecompressed(dataEntry.ReadDataRaw(stream2), out _);
@@ -718,12 +680,12 @@ public class IntegrationTests
         Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
 
         // Load .tmm
-        var (bar, tmmEntry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "petrobolos.tmm");
+        var (_, tmmEntry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "petrobolos.tmm");
         var tmmRaw = BarCompression.EnsureDecompressed(tmmEntry.ReadDataRaw(stream), out _);
         stream.Dispose();
 
         // Load .tmm.data
-        var (bar2, dataEntry, stream2) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheModelDataGreek.bar", "petrobolos.tmm.data");
+        var (_, dataEntry, stream2) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheModelDataGreek.bar", "petrobolos.tmm.data");
         var dataRaw = BarCompression.EnsureDecompressed(dataEntry.ReadDataRaw(stream2), out _);
         stream2.Dispose();
 
@@ -747,7 +709,7 @@ public class IntegrationTests
         Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
 
         // Load .tmm from ArtModelCacheMeta.bar
-        var (bar, tmmEntry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "shade_spc.tmm");
+        var (_, tmmEntry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "shade_spc.tmm");
         var tmmRaw = BarCompression.EnsureDecompressed(tmmEntry.ReadDataRaw(stream), out _);
         var tmm = new TmmFile(tmmRaw);
         Assert.True(tmm.Parsed, "shade_spc.tmm should parse");
@@ -759,7 +721,7 @@ public class IntegrationTests
         Assert.True(tmm.Bones!.Length > 0, "shade_spc should have bones");
 
         // Load .tmm.data from ArtModelCacheModelData.bar
-        var (bar2, dataEntry, stream2) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheModelData.bar", "shade_spc.tmm.data");
+        var (_, dataEntry, stream2) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheModelData.bar", "shade_spc.tmm.data");
         var dataRaw = BarCompression.EnsureDecompressed(dataEntry.ReadDataRaw(stream2), out _);
         stream2.Dispose();
 
@@ -906,6 +868,112 @@ public class IntegrationTests
         Assert.Contains($"Version: {tma.Version}", summary);
     }
 
+    /// <summary>
+    /// Verifies TMA animation data is in bone-local space (not matching TMM ParentSpaceMatrix),
+    /// confirming that animation TRS must be composed with the bind pose for glTF export.
+    /// </summary>
+    [SkippableFact]
+    public void TmaVsTmm_AnimationIsInBoneLocalSpace()
+    {
+        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+
+        var (_, tmmEntry, tmmStream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "hoplite_gold.tmm");
+        var tmmRaw = BarCompression.EnsureDecompressed(tmmEntry.ReadDataRaw(tmmStream), out _);
+        var tmm = new TmmFile(tmmRaw);
+        tmmStream.Dispose();
+        Assert.True(tmm.Parsed);
+
+        var barPath = Path.Combine(GamePath, @"modelcache\ArtModelCacheAnimationData.bar");
+        Skip.IfNot(File.Exists(barPath), "Animation BAR not found");
+        using var tmaStream = File.OpenRead(barPath);
+        var tmaBar = new BarFile(tmaStream);
+        tmaBar.Load(out _);
+        var tmaEntry = tmaBar.Entries!.FirstOrDefault(e =>
+            e.Name.Contains("hoplite", StringComparison.OrdinalIgnoreCase) &&
+            e.Name.EndsWith(".tma", StringComparison.OrdinalIgnoreCase) &&
+            !e.Name.Contains("igc", StringComparison.OrdinalIgnoreCase));
+        Skip.If(tmaEntry == null, "No hoplite TMA found");
+
+        var tmaRaw = BarCompression.EnsureDecompressed(tmaEntry!.ReadDataRaw(tmaStream), out _);
+        var tma = new TmaFile(tmaRaw);
+        Assert.True(tma.Parsed);
+
+        var tracks = TmaDecoder.DecodeAllTracks(tma);
+        Assert.NotNull(tracks);
+
+        var bones = tmm.Bones!;
+        var boneMap = new Dictionary<string, int>(bones.Length);
+        for (int i = 0; i < bones.Length; i++)
+            boneMap[bones[i].Name] = i;
+
+        // All 52 tracks should match TMM bone names
+        int matched = tracks!.Count(t => boneMap.ContainsKey(t.Name));
+        Assert.Equal(tracks.Length, matched);
+
+        // Hips bone: TMM has it at Y≈1.186, but TMA frame0 T is near zero
+        // This confirms TMA is in bone-local space (delta), not absolute parent space
+        var hipsTrack = tracks.First(t => t.Name == "mixamorig:Hips");
+        int hipsIdx = boneMap["mixamorig:Hips"];
+        float tmmHipsY = bones[hipsIdx].ParentSpaceMatrix[13]; // column-major Y translation
+        Assert.True(tmmHipsY > 1.0f, "TMM hips should be positioned well above root");
+        Assert.True(MathF.Abs(hipsTrack.Translations[0].Y) < 0.5f,
+            "TMA hips translation should be a small delta, not the full bind-pose offset");
+    }
+
+    /// <summary>
+    /// Validates TMA decoded rotation continuity - checks for frame-to-frame jumps
+    /// that would indicate a decoding bug (wrong quaternion component layout).
+    /// </summary>
+    [SkippableFact]
+    public void TmaDecoder_RotationContinuity()
+    {
+        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+
+        var barPath = Path.Combine(GamePath, @"modelcache\ArtModelCacheAnimationData.bar");
+        Skip.IfNot(File.Exists(barPath), "Animation BAR not found");
+        using var tmaStream = File.OpenRead(barPath);
+        var tmaBar = new BarFile(tmaStream);
+        tmaBar.Load(out _);
+
+        // Find a hoplite animation with many frames
+        var tmaEntry = tmaBar.Entries!.FirstOrDefault(e =>
+            e.Name.Contains("hoplite", StringComparison.OrdinalIgnoreCase) &&
+            e.Name.Contains("idle", StringComparison.OrdinalIgnoreCase) &&
+            e.Name.EndsWith(".tma", StringComparison.OrdinalIgnoreCase));
+        Skip.If(tmaEntry == null, "No hoplite idle TMA found");
+
+        var tmaRaw = BarCompression.EnsureDecompressed(tmaEntry!.ReadDataRaw(tmaStream), out _);
+        var tma = new TmaFile(tmaRaw);
+        Assert.True(tma.Parsed);
+
+        var tracks = TmaDecoder.DecodeAllTracks(tma);
+        Assert.NotNull(tracks);
+
+        int totalJumps = 0;
+        var jumpDetails = new System.Text.StringBuilder();
+        foreach (var track in tracks!)
+        {
+            var rots = track.Rotations;
+            if (rots.Length < 2) continue;
+            var src = tma.Tracks!.First(t => t.Name == track.Name);
+            for (int f = 1; f < rots.Length; f++)
+            {
+                float absDot = MathF.Abs(System.Numerics.Quaternion.Dot(rots[f - 1], rots[f]));
+                float angleDeg = 2f * MathF.Acos(MathF.Min(1f, absDot)) * (180f / MathF.PI);
+                if (angleDeg > 30f)
+                {
+                    totalJumps++;
+                    if (totalJumps <= 10)
+                        jumpDetails.AppendLine($"  {track.Name} enc={src.RotationEncoding} f{f - 1}->{f}: {angleDeg:F1}°");
+                }
+            }
+        }
+
+        if (totalJumps > 0)
+            Assert.Fail($"{totalJumps} rotation jumps > 30°:\n{jumpDetails}");
+        // If no jumps, test passes!
+    }
+
     [SkippableFact]
     public void TmaFile_SakimoriAttack_FullBodyParse()
     {
@@ -1023,7 +1091,8 @@ public class IntegrationTests
         {
             var raw = BarCompression.EnsureDecompressed(entry.ReadDataRaw(stream), out _);
             var tma = new TmaFile(raw);
-            if (!tma.Parsed || tma.Tracks == null) continue;
+            if (!tma.Parsed || tma.Tracks == null)
+                continue;
 
             var decoded = TmaDecoder.DecodeAllTracks(tma);
             Assert.NotNull(decoded);
@@ -1045,6 +1114,7 @@ public class IntegrationTests
                         ulong rawPacked = 0;
                         if (srcTrack.RotationEncoding == TmaEncoding.Quat64 && qi * 8 + 8 <= srcTrack.RotationData.Length)
                             rawPacked = BitConverter.ToUInt64(srcTrack.RotationData, qi * 8);
+                        
                         failures.Add($"{entry.Name}/{dt.Name} kf{qi}: mag={mag:F6} q=[{q.X:F4},{q.Y:F4},{q.Z:F4},{q.W:F4}] raw=0x{rawPacked:X16}");
                         break;
                     }
@@ -1088,7 +1158,7 @@ public class IntegrationTests
 
     /// <summary>
     /// Roundtrip test for L33t .mythscn files from the campaign/fott directory.
-    /// Verifies: decompress → recompress → decompress produces identical content,
+    /// Verifies: decompress -> recompress -> decompress produces identical content,
     /// and that the CRC32 checksum in the recompressed output is self-consistent.
     /// </summary>
     [SkippableFact]
@@ -1104,6 +1174,9 @@ public class IntegrationTests
 
         await Parallel.ForEachAsync(mythscnFiles, async (filePath, t) =>
         {
+            if (t.IsCancellationRequested)
+                return;
+
             var original = File.ReadAllBytes(filePath);
             if (!((Span<byte>)original).IsL33t()) return;
 
@@ -1246,7 +1319,7 @@ public class IntegrationTests
 
     static string[] FindScenarioFiles()
     {
-        // Only use campaign files from the game install — user scenarios are not stable test fixtures
+        // Only use campaign files from the game install - user scenarios are not stable test fixtures
         var campaignDir = Path.Combine(GamePath, "campaign");
         if (!Directory.Exists(campaignDir)) return [];
         return Directory.GetFiles(campaignDir, "*.mythscn", SearchOption.AllDirectories);
@@ -1260,6 +1333,9 @@ public class IntegrationTests
 
         await Parallel.ForEachAsync(allFiles, async (filePath, t) =>
         {
+            if (t.IsCancellationRequested)
+                return;
+
             var fileName = Path.GetFileName(filePath);
 
             var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath));
@@ -1295,6 +1371,9 @@ public class IntegrationTests
 
         await Parallel.ForEachAsync(allFiles, async (filePath, t) =>
         {
+            if (t.IsCancellationRequested)
+                return;
+
             var fileName = Path.GetFileName(filePath);
             var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath))!;
             var scenario = new ScenarioFile(decompressed);
@@ -1325,6 +1404,9 @@ public class IntegrationTests
 
         await Parallel.ForEachAsync(allFiles, async (filePath, t) =>
         {
+            if (t.IsCancellationRequested)
+                return;
+
             var fileName = Path.GetFileName(filePath);
             var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath))!;
             var scenario = new ScenarioFile(decompressed);
@@ -1349,6 +1431,9 @@ public class IntegrationTests
 
         await Parallel.ForEachAsync(allFiles, async (filePath, t) =>
         {
+            if (t.IsCancellationRequested)
+                return;
+
             var fileName = Path.GetFileName(filePath);
             var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath))!;
             var scenario = new ScenarioFile(decompressed);
@@ -1398,7 +1483,7 @@ public class IntegrationTests
             Assert.False(string.IsNullOrEmpty(pi), $"Entity {i} missing protoIndex");
             if (pi != "0") hasNonZero = true;
         }
-        Assert.True(hasNonZero, "All protoIndex values are 0 — likely still reading fake P1");
+        Assert.True(hasNonZero, "All protoIndex values are 0 - likely still reading fake P1");
     }
 
     [SkippableFact]
@@ -1519,6 +1604,9 @@ public class IntegrationTests
 
         await Parallel.ForEachAsync(allFiles, async (filePath, t) =>
         {
+            if (t.IsCancellationRequested)
+                return;
+
             var fileName = Path.GetFileName(filePath);
             var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath))!;
             var scenario = new ScenarioFile(decompressed);
@@ -1561,7 +1649,7 @@ public class IntegrationTests
     }
 
     /// <summary>
-    /// Perfect lossy roundtrip: XML → XS (no comments) → XML (with template matching).
+    /// Perfect lossy roundtrip: XML -> XS (no comments) -> XML (with template matching).
     /// For simple triggers, template matching should produce XML identical to the original.
     /// </summary>
     [SkippableFact]
@@ -1578,59 +1666,6 @@ public class IntegrationTests
         var orig = NormalizeXml(SimpleTriggersXml);
         var rt = NormalizeXml(roundtrippedXml);
         Assert.Equal(orig, rt);
-    }
-
-    /// <summary>
-    /// Tests lossy roundtrip on campaign scenarios — counts Extra tags per scenario
-    /// to measure template matching quality across real-world data.
-    /// </summary>
-    [SkippableFact]
-    public async Task XsLossy_CampaignScenarios_QualityMetric()
-    {
-        Skip.IfNot(GameInstalled, "Game not found");
-        var index = TriggerDataIndex.Load(GamePath);
-        Skip.If(index == null, "trigger_data.xml not found");
-
-        var allFiles = FindScenarioFiles();
-        Skip.If(allFiles.Length == 0, "No .mythscn files found");
-
-        int totalTriggers = 0, totalExtras = 0, totalStructured = 0;
-
-        await Parallel.ForEachAsync(allFiles, async (filePath, t) =>
-        {
-            var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath))!;
-            var scenario = new ScenarioFile(decompressed);
-            if (!scenario.Parsed) return;
-            var trSection = scenario.FindSection("TR");
-            if (trSection == null || trSection.Data.Length < 20) return;
-
-            string originalXml;
-            try { originalXml = ScenarioFile.SectionToTriggersXml(trSection); }
-            catch { return; }
-
-            var xs = ScenarioFile.ConvertTriggersXmlToXs(originalXml, lossless: false);
-            var rtXml = ScenarioFile.ParseXsToTriggersXml(xs, index);
-
-            var doc = new XmlDocument();
-            doc.LoadXml(rtXml);
-
-            var trigs = doc.GetElementsByTagName("Trigger").Count;
-            var extras = doc.GetElementsByTagName("Extra").Count;
-            var structured = doc.GetElementsByTagName("Effect").Count + doc.GetElementsByTagName("Cond").Count;
-
-            Interlocked.Add(ref totalTriggers, trigs);
-            Interlocked.Add(ref totalExtras, extras);
-            Interlocked.Add(ref totalStructured, structured);
-        });
-
-        // Report quality metric — this test always passes, it's informational
-        var pctStructured = totalStructured + totalExtras > 0
-            ? (100.0 * totalStructured / (totalStructured + totalExtras)).ToString("F1")
-            : "N/A";
-        Assert.True(true,
-            $"Lossy quality across {allFiles.Length} scenarios: " +
-            $"{totalTriggers} triggers, {totalStructured} structured elements, {totalExtras} extras " +
-            $"({pctStructured}% structured)");
     }
 
     #endregion
@@ -1867,7 +1902,7 @@ public class IntegrationTests
         Directory.CreateDirectory(subDir);
         try
         {
-            // sub/deep.xs — deepest included file
+            // sub/deep.xs - deepest included file
             File.WriteAllText(Path.Combine(subDir, "deep.xs"),
                 "rule _Deep\nhighFrequency\nactive\n{\n      trDeep();\n}\n");
 
@@ -1914,7 +1949,7 @@ public class IntegrationTests
             doc.LoadXml(xml);
             var triggers = doc.GetElementsByTagName("Trigger");
 
-            // Include line becomes preamble content → __preamble__ trigger + Main
+            // Include line becomes preamble content -> __preamble__ trigger + Main
             Assert.True(triggers.Count >= 1);
             Assert.Equal("Main", ((XmlElement)triggers[^1]!).GetAttribute("name"));
         }
@@ -1978,7 +2013,7 @@ public class IntegrationTests
         Skip.IfNot(File.Exists(xsFile), "yas02_p2.xs not found");
 
         var xs = File.ReadAllText(xsFile);
-        // Should not throw — includes get resolved from the ai/ parent directory
+        // Should not throw - includes get resolved from the ai/ parent directory
         var aiRoot = Path.Combine(GamePath, "ai");
         var xml = ScenarioFile.ParseXsToTriggersXml(xs, sourceDir: aiRoot);
 
@@ -2116,6 +2151,78 @@ public class IntegrationTests
                 $"TmmDataFile failed to parse for {path} using data from {bestEntry.RelativePath}");
             Assert.Equal((int)tmm.NumVertices, dataFile.Vertices!.Length);
         }
+    }
+
+    #endregion
+
+
+    #region Animation Discovery
+
+    /// <summary>
+    /// Verifies that FindAnimationsFromAnimXml captures ALL TMAnimation references
+    /// in the hoplite animxml, including variants within a single anim element
+    /// (e.g. HandAttack has attack_a and attack_b, Cinematic has 6 clips).
+    /// </summary>
+    [SkippableFact]
+    public void HopliteAnimXml_FindsAllAnimationVariants()
+    {
+        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+
+        var artGreekPath = Path.Combine(GamePath, @"art\ArtGreek.bar");
+        Skip.IfNot(File.Exists(artGreekPath), "ArtGreek.bar not found");
+
+        using var stream = File.OpenRead(artGreekPath);
+        var bar = new BarFile(stream);
+        bar.Load(out _);
+
+        var entry = bar.Entries!.FirstOrDefault(e =>
+            e.Name.Equals("hoplite.xml.XMB", StringComparison.OrdinalIgnoreCase) &&
+            e.RelativePath.Contains("hoplite", StringComparison.OrdinalIgnoreCase));
+        Skip.If(entry == null, "hoplite.xml.XMB not found");
+
+        var raw = entry!.ReadDataDecompressed(stream);
+        var xmlText = ConversionHelper.ConvertXmbToXmlText(raw.Span);
+        Assert.NotNull(xmlText);
+
+        var animRefs = AnimationDiscovery.FindAnimationsFromAnimXml(xmlText);
+
+        // ground truth: scan XML for ALL TMAnimation assetreferences
+        var allTmaRefs = new List<string>();
+        using var reader = XmlReader.Create(new StringReader(xmlText));
+        while (reader.Read())
+        {
+            if (reader.NodeType != XmlNodeType.Element || reader.LocalName != "assetreference")
+                continue;
+            if (reader.GetAttribute("type") != "TMAnimation") continue;
+            if (reader.ReadToDescendant("file"))
+                allTmaRefs.Add(reader.ReadElementContentAsString().Trim());
+        }
+
+        // every TMAnimation reference in the XML should appear in the parsed results
+        var discoveredPaths = animRefs.Select(r => r.TmaPath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var missing = allTmaRefs.Where(p => !discoveredPaths.Contains(p)).ToList();
+        Assert.True(missing.Count == 0,
+            $"Missing {missing.Count} TMA refs: {string.Join(", ", missing.Select(Path.GetFileName))}");
+
+        // specific expectations for hoplite
+        Assert.Equal(13, animRefs.Count);
+
+        // HandAttack has 2 variants (attack_a and attack_b)
+        var handAttacks = animRefs.Where(r => r.AnimName == "HandAttack").ToList();
+        Assert.Equal(2, handAttacks.Count);
+        Assert.Contains(handAttacks, r => r.TmaPath.Contains("attack_a", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(handAttacks, r => r.TmaPath.Contains("attack_b", StringComparison.OrdinalIgnoreCase));
+
+        // Cinematic has 6 clips
+        var cinematics = animRefs.Where(r => r.AnimName == "Cinematic").ToList();
+        Assert.Equal(6, cinematics.Count);
+
+        // single-variant anims
+        Assert.Single(animRefs, r => r.AnimName == "Idle");
+        Assert.Single(animRefs, r => r.AnimName == "Walk");
+        Assert.Single(animRefs, r => r.AnimName == "Death");
+        Assert.Single(animRefs, r => r.AnimName == "Flail");
+        Assert.Single(animRefs, r => r.AnimName == "Bored");
     }
 
     #endregion

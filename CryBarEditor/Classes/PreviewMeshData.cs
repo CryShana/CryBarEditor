@@ -46,10 +46,10 @@ public static class MeshDataBuilder
             var v = srcVerts[i];
             float px = (float)v.PosX;
             float py = (float)v.PosY;
-            float pz = -(float)v.PosZ; // negate Z for LH→RH
+            float pz = -(float)v.PosZ; // negate Z for LH->RH
 
             var (nx, ny, nz) = TbnDecoder.DecodeNormal(v.TbnX, v.TbnY, v.TbnZ);
-            nz = -nz; // negate Z for LH→RH
+            nz = -nz; // negate Z for LH->RH
 
             float u = (float)v.U;
             float vCoord = (float)v.V; // no flip - TMM top-left origin matches OpenGL
@@ -72,7 +72,7 @@ public static class MeshDataBuilder
             if (pz > maxZ) maxZ = pz;
         }
 
-        // Reverse triangle winding: [i0,i1,i2] → [i0,i2,i1] for LH→RH
+        // Reverse triangle winding: [i0,i1,i2] -> [i0,i2,i1] for LH->RH
         // Add VertexStart offset per mesh group to make indices global
         var indices = new uint[indexCount];
         foreach (var mg in meshGroups)

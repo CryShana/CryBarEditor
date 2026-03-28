@@ -163,7 +163,7 @@ public class DependencyFinderIntegrationTests
         return soundsetIndex;
     }
 
-    // Shared index — built once for all tests in this class
+    // Shared index - built once for all tests in this class
     static FileIndex? _sharedIndex;
     static readonly Lock _indexLock = new();
 
@@ -188,7 +188,7 @@ public class DependencyFinderIntegrationTests
         var xml = ReadXmlFromBar(@"data\Data.bar", @"gameplay\proto.xml.XMB");
         var result = DependencyFinder.FindDependencies(xml, @"game\data\gameplay\proto.xml.XMB", index);
 
-        // proto has hundreds of <unit> entities — should be grouped
+        // proto has hundreds of <unit> entities - should be grouped
         Assert.True(result.Groups.Count > 100, $"Expected many entity groups, got {result.Groups.Count}");
 
         // Find the Hoplite entity
@@ -257,7 +257,7 @@ public class DependencyFinderIntegrationTests
         var xml = ReadXmlFromBar(@"data\Data.bar", "powers.xml.XMB");
         var result = DependencyFinder.FindDependencies(xml, @"game\data\gameplay\powers.xml.XMB", index);
 
-        // powers.xml has <include> children — no name attr, so should be ungrouped
+        // powers.xml has <include> children - no name attr, so should be ungrouped
         var allPaths = result.GetAllReferences().Where(r => r.Type == DependencyRefType.FilePath).ToList();
         Assert.True(allPaths.Count >= 10, $"Expected many include paths, got {allPaths.Count}");
 
@@ -486,6 +486,174 @@ public class DependencyFinderIntegrationTests
 
         Assert.True(avgMs < 4.0,
             $"Hoplite animfile dependency scan averaged {avgMs:F3}ms, expected <4ms");
+    }
+
+    // ========= TMM dependency: hoplite_iron.tmm =========
+
+    [SkippableFact]
+    public void Tmm_HopliteIron_ResolvesDataAndMaterial()
+    {
+        Skip.IfNot(GameInstalled, "Game not found");
+        var index = GetOrBuildIndex();
+        var animfileIndex = GetOrBuildAnimfileIndex();
+
+        var result = DependencyFinder.FindDependenciesForTmm(
+            @"intermediate\modelcache\greek\units\infantry\hoplite\hoplite_iron.tmm", index, animfileIndex);
+
+        var refs = result.Groups[0].References;
+
+        // .tmm.data should resolve
+        var dataRef = refs.First(r => r.SourceTag == "geometry");
+        Assert.True(dataRef.Resolved.Count >= 1, $"tmm.data should resolve, got {dataRef.Resolved.Count}");
+        Assert.Contains(dataRef.Resolved, e => e.FileName.Equals("hoplite_iron.tmm.data", StringComparison.OrdinalIgnoreCase));
+
+        // .material should resolve
+        var matRef = refs.First(r => r.SourceTag == "material");
+        Assert.True(matRef.Resolved.Count >= 1, $"material should resolve, got {matRef.Resolved.Count}");
+
+        // animfile should resolve via AnimfileIndex (hoplite_iron -> strips _iron -> hoplite)
+        var animRef = refs.FirstOrDefault(r => r.SourceTag == "animfile");
+        Assert.NotNull(animRef);
+        Assert.True(animRef.Resolved.Count >= 1, "animfile should resolve via AnimfileIndex");
+    }
+
+    // ========= AnimfileIndex integration: build from real BARs =========
+
+    static AnimfileIndex? _sharedAnimfileIndex;
+    static readonly Lock _animfileIndexLock = new();
+
+    static AnimfileIndex GetOrBuildAnimfileIndex()
+    {
+        if (_sharedAnimfileIndex != null) return _sharedAnimfileIndex;
+        lock (_animfileIndexLock)
+        {
+            _sharedAnimfileIndex ??= BuildAnimfileIndex();
+            return _sharedAnimfileIndex;
+        }
+    }
+
+    /// <summary>
+    /// Mirrors the app's RebuildAnimfileIndexAsync: scans all BAR files for animfile XMLs
+    /// and builds a reverse index from TMM model stems to animfile entries.
+    /// </summary>
+    static AnimfileIndex BuildAnimfileIndex()
+    {
+        var index = new AnimfileIndex();
+        var barFiles = Directory.GetFiles(GamePath, "*.bar", SearchOption.AllDirectories);
+
+        foreach (var barPath in barFiles)
+        {
+            try
+            {
+                using var stream = File.OpenRead(barPath);
+                var bar = new BarFile(stream);
+                if (!bar.Load(out _) || bar.Entries == null) continue;
+
+                foreach (var entry in bar.Entries)
+                {
+                    if (!entry.Name.EndsWith(".xml.XMB", StringComparison.OrdinalIgnoreCase)) continue;
+
+                    try
+                    {
+                        var raw = entry.ReadDataDecompressed(stream);
+                        var xmlText = ConversionHelper.ConvertXmbToXmlText(raw.Span);
+                        if (xmlText == null || !xmlText.Contains("<animfile", StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        var modelPaths = CryBar.Export.AnimationDiscovery.FindAllModelsFromAnimXml(xmlText);
+                        if (modelPaths.Count == 0) continue;
+
+                        var fullRelPath = string.IsNullOrEmpty(bar.RootPath)
+                            ? entry.RelativePath
+                            : Path.Combine(bar.RootPath, entry.RelativePath);
+
+                        var animfileEntry = new FileIndexEntry
+                        {
+                            FullRelativePath = fullRelPath,
+                            FileName = entry.Name,
+                            Source = FileIndexSource.BarEntry,
+                            BarFilePath = barPath,
+                            EntryRelativePath = entry.RelativePath,
+                        };
+
+                        foreach (var modelPath in modelPaths)
+                            index.Add(modelPath, animfileEntry);
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+        }
+
+        return index;
+    }
+
+    [SkippableFact]
+    public void AnimfileIndex_BuildFromRealBars_FindsHoplite()
+    {
+        Skip.IfNot(GameInstalled, "Game not found");
+        var animfileIndex = GetOrBuildAnimfileIndex();
+
+        Assert.True(animfileIndex.Count > 0, $"AnimfileIndex should not be empty after scanning game BARs");
+
+        // Direct lookup: each variant is registered individually
+        var ironEntry = animfileIndex.Find("hoplite_iron");
+        Assert.NotNull(ironEntry);
+
+        var bronzeEntry = animfileIndex.Find("hoplite_bronze");
+        Assert.NotNull(bronzeEntry);
+
+        // All variants should point to the same animfile entry
+        Assert.Equal(ironEntry!.FileName, bronzeEntry!.FileName);
+    }
+
+    /// <summary>
+    /// Diagnostic test: trace every step of animfile XML parsing for the hoplite animfile.
+    /// </summary>
+    [SkippableFact]
+    public void AnimfileIndex_DiagnoseHopliteParsing()
+    {
+        Skip.IfNot(GameInstalled, "Game not found");
+
+        // Step 1: find ArtGreek.bar
+        var artGreekBar = Directory.GetFiles(GamePath, "ArtGreek.bar", SearchOption.AllDirectories);
+        Assert.True(artGreekBar.Length > 0, "ArtGreek.bar not found in game directory");
+
+        // Step 2: find hoplite.xml.XMB entry
+        using var stream = File.OpenRead(artGreekBar[0]);
+        var bar = new BarFile(stream);
+        Assert.True(bar.Load(out _), "Failed to load ArtGreek.bar");
+
+        var hopliteEntries = bar.Entries!.Where(e =>
+            e.Name.Equals("hoplite.xml.XMB", StringComparison.OrdinalIgnoreCase) &&
+            e.RelativePath.Contains("hoplite", StringComparison.OrdinalIgnoreCase)).ToList();
+        Assert.True(hopliteEntries.Count > 0,
+            $"hoplite.xml.XMB not found. All .xml.XMB entries: {string.Join(", ", bar.Entries!.Where(e => e.Name.EndsWith(".xml.XMB", StringComparison.OrdinalIgnoreCase) && e.RelativePath.Contains("hoplite", StringComparison.OrdinalIgnoreCase)).Select(e => e.RelativePath).Take(10))}");
+
+        var entry = hopliteEntries[0];
+
+        // Step 3: decompress and convert XMB->XML
+        var raw = entry.ReadDataDecompressed(stream);
+        Assert.True(raw.Length > 0, "Decompressed data is empty");
+
+        var xmlText = ConversionHelper.ConvertXmbToXmlText(raw.Span);
+        Assert.NotNull(xmlText);
+
+        // Step 4: check for <animfile> tag
+        Assert.True(xmlText.Contains("<animfile", StringComparison.OrdinalIgnoreCase),
+            $"XML does not contain <animfile>. First 500 chars: {xmlText[..Math.Min(500, xmlText.Length)]}");
+
+        // Step 5: extract ALL TMModel paths (real animfiles have many nested variants)
+        var modelPaths = CryBar.Export.AnimationDiscovery.FindAllModelsFromAnimXml(xmlText);
+        Assert.True(modelPaths.Count > 0, "No TMModel paths found in animfile XML");
+
+        // Should contain hoplite_iron (the first/default variant)
+        Assert.Contains(modelPaths, p => p.Contains("hoplite_iron", StringComparison.OrdinalIgnoreCase));
+
+        // Step 6: verify stems work for index building
+        var stems = modelPaths.Select(p => Path.GetFileNameWithoutExtension(p.Replace('/', '\\'))).ToList();
+        Assert.Contains("hoplite_iron", stems, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains("hoplite_bronze", stems, StringComparer.OrdinalIgnoreCase);
     }
 
     // ========= Composite JSON =========

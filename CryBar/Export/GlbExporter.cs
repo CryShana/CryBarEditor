@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Numerics;
 using System.Text.Json;
 
 using CryBar.TMM;
@@ -17,13 +18,25 @@ public static class GlbExporter
         public byte[]? NormalMapPng { get; init; }
     }
 
+    public class GlbAnimation
+    {
+        public required string Name { get; set; }
+        public required TmaDecoder.DecodedTrack[] Tracks { get; init; }
+        public required float Duration { get; init; }
+        public required uint FrameCount { get; init; }
+    }
+
+    // per-track offsets into the binary buffer for animation data
+    readonly record struct AnimTrackBuffer(int BoneIndex, TmaDecoder.DecodedTrack Track, int TransOffset, int TransLen, int RotOffset, int RotLen, int ScaleOffset, int ScaleLen);
+    readonly record struct AnimBuffer(string Name, float Duration, int FrameCount, int TimeOffset, int TimeLen, List<AnimTrackBuffer> Tracks);
+
     const uint GlbMagic = 0x46546C67;
     const uint GlbVersion = 2;
     const uint ChunkTypeJson = 0x4E4F534A;
     const uint ChunkTypeBin = 0x004E4942;
 
     /// <summary>
-    /// Column-major 4x4 matrix indices that get negated for LH→RH Z-flip.
+    /// Column-major 4x4 matrix indices that get negated for LH->RH Z-flip.
     /// </summary>
     static readonly int[] ZNegateIndices = [2, 6, 8, 9, 14];
 
@@ -74,7 +87,9 @@ public static class GlbExporter
     /// Exports a TMM model with its data file to GLB (glTF binary) format.
     /// </summary>
     /// <returns>GLB bytes, or null if the input is not valid.</returns>
-    public static byte[]? ExportGlb(TmmFile tmm, TmmDataFile dataFile, IReadOnlyList<GlbMaterial>? materials = null)
+    public static byte[]? ExportGlb(TmmFile tmm, TmmDataFile dataFile,
+        IReadOnlyList<GlbMaterial>? materials = null,
+        IReadOnlyList<GlbAnimation>? animations = null)
     {
         if (!tmm.Parsed || dataFile.Vertices == null || dataFile.Indices == null)
             return null;
@@ -153,6 +168,47 @@ public static class GlbExporter
             }
         }
 
+        // Animation data
+        var animBuffers = new List<AnimBuffer>();
+        bool hasAnimations = animations != null && animations.Count > 0 && hasSkin;
+        if (hasAnimations)
+        {
+            var boneMap = new Dictionary<string, int>(bones.Length);
+            for (int i = 0; i < bones.Length; i++)
+                boneMap[bones[i].Name] = i;
+
+            foreach (var anim in animations!)
+            {
+                int frameCount = (int)anim.FrameCount;
+                if (frameCount <= 0) continue;
+
+                int timeLen = frameCount * 4;
+                int timeOffset = afterIndices;
+                afterIndices += Align4(timeLen);
+
+                var matchedTracks = new List<AnimTrackBuffer>();
+                foreach (var track in anim.Tracks)
+                {
+                    if (!boneMap.TryGetValue(track.Name, out int boneIdx)) continue;
+                    if (track.Translations.Length < frameCount ||
+                        track.Rotations.Length < frameCount ||
+                        track.Scales.Length < frameCount) continue;
+
+                    int tLen = frameCount * 12; // VEC3
+                    int tOff = afterIndices; afterIndices += Align4(tLen);
+                    int rLen = frameCount * 16; // VEC4
+                    int rOff = afterIndices; afterIndices += Align4(rLen);
+                    int sLen = frameCount * 12; // VEC3
+                    int sOff = afterIndices; afterIndices += Align4(sLen);
+
+                    matchedTracks.Add(new AnimTrackBuffer(boneIdx, track, tOff, tLen, rOff, rLen, sOff, sLen));
+                }
+
+                if (matchedTracks.Count > 0)
+                    animBuffers.Add(new AnimBuffer(anim.Name, anim.Duration, frameCount, timeOffset, timeLen, matchedTracks));
+            }
+        }
+
         int totalBinLength = afterIndices;
         int binPadded = Align4(totalBinLength);
 
@@ -179,7 +235,7 @@ public static class GlbExporter
 
         // Build JSON chunk first to know its size
         var jsonBytes = BuildJson(tmm, meshGroups, bones, attachments, hasSkin, hasMaterials, materials,
-            vertexCount, layout, groupBounds);
+            vertexCount, layout, groupBounds, animBuffers);
 
         int jsonPadded = Align4(jsonBytes.Length);
 
@@ -240,6 +296,24 @@ public static class GlbExporter
             }
         }
 
+        if (hasAnimations)
+        {
+            foreach (var ab in animBuffers)
+            {
+                WriteAnimationTime(glb, binStart + ab.TimeOffset, ab.Duration, ab.FrameCount);
+
+                foreach (var mt in ab.Tracks)
+                {
+                    var bind = bones[mt.BoneIndex].ParentSpaceMatrix;
+                    DecomposeColumnMajor(bind, out var bindT, out var bindR, out var bindS);
+
+                    WriteComposedTranslations(glb, binStart + mt.TransOffset, mt.Track.Translations, bindT, ab.FrameCount);
+                    WriteAnimationRotations(glb, binStart + mt.RotOffset, mt.Track.Rotations, bindR, ab.FrameCount);
+                    WriteAnimationScales(glb, binStart + mt.ScaleOffset, mt.Track.Scales, bindS, ab.FrameCount);
+                }
+            }
+        }
+
         return glb;
     }
 
@@ -285,9 +359,9 @@ public static class GlbExporter
             BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), tangent.y); offset += 4;
             BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), -tangent.z); offset += 4;
 
-            // Z-negate (LH→RH) flips the TBN determinant, so tangent.w is inverted:
-            //   hand=0 (det=+1 in game) → det=-1 in glTF → w = -1
-            //   hand=1 (det=-1 in game) → det=+1 in glTF → w = +1
+            // Z-negate (LH->RH) flips the TBN determinant, so tangent.w is inverted:
+            //   hand=0 (det=+1 in game) -> det=-1 in glTF -> w = -1
+            //   hand=1 (det=-1 in game) -> det=+1 in glTF -> w = +1
             float w = handedness == 0 ? -1.0f : 1.0f;
             BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), w); offset += 4;
         }
@@ -385,6 +459,101 @@ public static class GlbExporter
         }
     }
 
+    static void WriteAnimationTime(byte[] buf, int offset, float duration, int frameCount)
+    {
+        for (int i = 0; i < frameCount; i++)
+        {
+            float t = frameCount > 1 ? (i / (float)(frameCount - 1)) * duration : 0f;
+            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), t); offset += 4;
+        }
+    }
+
+    /// <summary>
+    /// Decomposes a column-major 4x4 affine matrix into translation, rotation, scale.
+    /// Column-major columns become rows in System.Numerics row-vector Matrix4x4.
+    /// </summary>
+    static void DecomposeColumnMajor(float[] m, out Vector3 translation, out Quaternion rotation, out Vector3 scale)
+    {
+        translation = new Vector3(m[12], m[13], m[14]);
+
+        // Extract scale from column lengths
+        var col0 = new Vector3(m[0], m[1], m[2]);
+        var col1 = new Vector3(m[4], m[5], m[6]);
+        var col2 = new Vector3(m[8], m[9], m[10]);
+        scale = new Vector3(col0.Length(), col1.Length(), col2.Length());
+
+        // Build normalized rotation matrix
+        if (scale.X > 0) col0 /= scale.X;
+        if (scale.Y > 0) col1 /= scale.Y;
+        if (scale.Z > 0) col2 /= scale.Z;
+
+        // System.Numerics uses row-vector convention (v' = v * M),
+        // so column-major columns become rows (transpose)
+        var rotMatrix = new Matrix4x4(
+            col0.X, col0.Y, col0.Z, 0,
+            col1.X, col1.Y, col1.Z, 0,
+            col2.X, col2.Y, col2.Z, 0,
+            0, 0, 0, 1);
+        rotation = Quaternion.CreateFromRotationMatrix(rotMatrix);
+    }
+
+    /// <summary>
+    /// TMA translations are deltas from bind pose in parent space.
+    /// Composes: final_T = bind_T + anim_T, then Z-negate for RH.
+    /// </summary>
+    static void WriteComposedTranslations(byte[] buf, int offset,
+        Vector3[] translations, Vector3 bindT, int frameCount)
+    {
+        for (int i = 0; i < frameCount; i++)
+        {
+            var finalT = bindT + translations[i];
+            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), finalT.X); offset += 4;
+            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), finalT.Y); offset += 4;
+            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), -finalT.Z); offset += 4;
+        }
+    }
+
+    /// <summary>
+    /// TMA rotation deltas composed with bind pose in bone-local frame.
+    /// Game uses conjugated quaternion convention - conj(delta) applied after bind.
+    /// Z-mirror for LH->RH: q' = (-x, -y, z, w).
+    /// Hemisphere consistency prevents SLERP flipping between frames.
+    /// </summary>
+    static void WriteAnimationRotations(byte[] buf, int offset,
+        Quaternion[] rotations, Quaternion bindR, int frameCount)
+    {
+        var prev = Quaternion.Identity;
+        for (int i = 0; i < frameCount; i++)
+        {
+            var finalR = Quaternion.Normalize(
+                Quaternion.Multiply(bindR, Quaternion.Conjugate(rotations[i])));
+            finalR = new Quaternion(-finalR.X, -finalR.Y, finalR.Z, finalR.W);
+            if (i > 0 && Quaternion.Dot(prev, finalR) < 0)
+                finalR = Quaternion.Negate(finalR);
+            prev = finalR;
+            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), finalR.X); offset += 4;
+            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), finalR.Y); offset += 4;
+            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), finalR.Z); offset += 4;
+            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), finalR.W); offset += 4;
+        }
+    }
+
+    /// <summary>
+    /// Writes animation scales (component-wise multiply with bind scale).
+    /// Scale is unaffected by Z-mirror.
+    /// </summary>
+    static void WriteAnimationScales(byte[] buf, int offset,
+        Vector3[] scales, Vector3 bindS, int frameCount)
+    {
+        for (int i = 0; i < frameCount; i++)
+        {
+            var v = scales[i];
+            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), bindS.X * v.X); offset += 4;
+            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), bindS.Y * v.Y); offset += 4;
+            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), bindS.Z * v.Z); offset += 4;
+        }
+    }
+
     #endregion
 
     #region JSON Builder
@@ -393,7 +562,8 @@ public static class GlbExporter
         TmmFile tmm, TmmMeshGroup[] meshGroups, TmmBone[] bones, TmmAttachment[] attachments,
         bool hasSkin, bool hasMaterials, IReadOnlyList<GlbMaterial>? materials,
         int vertexCount, in BufferLayout bl,
-        (float[] min, float[] max)[] groupBounds)
+        (float[] min, float[] max)[] groupBounds,
+        List<AnimBuffer> animBuffers)
     {
         using var ms = new MemoryStream();
         using var w = new Utf8JsonWriter(ms, new JsonWriterOptions { Indented = false });
@@ -464,8 +634,12 @@ public static class GlbExporter
             w.WriteStartObject();
             w.WriteString("name", bones[i].Name);
 
-            // Parent space matrix with Z-negation
-            WriteZNegatedMatrixJson(w, bones[i].ParentSpaceMatrix);
+            // glTF spec: animated nodes MUST use TRS, not matrix.
+            // Use TRS when animations are present, matrix otherwise.
+            if (animBuffers.Count > 0)
+                WriteBoneTrsJson(w, bones[i].ParentSpaceMatrix);
+            else
+                WriteZNegatedMatrixJson(w, bones[i].ParentSpaceMatrix);
 
             // Children: child bones + attachments parented to this bone
             var childIndices = new List<int>();
@@ -541,6 +715,19 @@ public static class GlbExporter
         for (int i = 0; i < imageCount; i++)
             WriteBufferView(w, 0, bl.ImageOffsets[i], bl.ImageLengths[i]);
 
+        // animation buffer views: per animation: time + per track: T, R, S
+        int bvAnimStart = bvIndex;
+        foreach (var ab in animBuffers)
+        {
+            WriteBufferView(w, 0, ab.TimeOffset, ab.TimeLen); bvIndex++;
+            foreach (var mt in ab.Tracks)
+            {
+                WriteBufferView(w, 0, mt.TransOffset, mt.TransLen); bvIndex++;
+                WriteBufferView(w, 0, mt.RotOffset, mt.RotLen); bvIndex++;
+                WriteBufferView(w, 0, mt.ScaleOffset, mt.ScaleLen); bvIndex++;
+            }
+        }
+
         w.WriteEndArray(); // bufferViews
 
         // --- Build accessors ---
@@ -601,6 +788,27 @@ public static class GlbExporter
             ibmAccessorIndex = accessorIndex;
             WriteAccessor(w, bvIbm, 0, bones.Length, 5126, "MAT4");
             accessorIndex++;
+        }
+
+        // animation accessors: per animation: time + per track: T, R, S
+        int animAccessorStart = accessorIndex;
+        int animBvCursor = bvAnimStart;
+        foreach (var ab in animBuffers)
+        {
+            // time accessor with min/max
+            WriteAccessor(w, animBvCursor, 0, ab.FrameCount, 5126, "SCALAR",
+                [0f], [ab.Duration], true);
+            accessorIndex++; animBvCursor++;
+
+            foreach (var mt in ab.Tracks)
+            {
+                WriteAccessor(w, animBvCursor, 0, ab.FrameCount, 5126, "VEC3"); // translation
+                accessorIndex++; animBvCursor++;
+                WriteAccessor(w, animBvCursor, 0, ab.FrameCount, 5126, "VEC4"); // rotation
+                accessorIndex++; animBvCursor++;
+                WriteAccessor(w, animBvCursor, 0, ab.FrameCount, 5126, "VEC3"); // scale
+                accessorIndex++; animBvCursor++;
+            }
         }
 
         w.WriteEndArray(); // accessors
@@ -749,6 +957,90 @@ public static class GlbExporter
             w.WriteEndArray(); // skins
         }
 
+        // --- animations ---
+        if (animBuffers.Count > 0)
+        {
+            w.WriteStartArray("animations");
+
+            int accCursor = animAccessorStart;
+            foreach (var ab in animBuffers)
+            {
+                w.WriteStartObject();
+                w.WriteString("name", ab.Name);
+
+                int timeAccessor = accCursor++;
+
+                // samplers: 3 per matched track (T, R, S)
+                w.WriteStartArray("samplers");
+                foreach (var mt in ab.Tracks)
+                {
+                    // translation sampler
+                    w.WriteStartObject();
+                    w.WriteNumber("input", timeAccessor);
+                    w.WriteNumber("output", accCursor++);
+                    w.WriteString("interpolation", "LINEAR");
+                    w.WriteEndObject();
+
+                    // rotation sampler
+                    w.WriteStartObject();
+                    w.WriteNumber("input", timeAccessor);
+                    w.WriteNumber("output", accCursor++);
+                    w.WriteString("interpolation", "LINEAR");
+                    w.WriteEndObject();
+
+                    // scale sampler
+                    w.WriteStartObject();
+                    w.WriteNumber("input", timeAccessor);
+                    w.WriteNumber("output", accCursor++);
+                    w.WriteString("interpolation", "LINEAR");
+                    w.WriteEndObject();
+                }
+                w.WriteEndArray(); // samplers
+
+                // channels: 3 per matched track
+                w.WriteStartArray("channels");
+                int samplerBase = 0;
+                foreach (var mt in ab.Tracks)
+                {
+                    int nodeIdx = boneNodeStart + mt.BoneIndex;
+
+                    // translation channel
+                    w.WriteStartObject();
+                    w.WriteNumber("sampler", samplerBase);
+                    w.WriteStartObject("target");
+                    w.WriteNumber("node", nodeIdx);
+                    w.WriteString("path", "translation");
+                    w.WriteEndObject();
+                    w.WriteEndObject();
+
+                    // rotation channel
+                    w.WriteStartObject();
+                    w.WriteNumber("sampler", samplerBase + 1);
+                    w.WriteStartObject("target");
+                    w.WriteNumber("node", nodeIdx);
+                    w.WriteString("path", "rotation");
+                    w.WriteEndObject();
+                    w.WriteEndObject();
+
+                    // scale channel
+                    w.WriteStartObject();
+                    w.WriteNumber("sampler", samplerBase + 2);
+                    w.WriteStartObject("target");
+                    w.WriteNumber("node", nodeIdx);
+                    w.WriteString("path", "scale");
+                    w.WriteEndObject();
+                    w.WriteEndObject();
+
+                    samplerBase += 3;
+                }
+                w.WriteEndArray(); // channels
+
+                w.WriteEndObject(); // animation
+            }
+
+            w.WriteEndArray(); // animations
+        }
+
         // --- buffers ---
         w.WriteStartArray("buffers");
         w.WriteStartObject();
@@ -799,8 +1091,37 @@ public static class GlbExporter
     #region Helpers
 
     /// <summary>
+    /// Decomposes a column-major parent-space matrix to TRS and writes as glTF
+    /// "translation", "rotation", "scale" properties with Z-mirror for LH->RH.
+    /// Required for nodes targeted by animation (glTF spec forbids "matrix" on animated nodes).
+    /// </summary>
+    static void WriteBoneTrsJson(Utf8JsonWriter w, float[] matrix)
+    {
+        DecomposeColumnMajor(matrix, out var t, out var r, out var s);
+
+        w.WriteStartArray("translation");
+        w.WriteNumberValue(t.X);
+        w.WriteNumberValue(t.Y);
+        w.WriteNumberValue(-t.Z);
+        w.WriteEndArray();
+
+        w.WriteStartArray("rotation");
+        w.WriteNumberValue(-r.X);
+        w.WriteNumberValue(-r.Y);
+        w.WriteNumberValue(r.Z);
+        w.WriteNumberValue(r.W);
+        w.WriteEndArray();
+
+        w.WriteStartArray("scale");
+        w.WriteNumberValue(s.X);
+        w.WriteNumberValue(s.Y);
+        w.WriteNumberValue(s.Z);
+        w.WriteEndArray();
+    }
+
+    /// <summary>
     /// Writes a column-major 4×4 matrix as a glTF "matrix" JSON array,
-    /// negating the Z-axis components for LH→RH conversion.
+    /// negating the Z-axis components for LH->RH conversion.
     /// </summary>
     static void WriteZNegatedMatrixJson(Utf8JsonWriter w, float[] matrix)
     {

@@ -158,7 +158,7 @@ public partial class DependenciesWindow : SimpleWindow
                 entry = reference.Resolved[idx];
             }
 
-            // SoundsetName → bank file: navigate to the FMOD event instead
+            // SoundsetName -> bank file: navigate to the FMOD event instead
             if (reference.Type == DependencyRefType.SoundsetName &&
                 entry.FileName.EndsWith(".bank", StringComparison.OrdinalIgnoreCase))
             {

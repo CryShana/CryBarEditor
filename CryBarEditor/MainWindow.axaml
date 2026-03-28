@@ -109,7 +109,7 @@
 					Click="MenuItem_AdvancedExport" />
 
 			<MenuItem Header="{Binding ContextSelectedItemsCount, StringFormat='Export {0} selected to...'}"
-					Icon="{micons:MaterialIconExt Kind=FolderMoveOutline}"
+					Icon="{micons:MaterialIconExt Kind=CogOutline}"
 					Click="MenuItem_ExportTo" />
 
 			<Separator IsVisible="{Binding SelectedIsDDT}"/>

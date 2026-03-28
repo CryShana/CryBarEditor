@@ -8,7 +8,7 @@ public class ExportOptions
     /// <summary>Export raw copy of the file (as-is from source)</summary>
     public bool Copy { get; set; }
 
-    /// <summary>Export with format conversion (XMB→XML, DDT→TGA, etc.)</summary>
+    /// <summary>Export with format conversion (XMB->XML, DDT->TGA, etc.)</summary>
     public bool Convert { get; set; }
 
     /// <summary>Decompress files that have the Compressed flag before exporting</summary>
@@ -28,11 +28,14 @@ public class ExportOptions
     /// <summary>Whether any file in the selection is compressed</summary>
     public bool AnyCompressed { get; set; }
 
-    /// <summary>Export .mtl and textures alongside TMM→OBJ conversion</summary>
+    /// <summary>Export .mtl and textures alongside TMM->OBJ conversion</summary>
     public bool ExportMaterials { get; set; }
 
     /// <summary>Use glTF/GLB format instead of OBJ for TMM export</summary>
     public bool TmmToGltf { get; set; }
+
+    /// <summary>Discover and embed TMA animations in GLB export</summary>
+    public bool ExportAnimations { get; set; }
 
     /// <summary>Whether any file in the selection is convertible (XMB/DDT)</summary>
     public bool AnyConvertible { get; set; }

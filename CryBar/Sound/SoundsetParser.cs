@@ -212,7 +212,7 @@ public static class SoundsetParser
 
     /// <summary>
     /// Extracts the event name (last path segment) from an FMOD event path.
-    /// e.g. "event:/Shared/Shared VO/DeathFemale" → "DeathFemale"
+    /// e.g. "event:/Shared/Shared VO/DeathFemale" -> "DeathFemale"
     /// </summary>
     public static string? ExtractEventName(string eventPath)
     {
@@ -226,7 +226,7 @@ public static class SoundsetParser
 
     /// <summary>
     /// Extracts the bank name (first path segment after "event:/") from an FMOD event path.
-    /// e.g. "event:/Shared/Shared VO/DeathFemale" → "Shared"
+    /// e.g. "event:/Shared/Shared VO/DeathFemale" -> "Shared"
     /// </summary>
     public static string? ExtractBankName(string eventPath)
     {

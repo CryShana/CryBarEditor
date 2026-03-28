@@ -17,7 +17,7 @@ public partial class ScenarioFile
         var doc = new XmlDocument();
         doc.LoadXml(triggersXml);
 
-        // Build group id → name map and collect group elements for lossless footer
+        // Build group id -> name map and collect group elements for lossless footer
         var groups = new Dictionary<string, string>();
         var groupElements = new List<XmlElement>();
         var groupNodes = doc.GetElementsByTagName("Group");

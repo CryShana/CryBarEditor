@@ -54,7 +54,7 @@ public class FileIndexResolutionIntegrationTests
 
         // armory_a_age2.material.XMB should NOT resolve from modelcache alone
         var beforeResults = index.Find("armory_a_age2.material.XMB");
-        // It might or might not be in modelcache — the key assertion is that after supplemental it works
+        // It might or might not be in modelcache - the key assertion is that after supplemental it works
         var countBefore = beforeResults.Count;
 
         // Now add supplemental BARs

@@ -152,7 +152,7 @@ public class StringTableParserTests
     [Fact]
     public void MissingIdClosingQuote_Skipped()
     {
-        // Malformed ID line — no closing quote on ID key
+        // Malformed ID line - no closing quote on ID key
         var content = """
             ID = "STR_BROKEN ;   Str = "hello"
             ID = "STR_GOOD"   ;   Str = "world"
@@ -181,7 +181,7 @@ public class StringTableParserTests
     [Fact]
     public void MissingStrClosingQuote_NextIdNotCorrupted()
     {
-        // Str value missing closing quote — next ID should still parse correctly
+        // Str value missing closing quote - next ID should still parse correctly
         var content = """
             ID = "STR_BROKEN"   ;   Str = "no end quote
             ID = "STR_GOOD"   ;   Str = "world"

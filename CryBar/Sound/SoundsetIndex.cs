@@ -60,7 +60,7 @@ public class SoundsetIndex
     public void Clear() => _byName.Clear();
 
     /// <summary>
-    /// Extracts culture from a soundset filename: "soundsets_greek.soundset.XMB" → "greek".
+    /// Extracts culture from a soundset filename: "soundsets_greek.soundset.XMB" -> "greek".
     /// Returns null if the filename doesn't match the expected pattern.
     /// </summary>
     public static string? ExtractCulture(string fileName)

@@ -37,7 +37,7 @@ public class TbnDecoderTests
     [Fact]
     public void QuatFromPacked_ZeroInputs_ProducesUnitW()
     {
-        // x=0,y=0,z=0 → midpoint = 0,0,0 → w = 1
+        // x=0,y=0,z=0 -> midpoint = 0,0,0 -> w = 1
         ushort mid = 16384; // ~0.0
         var (x, y, z, w, hand) = TbnDecoder.QuatFromPacked(mid, mid, mid);
         Assert.InRange(w, 0.95f, 1.05f);
@@ -100,7 +100,7 @@ public class TbnDecoderTests
         // x = U15ToFloat(0x4000) = (16384/32767)*2-1 ≈ 0.0000305
         // y = U15ToFloat(0x7FFF) = 1.0
         // z = U15ToFloat(0x0000) = -1.0
-        // w_sq = max(0, 1 - (x²+y²+z²)) = max(0, 1-2) = 0 → w = 0
+        // w_sq = max(0, 1 - (x²+y²+z²)) = max(0, 1-2) = 0 -> w = 0
         var (x, y, z, w, hand) = TbnDecoder.QuatFromPacked(16384, 32767, 0);
         Assert.Equal(0, hand);
         // After normalization, x²+y²+z² ≈ 2, so each component is divided by sqrt(2)

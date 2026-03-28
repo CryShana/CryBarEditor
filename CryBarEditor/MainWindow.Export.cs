@@ -3,6 +3,7 @@ using Avalonia.Platform.Storage;
 using CryBar;
 using CryBar.Bar;
 using CryBar.Export;
+using CryBar.TMM;
 using CryBar.Indexing;
 using CryBar.Utilities;
 using CryBarEditor.Classes;
@@ -38,6 +39,9 @@ public partial class MainWindow
         var prompt = ShowProgress($"Exporting {files.Count} files", progress);
 
         p.Report("Starting export...");
+
+        if (options?.ExportAnimations == true)
+            await EnsureAnimfileIndexAsync();
 
         var sw = Stopwatch.StartNew();
         var isDirectExport = options?.DirectExport == true && !string.IsNullOrEmpty(options.DirectExportPath);
@@ -128,7 +132,9 @@ public partial class MainWindow
                                 {
                                     var glbMaterials = (options.ExportMaterials && _fileIndex != null)
                                         ? await BuildGlbMaterials(tmmFileName) : null;
-                                    convertedBytes = ConversionHelper.ConvertTmmToGlbBytes(data.Memory, companionData.Memory, glbMaterials);
+                                    var glbAnimations = (options.ExportAnimations && _fileIndex != null)
+                                        ? await BuildGlbAnimations(tmmFileName) : null;
+                                    convertedBytes = ConversionHelper.ConvertTmmToGlbBytes(data.Memory, companionData.Memory, glbMaterials, glbAnimations);
                                 }
                                 else
                                 {
@@ -400,6 +406,82 @@ public partial class MainWindow
             }
 
             return (materials, textures);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Discovers and decodes TMA animations for a TMM model via AnimfileIndex.
+    /// </summary>
+    async ValueTask<IReadOnlyList<GlbExporter.GlbAnimation>?> BuildGlbAnimations(string tmmFileName)
+    {
+        if (_fileIndex == null || _animfileIndex == null) return null;
+
+        try
+        {
+            var tmmStem = Path.GetFileNameWithoutExtension(tmmFileName);
+            var animfileEntry = _animfileIndex.Find(tmmStem);
+            if (animfileEntry == null) return null;
+
+            // read and parse the animfile XML
+            using var data = await ReadFromIndexEntryPooledAsync(animfileEntry);
+            if (data == null) return null;
+
+            using var decompressed = BarCompression.EnsureDecompressedPooled(data, out _);
+            var xmlText = ConversionHelper.GetTextContent(decompressed.Span, animfileEntry.FileName);
+
+            var animRefs = AnimationDiscovery.FindAnimationsFromAnimXml(xmlText);
+            if (animRefs.Count == 0) return null;
+
+            var animations = new List<GlbExporter.GlbAnimation>();
+            foreach (var animRef in animRefs)
+            {
+                var tmaFileName = Path.GetFileName(animRef.TmaPath.Replace('\\', '/'));
+                if (string.IsNullOrEmpty(tmaFileName)) continue;
+
+                var tmaEntries = _fileIndex.Find(tmaFileName + ".tma");
+                if (tmaEntries.Count == 0)
+                    tmaEntries = _fileIndex.Find(tmaFileName);
+                if (tmaEntries.Count == 0) continue;
+
+                using var tmaData = await ReadFromIndexEntryPooledAsync(tmaEntries[0]);
+                if (tmaData == null) continue;
+
+                using var tmaDecompressed = BarCompression.EnsureDecompressedPooled(tmaData, out _);
+                var tma = new TmaFile(tmaDecompressed.Memory);
+                if (!tma.Parsed) continue;
+
+                var decoded = TmaDecoder.DecodeAllTracks(tma);
+                if (decoded == null || decoded.Length == 0) continue;
+
+                var baseName = !string.IsNullOrEmpty(animRef.AnimName) ? animRef.AnimName : tmaFileName;
+                animations.Add(new GlbExporter.GlbAnimation
+                {
+                    Name = baseName,
+                    Tracks = decoded,
+                    Duration = tma.Duration,
+                    FrameCount = tma.FrameCount,
+                });
+            }
+
+            // deduplicate names: "Attack" stays if unique, becomes "Attack 1", "Attack 2" if not
+            var nameCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var anim in animations)
+                nameCounts[anim.Name] = nameCounts.GetValueOrDefault(anim.Name) + 1;
+
+            var nameCounters = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var anim in animations)
+            {
+                if (nameCounts[anim.Name] <= 1) continue;
+                int idx = nameCounters.GetValueOrDefault(anim.Name) + 1;
+                nameCounters[anim.Name] = idx;
+                anim.Name = $"{anim.Name} {idx}";
+            }
+
+            return animations.Count > 0 ? animations : null;
         }
         catch
         {

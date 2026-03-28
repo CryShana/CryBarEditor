@@ -187,7 +187,7 @@
 															  Width="12" Height="12" Margin="0,0,3,0"
 															  Foreground="#808080"
 															  VerticalAlignment="Center"
-															  ToolTip.Tip="Unresolved — not found in file index">
+															  ToolTip.Tip="Unresolved - not found in file index">
 											<micons:MaterialIcon.IsVisible>
 												<Binding Path="Resolved.Count" Converter="{x:Static ce:DependenciesWindow.EqualsZeroConverter}" />
 											</micons:MaterialIcon.IsVisible>

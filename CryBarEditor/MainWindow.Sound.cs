@@ -234,7 +234,7 @@ public partial class MainWindow
         {
             _lastSoundsetResolution = null;
             OnPropertyChanged(nameof(CanExportAllSounds));
-            return "\nContained Sounds:\n  (file index not available — load a root directory first)";
+            return "\nContained Sounds:\n  (file index not available - load a root directory first)";
         }
 
         try
@@ -346,7 +346,7 @@ public partial class MainWindow
                 for (int attempt = 0; attempt < maxAttempts && uniqueSounds.Count < targetCount; attempt++)
                 {
                     token.ThrowIfCancellationRequested();
-                    p.Report($"Attempt {attempt + 1}/{maxAttempts} — found {uniqueSounds.Count}/{targetCount} unique sounds...");
+                    p.Report($"Attempt {attempt + 1}/{maxAttempts} - found {uniqueSounds.Count}/{targetCount} unique sounds...");
 
                     var tempPath = Path.Combine(Path.GetTempPath(), $"crybar_fmod_{Guid.NewGuid()}.wav");
                     try
@@ -371,7 +371,7 @@ public partial class MainWindow
 
                 // Match exported sounds to original filenames via duration sorting.
                 // Trimmed durations differ from manifest durations in absolute value,
-                // but their relative ordering is preserved — so sort both sides and match positionally.
+                // but their relative ordering is preserved - so sort both sides and match positionally.
                 var sortedExports = uniqueSounds.OrderBy(kv => kv.Key).Select(kv => kv.Value).ToList();
 
                 int exported = 0;
