@@ -592,19 +592,24 @@ public class IntegrationTests
 
         Assert.True(tmmEntries.Count > 0, "No .tmm entries found");
 
-        var failures = new List<string>();
-        var partialList = new List<string>();
-
-        foreach (var entry in tmmEntries)
+        var failures = new ConcurrentQueue<string>();
+        var partialList = new ConcurrentQueue<string>();
+        var partitioner = Partitioner.Create(0, tmmEntries.Count);
+        Parallel.ForEach(partitioner, range =>
         {
-            var raw = BarCompression.EnsureDecompressed(entry.ReadDataRaw(stream), out _);
-            var tmm = new TmmFile(raw);
-            if (!tmm.Parsed)
-                failures.Add(entry.RelativePath);
-            else if (!tmm.FullyParsed)
-                partialList.Add($"{entry.RelativePath} (v{tmm.Version})");
-        }
-
+            using var str = File.OpenRead(barPath);
+            for (int i = range.Item1; i < range.Item2; i++)
+            {
+                var entry = tmmEntries[i];
+                var raw = entry.ReadDataDecompressed(str);
+                var tmm = new TmmFile(raw);
+                if (!tmm.Parsed)
+                    failures.Enqueue(entry.RelativePath);
+                else if (!tmm.FullyParsed)
+                    partialList.Enqueue($"{entry.RelativePath} (v{tmm.Version})");
+            }
+        });
+        
         Assert.True(failures.Count == 0,
             $"{failures.Count}/{tmmEntries.Count} TMM files failed to parse:\n{string.Join("\n", failures.Take(20))}");
         // many v37 TMM files don't fully parse yet - track count but don't fail
@@ -1182,7 +1187,7 @@ public class IntegrationTests
         var mythscnFiles = Directory.GetFiles(FottCampaignDir, "*.mythscn");
         Skip.If(mythscnFiles.Length == 0, "No .mythscn files found in campaign/fott");
 
-        var failures = new List<string>();
+        var failures = new ConcurrentQueue<string>();
         var tested = 0;
 
         await Parallel.ForEachAsync(mythscnFiles, async (filePath, t) =>
@@ -1200,7 +1205,7 @@ public class IntegrationTests
             var decompressed = BarCompression.DecompressL33t(original);
             if (decompressed == null)
             {
-                lock (failures) failures.Add($"{fileName}: decompression returned null");
+                failures.Enqueue($"{fileName}: decompression returned null");
                 return;
             }
 
@@ -1208,7 +1213,7 @@ public class IntegrationTests
             var recompressed = BarCompression.CompressL33t(decompressed);
             if (!recompressed.Span.IsL33t())
             {
-                lock (failures) failures.Add($"{fileName}: recompressed data missing L33t header");
+                failures.Enqueue($"{fileName}: recompressed data missing L33t header");
                 return;
             }
 
@@ -1216,7 +1221,7 @@ public class IntegrationTests
             var recompSpan = recompressed.Span;
             if (!BarCompression.VerifyL33tChecksum(recompSpan))
             {
-                lock (failures) failures.Add($"{fileName}: CRC32 checksum verification failed on recompressed output");
+                failures.Enqueue($"{fileName}: CRC32 checksum verification failed on recompressed output");
                 return;
             }
 
@@ -1224,13 +1229,12 @@ public class IntegrationTests
             var roundtripped = BarCompression.DecompressL33t(recompressed);
             if (roundtripped == null)
             {
-                lock (failures) failures.Add($"{fileName}: roundtrip decompression returned null");
+                failures.Enqueue($"{fileName}: roundtrip decompression returned null");
                 return;
             }
 
             if (!decompressed.AsSpan().SequenceEqual(roundtripped))
-                lock (failures)
-                    failures.Add($"{fileName}: content mismatch after roundtrip (original={decompressed.Length}, roundtripped={roundtripped.Length})");
+                failures.Enqueue($"{fileName}: content mismatch after roundtrip (original={decompressed.Length}, roundtripped={roundtripped.Length})");
         });
 
         Assert.True(tested > 0, "No L33t-compressed .mythscn files found in campaign/fott");
@@ -1338,26 +1342,33 @@ public class IntegrationTests
         return Directory.GetFiles(campaignDir, "*.mythscn", SearchOption.AllDirectories);
     }
 
+    static readonly Lazy<(string fileName, byte[] data)[]> CachedScenarioData = new(() =>
+    {
+        var files = FindScenarioFiles();
+        if (files.Length == 0) return [];
+        return files.AsParallel().Select(f =>
+        {
+            var fileName = Path.GetFileName(f);
+            var data = BarCompression.DecompressL33t(File.ReadAllBytes(f))!;
+            return (fileName, data);
+        }).ToArray();
+    });
+
     [SkippableFact]
     public async Task ScenarioFile_Parse_AllTestFiles()
     {
-        var allFiles = FindScenarioFiles();
-        Skip.If(allFiles.Length == 0, "No .mythscn files found");
+        var cached = CachedScenarioData.Value;
+        Skip.If(cached.Length == 0, "No .mythscn files found");
 
-        await Parallel.ForEachAsync(allFiles, async (filePath, t) =>
+        await Parallel.ForEachAsync(cached, async (entry, t) =>
         {
             if (t.IsCancellationRequested)
                 return;
 
-            var fileName = Path.GetFileName(filePath);
-
-            var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath));
-            Assert.NotNull(decompressed);
-
-            var scenario = new ScenarioFile(decompressed);
-            Assert.True(scenario.Parsed, $"{fileName}: failed to parse");
+            var scenario = new ScenarioFile(entry.data);
+            Assert.True(scenario.Parsed, $"{entry.fileName}: failed to parse");
             Assert.NotNull(scenario.Sections);
-            Assert.True(scenario.Sections.Length >= 15, $"{fileName}: expected at least 15 sections, got {scenario.Sections.Length}");
+            Assert.True(scenario.Sections.Length >= 15, $"{entry.fileName}: expected at least 15 sections, got {scenario.Sections.Length}");
 
             Assert.NotNull(scenario.FindSection("FH"));
             Assert.NotNull(scenario.FindSection("J1"));
@@ -1366,8 +1377,8 @@ public class IntegrationTests
 
             var j1 = scenario.GetJ1();
             Assert.NotNull(j1);
-            Assert.True(j1.Parsed, $"{fileName}: J1 failed to parse");
-            Assert.True(j1.Sections!.Count >= 50, $"{fileName}: J1 expected at least 50 sub-sections, got {j1.Sections.Count}");
+            Assert.True(j1.Parsed, $"{entry.fileName}: J1 failed to parse");
+            Assert.True(j1.Sections!.Count >= 50, $"{entry.fileName}: J1 expected at least 50 sub-sections, got {j1.Sections.Count}");
 
             Assert.NotNull(j1.FindSection("TN"));
             Assert.NotNull(j1.FindSection("PL"));
@@ -1378,31 +1389,29 @@ public class IntegrationTests
     [SkippableFact]
     public async Task ScenarioFile_Roundtrip_BytePerfect()
     {
-        var allFiles = FindScenarioFiles();
-        Skip.If(allFiles.Length == 0, "No .mythscn files found");
-        var failures = new List<string>();
+        var cached = CachedScenarioData.Value;
+        Skip.If(cached.Length == 0, "No .mythscn files found");
+        var failures = new ConcurrentQueue<string>();
 
-        await Parallel.ForEachAsync(allFiles, async (filePath, t) =>
+        await Parallel.ForEachAsync(cached, async (entry, t) =>
         {
             if (t.IsCancellationRequested)
                 return;
 
-            var fileName = Path.GetFileName(filePath);
-            var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath))!;
-            var scenario = new ScenarioFile(decompressed);
-            Assert.True(scenario.Parsed, $"{fileName}: parse failed");
+            var decompressed = entry.data.AsSpan();
+            var scenario = new ScenarioFile(entry.data);
+            Assert.True(scenario.Parsed, $"{entry.fileName}: parse failed");
 
             var roundtripped = scenario.ToBytes();
 
-            if (!decompressed.AsSpan().SequenceEqual(roundtripped))
+            if (!decompressed.SequenceEqual(roundtripped))
             {
                 var minLen = Math.Min(decompressed.Length, roundtripped.Length);
                 int firstDiff = -1;
                 for (int i = 0; i < minLen; i++)
                     if (decompressed[i] != roundtripped[i]) { firstDiff = i; break; }
-                
-                lock (failures)
-                    failures.Add($"{fileName}: size orig={decompressed.Length} rt={roundtripped.Length}, first diff at {firstDiff}");
+
+                failures.Enqueue($"{entry.fileName}: size orig={decompressed.Length} rt={roundtripped.Length}, first diff at {firstDiff}");
             }
         });
 
@@ -1412,17 +1421,15 @@ public class IntegrationTests
     [SkippableFact]
     public async Task ScenarioFile_J1_Roundtrip()
     {
-        var allFiles = FindScenarioFiles();
-        Skip.If(allFiles.Length == 0, "No .mythscn files found");
+        var cached = CachedScenarioData.Value;
+        Skip.If(cached.Length == 0, "No .mythscn files found");
 
-        await Parallel.ForEachAsync(allFiles, async (filePath, t) =>
+        await Parallel.ForEachAsync(cached, async (entry, t) =>
         {
             if (t.IsCancellationRequested)
                 return;
 
-            var fileName = Path.GetFileName(filePath);
-            var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath))!;
-            var scenario = new ScenarioFile(decompressed);
+            var scenario = new ScenarioFile(entry.data);
             Assert.True(scenario.Parsed);
 
             var j1Section = scenario.FindSection("J1")!;
@@ -1431,44 +1438,41 @@ public class IntegrationTests
 
             var roundtripped = j1.ToBytes();
             Assert.True(j1Section.Data.AsSpan().SequenceEqual(roundtripped),
-                $"{fileName}: J1 roundtrip mismatch (orig={j1Section.Data.Length}, rt={roundtripped.Length})");
+                $"{entry.fileName}: J1 roundtrip mismatch (orig={j1Section.Data.Length}, rt={roundtripped.Length})");
         });
     }
 
     [SkippableFact]
     public async Task ScenarioFile_XmlRoundtrip_BytePerfect()
     {
-        var allFiles = FindScenarioFiles();
-        Skip.If(allFiles.Length == 0, "No .mythscn files found");
-        var failures = new List<string>();
+        var cached = CachedScenarioData.Value;
+        Skip.If(cached.Length == 0, "No .mythscn files found");
+        var failures = new ConcurrentQueue<string>();
 
-        await Parallel.ForEachAsync(allFiles, async (filePath, t) =>
+        await Parallel.ForEachAsync(cached, async (entry, t) =>
         {
             if (t.IsCancellationRequested)
                 return;
 
-            var fileName = Path.GetFileName(filePath);
-            var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath))!;
-            var scenario = new ScenarioFile(decompressed);
-            Assert.True(scenario.Parsed, $"{fileName}: parse failed");
+            var decompressed = entry.data.AsSpan();
+            var scenario = new ScenarioFile(entry.data);
+            Assert.True(scenario.Parsed, $"{entry.fileName}: parse failed");
 
             var xml = scenario.ToXml();
-            Assert.True(xml.Length > 100, $"{fileName}: XML too short");
+            Assert.True(xml.Length > 100, $"{entry.fileName}: XML too short");
 
             var fromXml = ScenarioFile.FromXml(xml);
-            Assert.True(fromXml.Parsed, $"{fileName}: FromXml parse failed");
+            Assert.True(fromXml.Parsed, $"{entry.fileName}: FromXml parse failed");
 
             var roundtripped = fromXml.ToBytes();
-
-            if (!decompressed.AsSpan().SequenceEqual(roundtripped))
+            if (!decompressed.SequenceEqual(roundtripped))
             {
                 var minLen = Math.Min(decompressed.Length, roundtripped.Length);
                 int firstDiff = -1;
                 for (int i = 0; i < minLen; i++)
                     if (decompressed[i] != roundtripped[i]) { firstDiff = i; break; }
-                
-                lock (failures)
-                    failures.Add($"{fileName}: size orig={decompressed.Length} rt={roundtripped.Length}, first diff at {firstDiff}");
+
+                failures.Enqueue($"{entry.fileName}: size orig={decompressed.Length} rt={roundtripped.Length}, first diff at {firstDiff}");
             }
         });
 
@@ -1544,8 +1548,10 @@ public class IntegrationTests
 
     static XmlDocument ParseScenarioXml(string path)
     {
-        var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(path))!;
-        var scenario = new ScenarioFile(decompressed);
+        var fileName = Path.GetFileName(path);
+        var entry = CachedScenarioData.Value.FirstOrDefault(e => e.fileName == fileName);
+        var data = entry.data ?? BarCompression.DecompressL33t(File.ReadAllBytes(path))!;
+        var scenario = new ScenarioFile(data);
         Assert.True(scenario.Parsed);
         var xml = scenario.ToXml();
         var doc = new XmlDocument();
@@ -1560,15 +1566,16 @@ public class IntegrationTests
     static readonly string SamplesDir = Path.GetFullPath(
         Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".tr-samples"));
 
+    static readonly XmlWriterSettings NormalizeWriterSettings = new() { Indent = true, IndentChars = "\t", OmitXmlDeclaration = true };
+    static readonly XmlReaderSettings NormalizeReaderSettings = new() { IgnoreComments = true, IgnoreWhitespace = true };
+
     static string NormalizeXml(string xml)
     {
         // Streaming approach: XmlReader with IgnoreComments skips comments during read,
         // avoiding XmlDocument DOM construction + XPath traversal
         var sb = new System.Text.StringBuilder(xml.Length);
-        var writerSettings = new XmlWriterSettings { Indent = true, IndentChars = "\t", OmitXmlDeclaration = true };
-        using var writer = XmlWriter.Create(sb, writerSettings);
-        var readerSettings = new XmlReaderSettings { IgnoreComments = true, IgnoreWhitespace = true };
-        using var reader = XmlReader.Create(new System.IO.StringReader(xml), readerSettings);
+        using var writer = XmlWriter.Create(sb, NormalizeWriterSettings);
+        using var reader = XmlReader.Create(new System.IO.StringReader(xml), NormalizeReaderSettings);
         writer.WriteNode(reader, false);
         writer.Flush();
         return sb.ToString();
@@ -1607,18 +1614,16 @@ public class IntegrationTests
     [SkippableFact]
     public async Task ScenarioFile_TrgXsLosslessRoundtrip()
     {
-        var allFiles = FindScenarioFiles();
-        Skip.If(allFiles.Length == 0, "No .mythscn files found");
-        var failures = new List<string>();
+        var cached = CachedScenarioData.Value;
+        Skip.If(cached.Length == 0, "No .mythscn files found");
+        var failures = new ConcurrentQueue<string>();
 
-        await Parallel.ForEachAsync(allFiles, async (filePath, t) =>
+        await Parallel.ForEachAsync(cached, async (entry, t) =>
         {
             if (t.IsCancellationRequested)
                 return;
 
-            var fileName = Path.GetFileName(filePath);
-            var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath))!;
-            var scenario = new ScenarioFile(decompressed);
+            var scenario = new ScenarioFile(entry.data);
             if (!scenario.Parsed) return;
 
             var trSection = scenario.FindSection("TR");
@@ -1641,15 +1646,14 @@ public class IntegrationTests
                 var rtLines = rtNorm.Split('\n');
                 var diffLine = -1;
                 for (int i = 0; i < Math.Min(origLines.Length, rtLines.Length); i++)
-                {
-                    if (origLines[i] != rtLines[i]) { diffLine = i; break; }
-                }
+                    if (origLines[i] != rtLines[i])
+                        { diffLine = i; break; }
+
                 var detail = diffLine >= 0
                     ? $"line {diffLine}: orig=[{origLines[diffLine].Trim()}] rt=[{rtLines[diffLine].Trim()}]"
                     : $"line count differs: orig={origLines.Length} rt={rtLines.Length}";
 
-                lock (failures)
-                    failures.Add($"{fileName}: {detail}");
+                failures.Enqueue($"{entry.fileName}: {detail}");
             }
         });
 

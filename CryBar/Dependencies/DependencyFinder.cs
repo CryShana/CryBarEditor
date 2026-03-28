@@ -583,7 +583,7 @@ public static partial class DependencyFinder
     }
 
     /// <summary>
-    /// Builds dependencies for a TMM model file: companion .tmm.data and .material files.
+    /// Builds dependencies for a TMM model file: companion .tmm.data, .material files and anim files.
     /// </summary>
     public static DependencyResult FindDependenciesForTmm(string entryPath, FileIndex? index = null, AnimfileIndex? animfileIndex = null)
     {
