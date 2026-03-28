@@ -592,8 +592,12 @@ public static class GlbExporter
         // Node 0 = mesh node
         // Nodes 1..N = bone nodes (if any)
         // Nodes N+1..N+A = attachment nodes (empty nodes parented to bones)
+        // Nodes N+A+1..N+A+I = impact point nodes (empty nodes at world positions)
+        var impactPoints = tmm.AutoAttachInfo?.ManualImpactPoints;
+        int impactPointCount = impactPoints?.Length ?? 0;
         int boneNodeStart = 1;
         int attachmentNodeStart = boneNodeStart + bones.Length;
+        int impactNodeStart = attachmentNodeStart + attachments.Length;
 
         w.WriteStartArray("nodes");
 
@@ -619,6 +623,9 @@ public static class GlbExporter
             if (!hasSkin || attachments[i].ParentBoneId < 0 || attachments[i].ParentBoneId >= bones.Length)
                 meshNodeChildren.Add(attachmentNodeStart + i);
         }
+        // Impact points are children of the mesh node
+        for (int i = 0; i < impactPointCount; i++)
+            meshNodeChildren.Add(impactNodeStart + i);
         if (meshNodeChildren.Count > 0)
         {
             w.WriteStartArray("children");
@@ -673,6 +680,21 @@ public static class GlbExporter
             // Convert row-major 3×4 attachment transform to column-major 4×4 for glTF
             WriteZNegatedMatrixJson(w, RowMajor3x4ToColumnMajor4x4(attachments[i].AdjustmentTransformMatrix));
 
+            w.WriteEndObject();
+        }
+
+        // Impact point nodes (empty objects at world-space positions)
+        for (int i = 0; i < impactPointCount; i++)
+        {
+            var pt = impactPoints![i];
+            w.WriteStartObject();
+            w.WriteString("name", $"ImpactPoint_{i}");
+            // LH->RH: negate Z
+            w.WriteStartArray("translation");
+            w.WriteNumberValue(pt[0]);
+            w.WriteNumberValue(pt[1]);
+            w.WriteNumberValue(-pt[2]);
+            w.WriteEndArray();
             w.WriteEndObject();
         }
 

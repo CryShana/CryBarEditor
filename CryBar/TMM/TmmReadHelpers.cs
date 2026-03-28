@@ -70,6 +70,14 @@ internal static class TmmReadHelpers
         return true;
     }
 
+    internal static bool TryReadVector3(ReadOnlySpan<byte> data, ref int offset, out float[] value)
+    {
+        value = [];
+        if (offset + 12 > data.Length) return false;
+        value = ReadFloats(data, ref offset, 3);
+        return true;
+    }
+
     internal static bool TryReadVector4(ReadOnlySpan<byte> data, ref int offset, out float[] value)
     {
         value = [];

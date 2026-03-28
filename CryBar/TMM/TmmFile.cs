@@ -540,8 +540,8 @@ public class TmmFile
         var proxyGroups = new TmmProxyGroup[proxyGroupCount];
         for (int i = 0; i < proxyGroupCount; i++)
         {
-            if (!TryReadVector4(data, ref offset, out var center)) return false;
-            if (!TryReadVector4(data, ref offset, out var impactPoint)) return false;
+            if (!TryReadVector3(data, ref offset, out var center)) return false;
+            if (!TryReadVector3(data, ref offset, out var impactPoint)) return false;
             if (!TryReadUInt32(data, ref offset, out var firstChunkBone)) return false;
             if (!TryReadUInt32(data, ref offset, out var chunkCount)) return false;
             if (!TryReadInt32(data, ref offset, out var jitterCount)) return false;
@@ -550,12 +550,12 @@ public class TmmFile
             if (!TryReadFloat(data, ref offset, out var hideTime)) return false;
             if (!TryReadFloat(data, ref offset, out var hideDelayRandomExt)) return false;
             if (!TryReadFloat(data, ref offset, out var forceMult)) return false;
-            if (!TryReadVector4(data, ref offset, out var forceDirDefault)) return false;
-            if (!TryReadVector4(data, ref offset, out var forceDirReal)) return false;
-            if (!TryReadVector4(data, ref offset, out var boundsMin)) return false;
-            if (!TryReadVector4(data, ref offset, out var boundsMax)) return false;
-            if (!TryReadVector4(data, ref offset, out var boundsCenter)) return false;
-            if (!TryReadVector4(data, ref offset, out var boundsSize)) return false;
+            if (!TryReadVector3(data, ref offset, out var forceDirDefault)) return false;
+            if (!TryReadVector3(data, ref offset, out var forceDirReal)) return false;
+            if (!TryReadVector3(data, ref offset, out var boundsMin)) return false;
+            if (!TryReadVector3(data, ref offset, out var boundsMax)) return false;
+            if (!TryReadVector3(data, ref offset, out var boundsCenter)) return false;
+            if (!TryReadVector3(data, ref offset, out var boundsSize)) return false;
             if (!TryReadInt32(data, ref offset, out var physType)) return false;
             if (!TryReadBool(data, ref offset, out var allowDecals)) return false;
             if (!TryReadBool(data, ref offset, out var allowPopcorn)) return false;
@@ -667,24 +667,33 @@ public class TmmFile
         }
 
         // 5.10 Click Volume
+        // VX and VS are TLV structures: 2-byte tag + 4-byte length + data.
         if (offset >= data.Length) return false;
         var clickVolumeType = data[offset++];
 
-        // VX marker (0x56, 0x58)
-        if (offset + 2 > data.Length) return false;
-        offset += 2; // skip VX marker
+        // VX tag (0x56, 0x58) + length
+        if (offset + 6 > data.Length) return false;
+        offset += 2; // skip VX tag
+        if (!TryReadUInt32(data, ref offset, out var vxLength)) return false;
+        if (vxLength > data.Length) return false;
+        var vxDataEnd = offset + (int)vxLength;
+        if (vxDataEnd > data.Length) return false;
 
         if (!TryReadBool(data, ref offset, out var areVoxelsDefined)) return false;
+        offset = vxDataEnd; // advance past VX data
+
         if (areVoxelsDefined)
         {
-            // VS marker (0x56, 0x53)
-            if (offset + 2 > data.Length) return false;
-            offset += 2; // skip VS marker
+            // VS tag (0x56, 0x53) + length
+            if (offset + 6 > data.Length) return false;
+            offset += 2; // skip VS tag
+            if (!TryReadInt32(data, ref offset, out var vsLength)) return false;
+            if (vsLength < 0 || offset + vsLength > data.Length) return false;
+            var vsSectionEnd = offset + vsLength;
 
-            if (!TryReadInt32(data, ref offset, out _)) return false;
             if (!TryReadUInt32(data, ref offset, out var voxelVersion)) return false;
-            if (!TryReadVector4(data, ref offset, out var voxBoundsMin)) return false;
-            if (!TryReadVector4(data, ref offset, out var voxBoundsMax)) return false;
+            if (!TryReadVector3(data, ref offset, out var voxBoundsMin)) return false;
+            if (!TryReadVector3(data, ref offset, out var voxBoundsMax)) return false;
             if (!TryReadInt32(data, ref offset, out var voxDimensions)) return false;
             if (!TryReadFloat(data, ref offset, out var voxSizeLargestAxis)) return false;
             if (!TryReadUInt32(data, ref offset, out var voxByteCount)) return false;
@@ -699,6 +708,9 @@ public class TmmFile
                 VoxelDimensions = voxDimensions, VoxelSizeLargestAxis = voxSizeLargestAxis,
                 VoxelData = voxelData
             };
+
+            // Advance past any trailing data in VS section
+            offset = vsSectionEnd;
         }
         else
         {
@@ -758,6 +770,9 @@ public class TmmFile
 
     static float[] ReadFloats(ReadOnlySpan<byte> data, ref int offset, int count)
         => TmmReadHelpers.ReadFloats(data, ref offset, count);
+
+    static bool TryReadVector3(ReadOnlySpan<byte> data, ref int offset, out float[] value)
+        => TmmReadHelpers.TryReadVector3(data, ref offset, out value);
 
     static bool TryReadVector4(ReadOnlySpan<byte> data, ref int offset, out float[] value)
         => TmmReadHelpers.TryReadVector4(data, ref offset, out value);
