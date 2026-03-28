@@ -1,4 +1,5 @@
-﻿using System.Xml;
+﻿using System.Collections.Concurrent;
+using System.Xml;
 
 using CryBar;
 using CryBar.Bar;
@@ -1083,46 +1084,58 @@ public class IntegrationTests
             .Where(e => e.Name.EndsWith(".tma", StringComparison.OrdinalIgnoreCase))
             .ToList();
 
+        // Pre-read all raw data sequentially (single shared stream)
+        var rawEntries = new (BarFileEntry entry, byte[] raw)[tmaEntries.Count];
+        for (int i = 0; i < tmaEntries.Count; i++)
+            rawEntries[i] = (tmaEntries[i], tmaEntries[i].ReadDataRaw(stream));
+
+        // Parallel decompress + parse + validate (CPU-bound, no shared state)
         int totalTracks = 0;
         int totalDecoded = 0;
-        var failures = new List<string>();
+        var failures = new ConcurrentBag<string>();
 
-        foreach (var entry in tmaEntries)
+        Parallel.For(0, rawEntries.Length, i =>
         {
-            var raw = BarCompression.EnsureDecompressed(entry.ReadDataRaw(stream), out _);
+            var (entry, rawData) = rawEntries[i];
+            var raw = BarCompression.EnsureDecompressed(rawData, out _);
             var tma = new TmaFile(raw);
             if (!tma.Parsed || tma.Tracks == null)
-                continue;
+                return;
 
             var decoded = TmaDecoder.DecodeAllTracks(tma);
-            Assert.NotNull(decoded);
-            Assert.Equal(tma.Tracks.Length, decoded.Length);
-
-            foreach (var dt in decoded)
+            if (decoded == null || decoded.Length != tma.Tracks.Length)
             {
-                totalTracks++;
+                failures.Add($"{entry.Name}: decode returned null or wrong length");
+                return;
+            }
 
-                // Validate all rotation quaternions have magnitude ~1.0
+            for (int ti = 0; ti < decoded.Length; ti++)
+            {
+                var dt = decoded[ti];
+                Interlocked.Increment(ref totalTracks);
+
+                // Validate using squared magnitude (avoids sqrt per quaternion)
                 for (int qi = 0; qi < dt.Rotations.Length; qi++)
                 {
                     var q = dt.Rotations[qi];
-                    var mag = MathF.Sqrt(q.X * q.X + q.Y * q.Y + q.Z * q.Z + q.W * q.W);
-                    if (MathF.Abs(mag - 1.0f) > 0.01f)
+                    var magSq = q.X * q.X + q.Y * q.Y + q.Z * q.Z + q.W * q.W;
+                    // (1+-0.01)^2 ~= 1+-0.02, so threshold 0.02 is equivalent
+                    if (MathF.Abs(magSq - 1.0f) > 0.02f)
                     {
-                        // Show raw data for the failing keyframe
-                        var srcTrack = tma.Tracks[Array.IndexOf(decoded, dt)];
+                        var srcTrack = tma.Tracks[ti];
                         ulong rawPacked = 0;
                         if (srcTrack.RotationEncoding == TmaEncoding.Quat64 && qi * 8 + 8 <= srcTrack.RotationData.Length)
                             rawPacked = BitConverter.ToUInt64(srcTrack.RotationData, qi * 8);
-                        
+
+                        var mag = MathF.Sqrt(magSq);
                         failures.Add($"{entry.Name}/{dt.Name} kf{qi}: mag={mag:F6} q=[{q.X:F4},{q.Y:F4},{q.Z:F4},{q.W:F4}] raw=0x{rawPacked:X16}");
                         break;
                     }
                 }
 
-                totalDecoded++;
+                Interlocked.Increment(ref totalDecoded);
             }
-        }
+        });
 
         Assert.True(failures.Count == 0,
             $"{failures.Count}/{totalTracks} tracks had bad quaternion magnitudes:\n{string.Join("\n", failures.Take(20))}");
@@ -1549,18 +1562,14 @@ public class IntegrationTests
 
     static string NormalizeXml(string xml)
     {
-        var doc = new XmlDocument();
-        doc.LoadXml(xml);
-        // Strip XML comments (informational, not data)
-        foreach (XmlNode node in doc.SelectNodes("//comment()")!)
-            node.ParentNode!.RemoveChild(node);
-        // Also strip top-level comments (before/after document element)
-        foreach (XmlNode node in doc.ChildNodes)
-            if (node is XmlComment) { doc.RemoveChild(node); break; }
-        var sb = new System.Text.StringBuilder();
-        var settings = new XmlWriterSettings { Indent = true, IndentChars = "\t", OmitXmlDeclaration = true };
-        using var writer = XmlWriter.Create(sb, settings);
-        doc.WriteTo(writer);
+        // Streaming approach: XmlReader with IgnoreComments skips comments during read,
+        // avoiding XmlDocument DOM construction + XPath traversal
+        var sb = new System.Text.StringBuilder(xml.Length);
+        var writerSettings = new XmlWriterSettings { Indent = true, IndentChars = "\t", OmitXmlDeclaration = true };
+        using var writer = XmlWriter.Create(sb, writerSettings);
+        var readerSettings = new XmlReaderSettings { IgnoreComments = true, IgnoreWhitespace = true };
+        using var reader = XmlReader.Create(new System.IO.StringReader(xml), readerSettings);
+        writer.WriteNode(reader, false);
         writer.Flush();
         return sb.ToString();
     }

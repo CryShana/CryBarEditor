@@ -11,6 +11,8 @@ public static class TmaDecoder
     const float InvSqrt2 = 0.70710678118f; // 1/sqrt(2)
     const float Quat64MaxMagnitude = 524287f; // 2^19 - 1
     const float Quat32MaxMagnitude = 511f;    // 2^9 - 1
+    const float Quat64Scale = InvSqrt2 / Quat64MaxMagnitude; // precomputed: one multiply instead of divide+multiply
+    const float Quat32Scale = InvSqrt2 / Quat32MaxMagnitude;
 
     /// <summary>Decoded animation data for a single track.</summary>
     public sealed class DecodedTrack
@@ -185,7 +187,7 @@ public static class TmaDecoder
             if (comp == idx) continue;
             int magnitude = (int)(bits & 0x1FF);  // 9-bit magnitude
             bool negative = ((bits >> 9) & 1) != 0;
-            float val = (magnitude / Quat32MaxMagnitude) * InvSqrt2;
+            float val = magnitude * Quat32Scale;
             if (negative) val = -val;
             switch (comp) { case 0: q0 = val; break; case 1: q1 = val; break; case 2: q2 = val; break; default: q3 = val; break; }
             bits >>= 10;
@@ -211,7 +213,7 @@ public static class TmaDecoder
             if (comp == idx) continue;
             int magnitude = (int)(bits & 0x7FFFF);  // 19-bit magnitude
             bool negative = ((bits >> 19) & 1) != 0;
-            float val = (magnitude / Quat64MaxMagnitude) * InvSqrt2;
+            float val = magnitude * Quat64Scale;
             if (negative) val = -val;
             switch (comp) { case 0: q0 = val; break; case 1: q1 = val; break; case 2: q2 = val; break; default: q3 = val; break; }
             bits >>= 20;
