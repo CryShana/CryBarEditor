@@ -10,7 +10,11 @@ public static class AnimationDiscovery
     /// <summary>Parsed animation reference from an AnimXML file.</summary>
     public readonly record struct AnimRef(string AnimName, string TmaPath);
 
-    /// <summary>Extracts animation name + TMA path pairs from AnimXML content.</summary>
+    /// <summary>
+    /// Extracts animation name + TMA path pairs from AnimXML content.
+    /// An anim element can contain multiple TMAnimation assetreferences (variants).
+    /// Each variant becomes a separate AnimRef with the same base name.
+    /// </summary>
     public static List<AnimRef> FindAnimationsFromAnimXml(string xmlContent)
     {
         var results = new List<AnimRef>();
@@ -22,33 +26,29 @@ public static class AnimationDiscovery
                 if (reader.NodeType != XmlNodeType.Element || reader.LocalName != "anim")
                     continue;
 
-                // mixed content: <anim>AnimName<assetreference type="TMAnimation"><file>path</file></assetreference></anim>
+                // mixed content: <anim>AnimName<assetreference type="TMAnimation"><file>path</file></assetreference>...</anim>
+                using var subtree = reader.ReadSubtree();
+                subtree.Read(); // move into <anim>
+
                 string animName = "";
-                string? tmaPath = null;
+                var paths = new List<string>();
 
-                if (!reader.Read()) break;
-
-                // first child should be the animation name as text
-                if (reader.NodeType == XmlNodeType.Text)
+                while (subtree.Read())
                 {
-                    animName = reader.Value.Trim();
-                    reader.Read();
-                }
-
-                // then <assetreference type="TMAnimation">
-                if (reader.NodeType == XmlNodeType.Element && reader.LocalName == "assetreference")
-                {
-                    var type = reader.GetAttribute("type");
-                    if (type == "TMAnimation")
+                    if (subtree.NodeType == XmlNodeType.Text && animName.Length == 0)
                     {
-                        // descend to <file>
-                        if (reader.ReadToDescendant("file"))
-                            tmaPath = reader.ReadElementContentAsString().Trim();
+                        animName = subtree.Value.Trim();
+                    }
+                    else if (subtree.NodeType == XmlNodeType.Element && subtree.LocalName == "assetreference")
+                    {
+                        var type = subtree.GetAttribute("type");
+                        if (type == "TMAnimation" && subtree.ReadToDescendant("file"))
+                            paths.Add(subtree.ReadElementContentAsString().Trim());
                     }
                 }
 
-                if (tmaPath != null)
-                    results.Add(new AnimRef(animName, tmaPath));
+                for (int i = 0; i < paths.Count; i++)
+                    results.Add(new AnimRef(animName, paths[i]));
             }
         }
         catch (XmlException)

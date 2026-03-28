@@ -112,6 +112,32 @@ public class AnimationDiscoveryTests
     }
 
     [Fact]
+    public void FindAnimations_MultipleVariantsPerAnim()
+    {
+        var xml = """
+            <animfile>
+                <anim>HandAttack<assetreference type="TMAnimation"><file>anim\attack_a</file><tag type="Attack">0.5</tag></assetreference><assetreference type="TMAnimation"><file>anim\attack_b</file><tag type="Attack">0.5</tag></assetreference><component>ModelComp</component></anim>
+                <anim>Idle<assetreference type="TMAnimation"><file>anim\idle_a</file></assetreference><component>ModelComp</component></anim>
+                <anim>Cinematic<assetreference type="TMAnimation"><file>anim\igc\clip_a</file></assetreference><assetreference type="TMAnimation"><file>anim\igc\clip_b</file></assetreference><assetreference type="TMAnimation"><file>anim\igc\clip_c</file></assetreference><component>ModelComp</component></anim>
+            </animfile>
+            """;
+
+        var results = AnimationDiscovery.FindAnimationsFromAnimXml(xml);
+
+        Assert.Equal(6, results.Count);
+
+        var attacks = results.Where(r => r.AnimName == "HandAttack").ToList();
+        Assert.Equal(2, attacks.Count);
+        Assert.Contains(attacks, r => r.TmaPath.Contains("attack_a"));
+        Assert.Contains(attacks, r => r.TmaPath.Contains("attack_b"));
+
+        Assert.Single(results, r => r.AnimName == "Idle");
+
+        var cinematics = results.Where(r => r.AnimName == "Cinematic").ToList();
+        Assert.Equal(3, cinematics.Count);
+    }
+
+    [Fact]
     public void FindAllModels_SkipsNonTMModel()
     {
         var xml = """

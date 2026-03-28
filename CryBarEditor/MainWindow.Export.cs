@@ -457,13 +457,28 @@ public partial class MainWindow
                 var decoded = TmaDecoder.DecodeAllTracks(tma);
                 if (decoded == null || decoded.Length == 0) continue;
 
+                var baseName = !string.IsNullOrEmpty(animRef.AnimName) ? animRef.AnimName : tmaFileName;
                 animations.Add(new GlbExporter.GlbAnimation
                 {
-                    Name = !string.IsNullOrEmpty(animRef.AnimName) ? animRef.AnimName : tmaFileName,
+                    Name = baseName,
                     Tracks = decoded,
                     Duration = tma.Duration,
                     FrameCount = tma.FrameCount,
                 });
+            }
+
+            // deduplicate names: "Attack" stays if unique, becomes "Attack 1", "Attack 2" if not
+            var nameCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var anim in animations)
+                nameCounts[anim.Name] = nameCounts.GetValueOrDefault(anim.Name) + 1;
+
+            var nameCounters = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var anim in animations)
+            {
+                if (nameCounts[anim.Name] <= 1) continue;
+                int idx = nameCounters.GetValueOrDefault(anim.Name) + 1;
+                nameCounters[anim.Name] = idx;
+                anim.Name = $"{anim.Name} {idx}";
             }
 
             return animations.Count > 0 ? animations : null;

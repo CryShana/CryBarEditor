@@ -20,7 +20,7 @@ public static class GlbExporter
 
     public class GlbAnimation
     {
-        public required string Name { get; init; }
+        public required string Name { get; set; }
         public required TmaDecoder.DecodedTrack[] Tracks { get; init; }
         public required float Duration { get; init; }
         public required uint FrameCount { get; init; }
