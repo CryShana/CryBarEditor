@@ -200,12 +200,14 @@ public static class TmaDecoder
         return AssembleQuaternion(idx, fa, fb, fc, fw);
     }
 
-    /// <summary>Unsigned N-bit value to signed float [-1, +1) via two's complement.</summary>
+    /// <summary>Unsigned N-bit value to signed float via sign-magnitude.
+    /// MSB = sign (0=positive, 1=negative), remaining bits = magnitude.</summary>
     static float SignedComponent(int raw, int bits)
     {
-        int half = 1 << (bits - 1);
-        int signed_ = raw >= half ? raw - (half << 1) : raw;
-        return signed_ / (float)half;
+        int signBit = 1 << (bits - 1);
+        int magnitude = raw & (signBit - 1);
+        float value = magnitude / (float)signBit;
+        return (raw & signBit) != 0 ? -value : value;
     }
 
     /// <summary>
