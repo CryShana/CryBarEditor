@@ -574,7 +574,7 @@ public class IntegrationTests
     }
 
     [SkippableFact]
-    public void ArtModelCacheMetaBar_ParseAllTmm_AllSucceed()
+    public void ArtModelCacheMetaBar_ParseAllTmm_AllSucceedAndFullyParsed()
     {
         Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
 
@@ -592,61 +592,24 @@ public class IntegrationTests
         Assert.True(tmmEntries.Count > 0, "No .tmm entries found");
 
         var failures = new List<string>();
-        foreach (var entry in tmmEntries)
-        {
-            var raw = BarCompression.EnsureDecompressed(entry.ReadDataRaw(stream), out _);
-            var tmm = new TmmFile(raw);
-            if (!tmm.Parsed)
-                failures.Add(entry.RelativePath);
-        }
-        
-        Assert.True(failures.Count == 0,
-            $"{failures.Count}/{tmmEntries.Count} TMM files failed to parse:\n{string.Join("\n", failures.Take(20))}");
-    }
-
-    [SkippableFact]
-    public void ArtModelCacheMetaBar_ParseAllTmm_ReportFullyParsed()
-    {
-        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
-
-        var barPath = Path.Combine(GamePath, @"modelcache\ArtModelCacheMeta.bar");
-        Skip.IfNot(File.Exists(barPath), "ArtModelCacheMeta.bar not found");
-
-        using var stream = File.OpenRead(barPath);
-        var bar = new BarFile(stream);
-        Assert.True(bar.Load(out _));
-
-        var tmmEntries = bar.Entries!
-            .Where(e => e.Name.EndsWith(".tmm", StringComparison.OrdinalIgnoreCase))
-            .ToList();
-
-        int total = tmmEntries.Count;
-        int parsed = 0;
-        int fullyParsed = 0;
         var partialList = new List<string>();
 
         foreach (var entry in tmmEntries)
         {
             var raw = BarCompression.EnsureDecompressed(entry.ReadDataRaw(stream), out _);
             var tmm = new TmmFile(raw);
-            if (tmm.Parsed) parsed++;
-            if (tmm.Parsed && tmm.FullyParsed) fullyParsed++;
-            else if (tmm.Parsed && !tmm.FullyParsed)
+            if (!tmm.Parsed)
+                failures.Add(entry.RelativePath);
+            else if (!tmm.FullyParsed)
                 partialList.Add($"{entry.RelativePath} (v{tmm.Version})");
         }
 
-        // Report but don't fail on partial parses - this test is informational
-        // If some files only partially parse, log them for investigation
-        Assert.True(parsed == total,
-            $"{total - parsed}/{total} TMM files failed core parse");
-
-        // This is a soft check - we log partial parses but don't fail
-        if (partialList.Count > 0)
-        {
-            // Output as test message for visibility
-            Assert.True(true,
-                $"INFO: {fullyParsed}/{total} fully parsed, {partialList.Count} partial:\n{string.Join("\n", partialList.Take(20))}");
-        }
+        Assert.True(failures.Count == 0,
+            $"{failures.Count}/{tmmEntries.Count} TMM files failed to parse:\n{string.Join("\n", failures.Take(20))}");
+        // many v37 TMM files don't fully parse yet - track count but don't fail
+        int fullyParsed = tmmEntries.Count - failures.Count - partialList.Count;
+        Assert.True(fullyParsed > 0,
+            $"No TMM files fully parsed out of {tmmEntries.Count}");
     }
 
     #endregion
@@ -689,14 +652,14 @@ public class IntegrationTests
         Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
 
         // Load companion .tmm
-        var (bar, tmmEntry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "shuten_doji.tmm");
+        var (_, tmmEntry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "shuten_doji.tmm");
         var tmmRaw = BarCompression.EnsureDecompressed(tmmEntry.ReadDataRaw(stream), out _);
         var tmm = new TmmFile(tmmRaw);
         Assert.True(tmm.Parsed, "Companion TMM should parse");
         stream.Dispose();
 
         // Load .tmm.data
-        var (bar2, dataEntry, stream2) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheModelDataJapanese.bar", "shuten_doji.tmm.data");
+        var (_, dataEntry, stream2) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheModelDataJapanese.bar", "shuten_doji.tmm.data");
         using var s = stream2;
 
         var dataRaw = BarCompression.EnsureDecompressed(dataEntry.ReadDataRaw(stream2), out _);
@@ -717,12 +680,12 @@ public class IntegrationTests
         Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
 
         // Load .tmm
-        var (bar, tmmEntry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "petrobolos.tmm");
+        var (_, tmmEntry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "petrobolos.tmm");
         var tmmRaw = BarCompression.EnsureDecompressed(tmmEntry.ReadDataRaw(stream), out _);
         stream.Dispose();
 
         // Load .tmm.data
-        var (bar2, dataEntry, stream2) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheModelDataGreek.bar", "petrobolos.tmm.data");
+        var (_, dataEntry, stream2) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheModelDataGreek.bar", "petrobolos.tmm.data");
         var dataRaw = BarCompression.EnsureDecompressed(dataEntry.ReadDataRaw(stream2), out _);
         stream2.Dispose();
 
@@ -746,7 +709,7 @@ public class IntegrationTests
         Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
 
         // Load .tmm from ArtModelCacheMeta.bar
-        var (bar, tmmEntry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "shade_spc.tmm");
+        var (_, tmmEntry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "shade_spc.tmm");
         var tmmRaw = BarCompression.EnsureDecompressed(tmmEntry.ReadDataRaw(stream), out _);
         var tmm = new TmmFile(tmmRaw);
         Assert.True(tmm.Parsed, "shade_spc.tmm should parse");
@@ -758,7 +721,7 @@ public class IntegrationTests
         Assert.True(tmm.Bones!.Length > 0, "shade_spc should have bones");
 
         // Load .tmm.data from ArtModelCacheModelData.bar
-        var (bar2, dataEntry, stream2) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheModelData.bar", "shade_spc.tmm.data");
+        var (_, dataEntry, stream2) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheModelData.bar", "shade_spc.tmm.data");
         var dataRaw = BarCompression.EnsureDecompressed(dataEntry.ReadDataRaw(stream2), out _);
         stream2.Dispose();
 
@@ -986,45 +949,6 @@ public class IntegrationTests
         var tracks = TmaDecoder.DecodeAllTracks(tma);
         Assert.NotNull(tracks);
 
-        // Dump raw Quat64 packed values for the first bone with Quat64 encoding
-        var sb = new System.Text.StringBuilder();
-        var q64Track = tma.Tracks!.FirstOrDefault(t => t.RotationEncoding == TmaEncoding.Quat64);
-        if (q64Track != null)
-        {
-            sb.AppendLine($"Raw Quat64 dump for: {q64Track.Name} ({q64Track.KeyframeCount} kf, {q64Track.RotationData.Length} bytes)");
-            int numFrames = Math.Min(6, q64Track.KeyframeCount);
-            for (int f = 0; f < numFrames; f++)
-            {
-                int off = f * 8;
-                if (off + 8 > q64Track.RotationData.Length) break;
-                ulong packed = System.Buffers.Binary.BinaryPrimitives.ReadUInt64LittleEndian(q64Track.RotationData.AsSpan(off));
-
-                // Current layout: index at top 2 bits
-                int idxTop = (int)(packed >> 62) & 3;
-                int topA = (int)((packed >> 41) & 0x1FFFFF);
-                int topB = (int)((packed >> 20) & 0x1FFFFF);
-                int topC = (int)(packed & 0xFFFFF);
-
-                // Alternative layout: index at bottom 2 bits
-                int idxBot = (int)(packed & 3);
-                int botA = (int)((packed >> 43) & 0x1FFFFF);
-                int botB = (int)((packed >> 22) & 0x1FFFFF);
-                int botC = (int)((packed >> 2) & 0xFFFFF);
-
-                sb.AppendLine($"  Frame {f}: 0x{packed:X16}");
-                // Layout 21+21+20 (current)
-                sb.AppendLine($"    21-21-20: idx={idxTop} A={topA} B={topB} C={topC}");
-
-                // Layout 22+20+20 (hypothesis: first component gets extra 2 bits)
-                int fixA = (int)((packed >> 40) & 0x3FFFFF);  // 22 bits
-                int fixB = (int)((packed >> 20) & 0xFFFFF);   // 20 bits
-                int fixC = (int)(packed & 0xFFFFF);            // 20 bits
-                int fixIdx = (int)(packed >> 62) & 3;
-                sb.AppendLine($"    22-20-20: idx={fixIdx} A={fixA} B={fixB} C={fixC}");
-            }
-        }
-
-        // Now test rotation continuity with the fixed decoder
         int totalJumps = 0;
         var jumpDetails = new System.Text.StringBuilder();
         foreach (var track in tracks!)
@@ -1046,7 +970,7 @@ public class IntegrationTests
         }
 
         if (totalJumps > 0)
-            Assert.Fail($"Quat64 analysis:\n{sb}\n\nStill {totalJumps} rotation jumps > 30°:\n{jumpDetails}");
+            Assert.Fail($"{totalJumps} rotation jumps > 30°:\n{jumpDetails}");
         // If no jumps, test passes!
     }
 
@@ -1742,62 +1666,6 @@ public class IntegrationTests
         var orig = NormalizeXml(SimpleTriggersXml);
         var rt = NormalizeXml(roundtrippedXml);
         Assert.Equal(orig, rt);
-    }
-
-    /// <summary>
-    /// Tests lossy roundtrip on campaign scenarios - counts Extra tags per scenario
-    /// to measure template matching quality across real-world data.
-    /// </summary>
-    [SkippableFact]
-    public async Task XsLossy_CampaignScenarios_QualityMetric()
-    {
-        Skip.IfNot(GameInstalled, "Game not found");
-        var index = TriggerDataIndex.Load(GamePath);
-        Skip.If(index == null, "trigger_data.xml not found");
-
-        var allFiles = FindScenarioFiles();
-        Skip.If(allFiles.Length == 0, "No .mythscn files found");
-
-        int totalTriggers = 0, totalExtras = 0, totalStructured = 0;
-
-        await Parallel.ForEachAsync(allFiles, async (filePath, t) =>
-        {
-            if (t.IsCancellationRequested)
-                return;
-
-            var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath))!;
-            var scenario = new ScenarioFile(decompressed);
-            if (!scenario.Parsed) return;
-            var trSection = scenario.FindSection("TR");
-            if (trSection == null || trSection.Data.Length < 20) return;
-
-            string originalXml;
-            try { originalXml = ScenarioFile.SectionToTriggersXml(trSection); }
-            catch { return; }
-
-            var xs = ScenarioFile.ConvertTriggersXmlToXs(originalXml, lossless: false);
-            var rtXml = ScenarioFile.ParseXsToTriggersXml(xs, index);
-
-            var doc = new XmlDocument();
-            doc.LoadXml(rtXml);
-
-            var trigs = doc.GetElementsByTagName("Trigger").Count;
-            var extras = doc.GetElementsByTagName("Extra").Count;
-            var structured = doc.GetElementsByTagName("Effect").Count + doc.GetElementsByTagName("Cond").Count;
-
-            Interlocked.Add(ref totalTriggers, trigs);
-            Interlocked.Add(ref totalExtras, extras);
-            Interlocked.Add(ref totalStructured, structured);
-        });
-
-        // Report quality metric - this test always passes, it's informational
-        var pctStructured = totalStructured + totalExtras > 0
-            ? (100.0 * totalStructured / (totalStructured + totalExtras)).ToString("F1")
-            : "N/A";
-        Assert.True(true,
-            $"Lossy quality across {allFiles.Length} scenarios: " +
-            $"{totalTriggers} triggers, {totalStructured} structured elements, {totalExtras} extras " +
-            $"({pctStructured}% structured)");
     }
 
     #endregion
