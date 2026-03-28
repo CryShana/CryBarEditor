@@ -162,22 +162,17 @@ public partial class MainWindow
         var manifestEntry = manifestEntries[0];
         if (manifestEntry.Source == FileIndexSource.BarEntry && manifestEntry.BarFilePath != null)
         {
-            try
-            {
-                using var stream = File.OpenRead(manifestEntry.BarFilePath);
-                var bar = new BarFile(stream);
-                if (!bar.Load(out _) || bar.Entries == null) return result;
+            var cached = GetOrLoadBar(manifestEntry.BarFilePath);
+            if (cached?.Bar.Entries == null) return result;
 
-                foreach (var entry in bar.Entries)
+            foreach (var entry in cached.Bar.Entries)
+            {
+                if (entry.Name.StartsWith("soundsets_", StringComparison.OrdinalIgnoreCase) &&
+                    entry.Name.Contains(".soundset", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (entry.Name.StartsWith("soundsets_", StringComparison.OrdinalIgnoreCase) &&
-                        entry.Name.Contains(".soundset", StringComparison.OrdinalIgnoreCase))
-                    {
-                        result.Add(entry.Name);
-                    }
+                    result.Add(entry.Name);
                 }
             }
-            catch { /* skip */ }
         }
 
         return result;

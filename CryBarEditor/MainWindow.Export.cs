@@ -223,10 +223,10 @@ public partial class MainWindow
         {
             var found = await FindCompanionInSiblingBars(
                 _barStream.Name, dataFileName,
-                async (entry, stream) =>
+                async (entry, cachedBar) =>
                 {
-                    using var data = await entry.ReadDataRawPooledAsync(stream);
-                    return BarCompression.EnsureDecompressedPooled(data, out _);
+                    using var data = await cachedBar.ReadEntryRawPooledAsync(entry);
+                    return data != null ? BarCompression.EnsureDecompressedPooled(data, out _) : null;
                 },
                 preferredRelativeDir
             );

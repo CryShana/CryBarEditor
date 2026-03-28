@@ -10,13 +10,15 @@ namespace CryBarEditor.Classes;
 public class LruCache<TValue>
 {
     readonly int _maxItems;
+    readonly Action<TValue>? _onEvict;
     readonly Dictionary<string, LinkedListNode<(string Key, TValue Value)>> _map;
     readonly LinkedList<(string Key, TValue Value)> _list = new();
     readonly Lock _lock = new();
 
-    public LruCache(int maxItems)
+    public LruCache(int maxItems, Action<TValue>? onEvict = null)
     {
         _maxItems = maxItems;
+        _onEvict = onEvict;
         _map = new Dictionary<string, LinkedListNode<(string Key, TValue Value)>>(
             maxItems, StringComparer.OrdinalIgnoreCase);
     }
@@ -45,6 +47,7 @@ public class LruCache<TValue>
             {
                 _list.Remove(existing);
                 _map.Remove(key);
+                _onEvict?.Invoke(existing.Value.Value);
             }
 
             var node = _list.AddFirst((key, value));
@@ -55,6 +58,7 @@ public class LruCache<TValue>
                 var last = _list.Last!;
                 _map.Remove(last.Value.Key);
                 _list.RemoveLast();
+                _onEvict?.Invoke(last.Value.Value);
             }
         }
     }
@@ -67,6 +71,7 @@ public class LruCache<TValue>
             {
                 _list.Remove(node);
                 _map.Remove(key);
+                _onEvict?.Invoke(node.Value.Value);
                 return true;
             }
             return false;
@@ -77,6 +82,11 @@ public class LruCache<TValue>
     {
         lock (_lock)
         {
+            if (_onEvict != null)
+            {
+                foreach (var node in _list)
+                    _onEvict(node.Value);
+            }
             _map.Clear();
             _list.Clear();
         }

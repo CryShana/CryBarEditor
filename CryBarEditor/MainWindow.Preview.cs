@@ -292,9 +292,10 @@ public partial class MainWindow
                     {
                         companionTmm = await FindCompanionInSiblingBars<TmmFile>(
                             _barStream.Name, tmmBaseName,
-                            async (entry, stream) =>
+                            async (entry, cachedBar) =>
                             {
-                                using var rawData = await entry.ReadDataRawPooledAsync(stream);
+                                using var rawData = await cachedBar.ReadEntryRawPooledAsync(entry);
+                                if (rawData == null) return null;
                                 using var data = BarCompression.EnsureDecompressedPooled(rawData, out _);
                                 var tmm = new TmmFile(data.Memory);
                                 return tmm.Parsed ? tmm : null;

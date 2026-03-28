@@ -298,6 +298,7 @@ public partial class MainWindow
     {
         if (_loadedRootFiles == null || !Directory.Exists(_rootDirectory)) return;
 
+        _barFileCache.Clear();
         var index = new FileIndex();
         var rootRelevantPath = GetRootRelevantPath();
 
@@ -333,6 +334,33 @@ public partial class MainWindow
         _cachedStringTableContent = null;
     }
 
+    CachedBarFile? GetOrLoadBar(string barFilePath)
+    {
+        if (_barFileCache.TryGet(barFilePath, out var cached))
+            return cached;
+
+        FileStream? stream = null;
+        try
+        {
+            stream = File.OpenRead(barFilePath);
+            var bar = new BarFile(stream);
+            if (!bar.Load(out _))
+            {
+                stream.Dispose();
+                return null;
+            }
+
+            cached = new CachedBarFile(bar, stream);
+            _barFileCache.Add(barFilePath, cached);
+            return cached;
+        }
+        catch
+        {
+            stream?.Dispose();
+            return null;
+        }
+    }
+
     internal async ValueTask<PooledBuffer?> ReadFromIndexEntryPooledAsync(FileIndexEntry entry)
     {
         if (entry.Source == FileIndexSource.RootFile)
@@ -344,26 +372,25 @@ public partial class MainWindow
                 relPath = relPath[rootRelevantPath.Length..];
 
             var diskPath = Path.Combine(_rootDirectory, relPath);
-            if (!File.Exists(diskPath)) 
+            if (!File.Exists(diskPath))
                 return null;
 
             return await PooledBuffer.FromFile(diskPath);
         }
 
-        if (entry.BarFilePath == null || entry.EntryRelativePath == null) 
+        if (entry.BarFilePath == null || entry.EntryRelativePath == null)
             return null;
 
         try
         {
-            using var stream = File.OpenRead(entry.BarFilePath);
-            var bar = new BarFile(stream);
-            if (!bar.Load(out _)) return null;
+            var cached = GetOrLoadBar(entry.BarFilePath);
+            if (cached == null) return null;
 
-            var barEntry = bar.Entries?.FirstOrDefault(e =>
-                e.RelativePath.Equals(entry.EntryRelativePath, StringComparison.OrdinalIgnoreCase));
+            var barEntry = cached.FindEntry(entry.EntryRelativePath);
             if (barEntry == null) return null;
 
-            using var dataRaw = await barEntry.ReadDataRawPooledAsync(stream);
+            using var dataRaw = await cached.ReadEntryRawPooledAsync(barEntry);
+            if (dataRaw == null) return null;
             return BarCompression.EnsureDecompressedPooled(dataRaw, out _);
         }
         catch
@@ -444,6 +471,7 @@ public partial class MainWindow
         }
 
         _docCache.Clear();
+        _barFileCache.Remove(bar_file);
         _barStream?.Dispose();
         var stream = File.OpenRead(bar_file);
 
@@ -551,8 +579,8 @@ public partial class MainWindow
     /// Skips the current BAR file. Returns the result of the factory function, or default if not found.
     /// When preferredRelativeDir is provided and multiple matches exist, picks the best directory match.
     /// </summary>
-    static async ValueTask<T?> FindCompanionInSiblingBars<T>(string currentBarPath, string entryName,
-        Func<BarFileEntry, FileStream, ValueTask<T?>> factory,
+    async ValueTask<T?> FindCompanionInSiblingBars<T>(string currentBarPath, string entryName,
+        Func<BarFileEntry, CachedBarFile, ValueTask<T?>> factory,
         string? preferredRelativeDir = null)
     {
         var barDir = Path.GetDirectoryName(currentBarPath);
@@ -568,79 +596,51 @@ public partial class MainWindow
                     if (siblingBarPath.Equals(currentBarPath, StringComparison.OrdinalIgnoreCase))
                         continue;
 
-                    try
-                    {
-                        using var sibStream = File.OpenRead(siblingBarPath);
-                        var sibBar = new BarFile(sibStream);
-                        if (!sibBar.Load(out _)) continue;
+                    var cached = GetOrLoadBar(siblingBarPath);
+                    if (cached?.Bar.Entries == null) continue;
 
-                        var entry = sibBar.Entries?.FirstOrDefault(e =>
-                            e.Name.Equals(entryName, StringComparison.OrdinalIgnoreCase));
-                        if (entry != null)
+                    foreach (var e in cached.Bar.Entries)
+                    {
+                        if (e.Name.Equals(entryName, StringComparison.OrdinalIgnoreCase))
                         {
-                            var result = await factory(entry, sibStream);
+                            var result = await factory(e, cached);
                             if (result != null) return result;
                         }
                     }
-                    catch { /* skip unreadable BAR files */ }
                 }
             }
             else
             {
                 // Collect all matches across sibling BARs for disambiguation
-                var matches = new List<(BarFileEntry Entry, string BarPath)>();
+                var matches = new List<(BarFileEntry Entry, CachedBarFile Cached)>();
 
                 foreach (var siblingBarPath in Directory.GetFiles(barDir, "*.bar"))
                 {
                     if (siblingBarPath.Equals(currentBarPath, StringComparison.OrdinalIgnoreCase))
                         continue;
 
-                    try
-                    {
-                        using var sibStream = File.OpenRead(siblingBarPath);
-                        var sibBar = new BarFile(sibStream);
-                        if (!sibBar.Load(out _)) continue;
+                    var cached = GetOrLoadBar(siblingBarPath);
+                    if (cached?.Bar.Entries == null) continue;
 
-                        if (sibBar.Entries == null) continue;
-                        foreach (var e in sibBar.Entries)
-                        {
-                            if (e.Name.Equals(entryName, StringComparison.OrdinalIgnoreCase))
-                                matches.Add((e, siblingBarPath));
-                        }
+                    foreach (var e in cached.Bar.Entries)
+                    {
+                        if (e.Name.Equals(entryName, StringComparison.OrdinalIgnoreCase))
+                            matches.Add((e, cached));
                     }
-                    catch { /* skip unreadable BAR files */ }
                 }
 
                 if (matches.Count == 0) return default;
 
                 if (matches.Count == 1)
-                {
-                    using var sibStream = File.OpenRead(matches[0].BarPath);
-                    var sibBar = new BarFile(sibStream);
-                    if (!sibBar.Load(out _)) return default;
-
-                    var entry = sibBar.Entries?.FirstOrDefault(e =>
-                        e.Name.Equals(entryName, StringComparison.OrdinalIgnoreCase));
-                    if (entry != null)
-                        return await factory(entry, sibStream);
-
-                    return default;
-                }
+                    return await factory(matches[0].Entry, matches[0].Cached);
 
                 // Multiple matches: pick best by directory suffix
-                var bestEntry = BestMatchByDirectorySuffix(
+                var bestMatch = BestMatchByDirectorySuffix(
                     matches.Select(m => m.Entry), preferredRelativeDir);
-                if (bestEntry == null) return default;
+                if (bestMatch == null) return default;
 
-                var bestBarPath = matches.First(m => m.Entry == bestEntry).BarPath;
-                using var bestStream = File.OpenRead(bestBarPath);
-                var bestBar = new BarFile(bestStream);
-                if (!bestBar.Load(out _)) return default;
-
-                var reloadedEntry = bestBar.Entries?.FirstOrDefault(e =>
-                    e.RelativePath.Equals(bestEntry.RelativePath, StringComparison.OrdinalIgnoreCase));
-                if (reloadedEntry != null)
-                    return await factory(reloadedEntry, bestStream);
+                var best = matches.First(m => m.Entry == bestMatch);
+                return await factory(best.Entry, best.Cached);
             }
         }
         catch { /* ignore directory enumeration errors */ }

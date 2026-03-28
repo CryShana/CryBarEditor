@@ -121,6 +121,9 @@ public partial class MainWindow : SimpleWindow
     int _tmmSelectedTabIndex = 0;
     CancellationTokenSource? _meshConversionCts;
 
+    // BAR file metadata cache (avoids re-opening and re-parsing BAR headers)
+    readonly LruCache<CachedBarFile> _barFileCache = new(64, onEvict: v => v.Dispose());
+
     // Text document cache + async load cancellation
     readonly LruCache<TextDocument> _docCache = new(maxItems: 4);
     CancellationTokenSource? _docLoadCts;
@@ -832,6 +835,7 @@ public partial class MainWindow : SimpleWindow
         _glPreview = null;
         _meshCache.Clear();
         _docCache.Clear();
+        _barFileCache.Clear();
         base.OnClosing(e);
     }
 }
