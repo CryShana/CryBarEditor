@@ -674,10 +674,9 @@ public class TmmFile
         // VX tag (0x56, 0x58) + length
         if (offset + 6 > data.Length) return false;
         offset += 2; // skip VX tag
-        if (!TryReadUInt32(data, ref offset, out var vxLength)) return false;
-        if (vxLength > data.Length) return false;
-        var vxDataEnd = offset + (int)vxLength;
-        if (vxDataEnd > data.Length) return false;
+        if (!TryReadInt32(data, ref offset, out var vxLength)) return false;
+        if (vxLength < 0 || offset + vxLength > data.Length) return false;
+        var vxDataEnd = offset + vxLength;
 
         if (!TryReadBool(data, ref offset, out var areVoxelsDefined)) return false;
         offset = vxDataEnd; // advance past VX data

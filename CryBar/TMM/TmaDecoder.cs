@@ -178,7 +178,7 @@ public static class TmaDecoder
         // Index: 0=X, 1=Y, 2=Z, 3=W is reconstructed
         int idx = (int)(packed >> 30) & 3;
 
-        float[] q = new float[4];
+        float q0 = 0, q1 = 0, q2 = 0, q3 = 0;
         uint bits = packed;
         for (int comp = 3; comp >= 0; comp--)
         {
@@ -187,12 +187,12 @@ public static class TmaDecoder
             bool negative = ((bits >> 9) & 1) != 0;
             float val = (magnitude / Quat32MaxMagnitude) * InvSqrt2;
             if (negative) val = -val;
-            q[comp] = val;
+            switch (comp) { case 0: q0 = val; break; case 1: q1 = val; break; case 2: q2 = val; break; default: q3 = val; break; }
             bits >>= 10;
         }
-        q[idx] = MathF.Sqrt(MathF.Max(0, 1.0f - q[0] * q[0] - q[1] * q[1] - q[2] * q[2] - q[3] * q[3]));
+        switch (idx) { case 0: q0 = ReconstructW(q0, q1, q2, q3); break; case 1: q1 = ReconstructW(q0, q1, q2, q3); break; case 2: q2 = ReconstructW(q0, q1, q2, q3); break; default: q3 = ReconstructW(q0, q1, q2, q3); break; }
 
-        return new Quaternion(q[0], q[1], q[2], q[3]);
+        return new Quaternion(q0, q1, q2, q3);
     }
 
     static Quaternion DecodeSmallestThree64(ulong packed)
@@ -204,7 +204,7 @@ public static class TmaDecoder
         int idx = (int)(packed >> 60) & 0xF;
         if (idx > 3) idx = 3; // safety clamp
 
-        float[] q = new float[4];
+        float q0 = 0, q1 = 0, q2 = 0, q3 = 0;
         ulong bits = packed;
         for (int comp = 3; comp >= 0; comp--)
         {
@@ -213,11 +213,14 @@ public static class TmaDecoder
             bool negative = ((bits >> 19) & 1) != 0;
             float val = (magnitude / Quat64MaxMagnitude) * InvSqrt2;
             if (negative) val = -val;
-            q[comp] = val;
+            switch (comp) { case 0: q0 = val; break; case 1: q1 = val; break; case 2: q2 = val; break; default: q3 = val; break; }
             bits >>= 20;
         }
-        q[idx] = MathF.Sqrt(MathF.Max(0, 1.0f - q[0] * q[0] - q[1] * q[1] - q[2] * q[2] - q[3] * q[3]));
+        switch (idx) { case 0: q0 = ReconstructW(q0, q1, q2, q3); break; case 1: q1 = ReconstructW(q0, q1, q2, q3); break; case 2: q2 = ReconstructW(q0, q1, q2, q3); break; default: q3 = ReconstructW(q0, q1, q2, q3); break; }
 
-        return new Quaternion(q[0], q[1], q[2], q[3]);
+        return new Quaternion(q0, q1, q2, q3);
     }
+
+    static float ReconstructW(float q0, float q1, float q2, float q3)
+        => MathF.Sqrt(MathF.Max(0, 1.0f - q0 * q0 - q1 * q1 - q2 * q2 - q3 * q3));
 }

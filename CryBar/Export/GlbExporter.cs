@@ -37,8 +37,15 @@ public static class GlbExporter
 
     /// <summary>
     /// Column-major 4x4 matrix indices that get negated for LH->RH Z-flip.
+    /// Bool lookup is O(1) vs Array.IndexOf's O(N) scan per element.
     /// </summary>
-    static readonly int[] ZNegateIndices = [2, 6, 8, 9, 14];
+    static readonly bool[] ZNegateMask = CreateZNegateMask();
+    static bool[] CreateZNegateMask()
+    {
+        var mask = new bool[16];
+        foreach (var i in new[] { 2, 6, 8, 9, 14 }) mask[i] = true;
+        return mask;
+    }
 
     /// <summary>
     /// Tracks byte offsets and lengths for each section of the binary buffer.
@@ -266,8 +273,7 @@ public static class GlbExporter
         int binStart = off;
 
         WritePositions(glb, binStart + positionsOffset, vertices);
-        WriteNormals(glb, binStart + normalsOffset, vertices);
-        WriteTangents(glb, binStart + tangentsOffset, vertices);
+        WriteNormalsAndTangents(glb, binStart + normalsOffset, binStart + tangentsOffset, vertices);
         WriteTexCoords(glb, binStart + texcoordsOffset, vertices);
         WriteIndices(glb, binStart + indicesOffset, indices);
 
@@ -333,37 +339,32 @@ public static class GlbExporter
         }
     }
 
-    static void WriteNormals(byte[] buf, int offset, TmmVertex[] vertices)
-    {
-        for (int i = 0; i < vertices.Length; i++)
-        {
-            var v = vertices[i];
-            var (nx, ny, nz) = TbnDecoder.DecodeNormal(v.TbnX, v.TbnY, v.TbnZ);
-            // Negate Z for RH
-            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), nx); offset += 4;
-            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), ny); offset += 4;
-            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), -nz); offset += 4;
-        }
-    }
-
-    static void WriteTangents(byte[] buf, int offset, TmmVertex[] vertices)
+    /// <summary>
+    /// Decodes TBN quaternion once per vertex and writes both normal (Vec3) and tangent (Vec4) data.
+    /// </summary>
+    static void WriteNormalsAndTangents(byte[] buf, int normalOffset, int tangentOffset, TmmVertex[] vertices)
     {
         for (int i = 0; i < vertices.Length; i++)
         {
             var v = vertices[i];
             var (qx, qy, qz, qw, handedness) = TbnDecoder.QuatFromPacked(v.TbnX, v.TbnY, v.TbnZ);
-            var (tangent, _, _) = TbnDecoder.QuatToTbn(qx, qy, qz, qw, handedness);
+            var (tangent, _, normal) = TbnDecoder.QuatToTbn(qx, qy, qz, qw, handedness);
 
-            // Negate Z of tangent XYZ for RH
-            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), tangent.x); offset += 4;
-            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), tangent.y); offset += 4;
-            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), -tangent.z); offset += 4;
+            // Normals: negate Z for RH
+            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(normalOffset), normal.x); normalOffset += 4;
+            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(normalOffset), normal.y); normalOffset += 4;
+            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(normalOffset), -normal.z); normalOffset += 4;
+
+            // Tangents: negate Z for RH
+            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(tangentOffset), tangent.x); tangentOffset += 4;
+            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(tangentOffset), tangent.y); tangentOffset += 4;
+            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(tangentOffset), -tangent.z); tangentOffset += 4;
 
             // Z-negate (LH->RH) flips the TBN determinant, so tangent.w is inverted:
             //   hand=0 (det=+1 in game) -> det=-1 in glTF -> w = -1
             //   hand=1 (det=-1 in game) -> det=+1 in glTF -> w = +1
             float w = handedness == 0 ? -1.0f : 1.0f;
-            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), w); offset += 4;
+            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(tangentOffset), w); tangentOffset += 4;
         }
     }
 
@@ -452,8 +453,7 @@ public static class GlbExporter
             for (int j = 0; j < 16; j++)
             {
                 float val = ibm[j];
-                if (Array.IndexOf(ZNegateIndices, j) >= 0)
-                    val = -val;
+                if (ZNegateMask[j]) val = -val;
                 BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), val); offset += 4;
             }
         }
@@ -1151,8 +1151,7 @@ public static class GlbExporter
         for (int j = 0; j < 16; j++)
         {
             float val = matrix[j];
-            if (Array.IndexOf(ZNegateIndices, j) >= 0)
-                val = -val;
+            if (ZNegateMask[j]) val = -val;
             w.WriteNumberValue(val);
         }
         w.WriteEndArray();
