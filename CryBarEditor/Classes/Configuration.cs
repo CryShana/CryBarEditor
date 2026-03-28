@@ -18,6 +18,7 @@ public class Configuration
     public bool? ExportDoDecompress { get; set; }
     public bool? ExportDoExportMaterials { get; set; }
     public bool? ExportTmmToGltf { get; set; }
+    public bool? ExportAnimations { get; set; }
     public string? EditorCommand { get; set; }
     public bool? ExportOpenInEditor { get; set; }
     public string? StringTableLanguage { get; set; }

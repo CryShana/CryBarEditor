@@ -174,22 +174,14 @@ public static class ConversionHelper
     }
 
     /// <summary>
-    /// Converts TMM+TMM.DATA pair to GLB (glTF binary) format. Geometry only.
-    /// </summary>
-    public static byte[]? ConvertTmmToGlbBytes(ReadOnlyMemory<byte> tmmData, ReadOnlyMemory<byte> tmmDataData)
-    {
-        if (!TryParseTmmPair(tmmData, tmmDataData, out var tmm, out var dataFile)) return null;
-        return GlbExporter.ExportGlb(tmm, dataFile);
-    }
-
-    /// <summary>
-    /// Converts TMM+TMM.DATA pair to GLB (glTF binary) format with materials.
+    /// Converts TMM+TMM.DATA pair to GLB (glTF binary) format with optional materials and animations.
     /// </summary>
     public static byte[]? ConvertTmmToGlbBytes(ReadOnlyMemory<byte> tmmData, ReadOnlyMemory<byte> tmmDataData,
-        IReadOnlyList<GlbExporter.GlbMaterial>? materials)
+        IReadOnlyList<GlbExporter.GlbMaterial>? materials = null,
+        IReadOnlyList<GlbExporter.GlbAnimation>? animations = null)
     {
         if (!TryParseTmmPair(tmmData, tmmDataData, out var tmm, out var dataFile)) return null;
-        return GlbExporter.ExportGlb(tmm, dataFile, materials);
+        return GlbExporter.ExportGlb(tmm, dataFile, materials, animations);
     }
 
     /// <summary>

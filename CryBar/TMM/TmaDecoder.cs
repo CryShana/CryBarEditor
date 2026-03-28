@@ -105,7 +105,7 @@ public static class TmaDecoder
         return result;
     }
 
-    /// <summary>Single quaternion from 16 bytes, repeated for all keyframes.</summary>
+    /// <summary>Single quaternion from 16 bytes (XYZW), repeated for all keyframes.</summary>
     static Quaternion[] DecodeConstantQuat(byte[] data, int keyframeCount)
     {
         if (data.Length < 16) return [Quaternion.Identity];
@@ -120,7 +120,7 @@ public static class TmaDecoder
         return result;
     }
 
-    /// <summary>N keyframes, 16 bytes each (x,y,z,w floats).</summary>
+    /// <summary>N keyframes, 16 bytes each (XYZW floats).</summary>
     static Quaternion[] DecodeRawQuat(byte[] data, int keyframeCount)
     {
         int count = Math.Max(1, keyframeCount);
@@ -153,7 +153,7 @@ public static class TmaDecoder
         return result;
     }
 
-    /// <summary>Quat64 "smallest three": 2-bit index + 21+21+20 signed components (8 bytes/kf).</summary>
+    /// <summary>Quat64 "smallest three": 2-bit index + 22+20+20 signed components (8 bytes/kf).</summary>
     static Quaternion[] DecodeQuat64(byte[] data, int keyframeCount)
     {
         int count = Math.Max(1, keyframeCount);
@@ -186,15 +186,14 @@ public static class TmaDecoder
 
     static Quaternion DecodeSmallestThree64(ulong packed)
     {
-        // top 2 bits = index, lower 62 bits = 21+21+20 components
+        // top 2 bits = index, then 22+20+20 bit components
         int idx = (int)(packed >> 62) & 3;
-        int rawA = (int)((packed >> 41) & 0x1FFFFF);
-        int rawB = (int)((packed >> 20) & 0x1FFFFF);
-        int rawC = (int)(packed & 0xFFFFF);
+        int rawA = (int)((packed >> 40) & 0x3FFFFF);  // 22 bits
+        int rawB = (int)((packed >> 20) & 0xFFFFF);    // 20 bits
+        int rawC = (int)(packed & 0xFFFFF);             // 20 bits
 
-        // signed two's complement, scaled to [-1/sqrt(3), +1/sqrt(3)]
-        float fa = SignedComponent(rawA, 21) * InvSqrt3;
-        float fb = SignedComponent(rawB, 21) * InvSqrt3;
+        float fa = SignedComponent(rawA, 22) * InvSqrt3;
+        float fb = SignedComponent(rawB, 20) * InvSqrt3;
         float fc = SignedComponent(rawC, 20) * InvSqrt3;
         float fw = MathF.Sqrt(MathF.Max(0, 1.0f - fa * fa - fb * fb - fc * fc));
 
@@ -209,15 +208,19 @@ public static class TmaDecoder
         return signed_ / (float)half;
     }
 
-    /// <summary>Reassembles quaternion from "smallest three" (x=0, y=1, z=2, w=3).</summary>
+    /// <summary>
+    /// Reassembles quaternion from "smallest three" with WXYZ index convention.
+    /// Index 0=W is largest (remaining: X,Y,Z), 1=X, 2=Y, 3=Z.
+    /// The three stored components (a,b,c) are the remaining ones in WXYZ order.
+    /// </summary>
     static Quaternion AssembleQuaternion(int largestIndex, float a, float b, float c, float reconstructed)
     {
         return largestIndex switch
         {
-            0 => new Quaternion(reconstructed, a, b, c),
-            1 => new Quaternion(a, reconstructed, b, c),
-            2 => new Quaternion(a, b, reconstructed, c),
-            3 => new Quaternion(a, b, c, reconstructed),
+            0 => new Quaternion(a, b, c, reconstructed),       // W largest → a=X, b=Y, c=Z
+            1 => new Quaternion(reconstructed, b, c, a),       // X largest → a=W, b=Y, c=Z
+            2 => new Quaternion(b, reconstructed, c, a),       // Y largest → a=W, b=X, c=Z
+            3 => new Quaternion(b, c, reconstructed, a),       // Z largest → a=W, b=X, c=Y
             _ => Quaternion.Identity,
         };
     }

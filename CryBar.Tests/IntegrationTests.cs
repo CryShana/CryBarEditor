@@ -5,7 +5,6 @@ using CryBar.Bar;
 using CryBar.Export;
 using CryBar.Scenario;
 using CryBar.TMM;
-
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
@@ -600,7 +599,7 @@ public class IntegrationTests
             if (!tmm.Parsed)
                 failures.Add(entry.RelativePath);
         }
-
+        
         Assert.True(failures.Count == 0,
             $"{failures.Count}/{tmmEntries.Count} TMM files failed to parse:\n{string.Join("\n", failures.Take(20))}");
     }
@@ -660,14 +659,14 @@ public class IntegrationTests
         Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
 
         // Load the companion .tmm first
-        var (bar, tmmEntry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "petrobolos.tmm");
+        var (_, tmmEntry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "petrobolos.tmm");
         var tmmRaw = BarCompression.EnsureDecompressed(tmmEntry.ReadDataRaw(stream), out _);
         var tmm = new TmmFile(tmmRaw);
         Assert.True(tmm.Parsed, "Companion TMM should parse");
         stream.Dispose();
 
         // Load the .tmm.data
-        var (bar2, dataEntry, stream2) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheModelDataGreek.bar", "petrobolos.tmm.data");
+        var (_, dataEntry, stream2) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheModelDataGreek.bar", "petrobolos.tmm.data");
         using var s = stream2;
 
         var dataRaw = BarCompression.EnsureDecompressed(dataEntry.ReadDataRaw(stream2), out _);
@@ -906,6 +905,151 @@ public class IntegrationTests
         Assert.Contains($"Version: {tma.Version}", summary);
     }
 
+    /// <summary>
+    /// Verifies TMA animation data is in bone-local space (not matching TMM ParentSpaceMatrix),
+    /// confirming that animation TRS must be composed with the bind pose for glTF export.
+    /// </summary>
+    [SkippableFact]
+    public void TmaVsTmm_AnimationIsInBoneLocalSpace()
+    {
+        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+
+        var (_, tmmEntry, tmmStream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "hoplite_gold.tmm");
+        var tmmRaw = BarCompression.EnsureDecompressed(tmmEntry.ReadDataRaw(tmmStream), out _);
+        var tmm = new TmmFile(tmmRaw);
+        tmmStream.Dispose();
+        Assert.True(tmm.Parsed);
+
+        var barPath = Path.Combine(GamePath, @"modelcache\ArtModelCacheAnimationData.bar");
+        Skip.IfNot(File.Exists(barPath), "Animation BAR not found");
+        using var tmaStream = File.OpenRead(barPath);
+        var tmaBar = new BarFile(tmaStream);
+        tmaBar.Load(out _);
+        var tmaEntry = tmaBar.Entries!.FirstOrDefault(e =>
+            e.Name.Contains("hoplite", StringComparison.OrdinalIgnoreCase) &&
+            e.Name.EndsWith(".tma", StringComparison.OrdinalIgnoreCase) &&
+            !e.Name.Contains("igc", StringComparison.OrdinalIgnoreCase));
+        Skip.If(tmaEntry == null, "No hoplite TMA found");
+
+        var tmaRaw = BarCompression.EnsureDecompressed(tmaEntry!.ReadDataRaw(tmaStream), out _);
+        var tma = new TmaFile(tmaRaw);
+        Assert.True(tma.Parsed);
+
+        var tracks = TmaDecoder.DecodeAllTracks(tma);
+        Assert.NotNull(tracks);
+
+        var bones = tmm.Bones!;
+        var boneMap = new Dictionary<string, int>(bones.Length);
+        for (int i = 0; i < bones.Length; i++)
+            boneMap[bones[i].Name] = i;
+
+        // All 52 tracks should match TMM bone names
+        int matched = tracks!.Count(t => boneMap.ContainsKey(t.Name));
+        Assert.Equal(tracks.Length, matched);
+
+        // Hips bone: TMM has it at Y≈1.186, but TMA frame0 T is near zero
+        // This confirms TMA is in bone-local space (delta), not absolute parent space
+        var hipsTrack = tracks.First(t => t.Name == "mixamorig:Hips");
+        int hipsIdx = boneMap["mixamorig:Hips"];
+        float tmmHipsY = bones[hipsIdx].ParentSpaceMatrix[13]; // column-major Y translation
+        Assert.True(tmmHipsY > 1.0f, "TMM hips should be positioned well above root");
+        Assert.True(MathF.Abs(hipsTrack.Translations[0].Y) < 0.5f,
+            "TMA hips translation should be a small delta, not the full bind-pose offset");
+    }
+
+    /// <summary>
+    /// Validates TMA decoded rotation continuity — checks for frame-to-frame jumps
+    /// that would indicate a decoding bug (wrong quaternion component layout).
+    /// </summary>
+    [SkippableFact]
+    public void TmaDecoder_RotationContinuity()
+    {
+        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+
+        var barPath = Path.Combine(GamePath, @"modelcache\ArtModelCacheAnimationData.bar");
+        Skip.IfNot(File.Exists(barPath), "Animation BAR not found");
+        using var tmaStream = File.OpenRead(barPath);
+        var tmaBar = new BarFile(tmaStream);
+        tmaBar.Load(out _);
+
+        // Find a hoplite animation with many frames
+        var tmaEntry = tmaBar.Entries!.FirstOrDefault(e =>
+            e.Name.Contains("hoplite", StringComparison.OrdinalIgnoreCase) &&
+            e.Name.Contains("idle", StringComparison.OrdinalIgnoreCase) &&
+            e.Name.EndsWith(".tma", StringComparison.OrdinalIgnoreCase));
+        Skip.If(tmaEntry == null, "No hoplite idle TMA found");
+
+        var tmaRaw = BarCompression.EnsureDecompressed(tmaEntry!.ReadDataRaw(tmaStream), out _);
+        var tma = new TmaFile(tmaRaw);
+        Assert.True(tma.Parsed);
+
+        var tracks = TmaDecoder.DecodeAllTracks(tma);
+        Assert.NotNull(tracks);
+
+        // Dump raw Quat64 packed values for the first bone with Quat64 encoding
+        var sb = new System.Text.StringBuilder();
+        var q64Track = tma.Tracks!.FirstOrDefault(t => t.RotationEncoding == TmaEncoding.Quat64);
+        if (q64Track != null)
+        {
+            sb.AppendLine($"Raw Quat64 dump for: {q64Track.Name} ({q64Track.KeyframeCount} kf, {q64Track.RotationData.Length} bytes)");
+            int numFrames = Math.Min(6, q64Track.KeyframeCount);
+            for (int f = 0; f < numFrames; f++)
+            {
+                int off = f * 8;
+                if (off + 8 > q64Track.RotationData.Length) break;
+                ulong packed = System.Buffers.Binary.BinaryPrimitives.ReadUInt64LittleEndian(q64Track.RotationData.AsSpan(off));
+
+                // Current layout: index at top 2 bits
+                int idxTop = (int)(packed >> 62) & 3;
+                int topA = (int)((packed >> 41) & 0x1FFFFF);
+                int topB = (int)((packed >> 20) & 0x1FFFFF);
+                int topC = (int)(packed & 0xFFFFF);
+
+                // Alternative layout: index at bottom 2 bits
+                int idxBot = (int)(packed & 3);
+                int botA = (int)((packed >> 43) & 0x1FFFFF);
+                int botB = (int)((packed >> 22) & 0x1FFFFF);
+                int botC = (int)((packed >> 2) & 0xFFFFF);
+
+                sb.AppendLine($"  Frame {f}: 0x{packed:X16}");
+                // Layout 21+21+20 (current)
+                sb.AppendLine($"    21-21-20: idx={idxTop} A={topA} B={topB} C={topC}");
+
+                // Layout 22+20+20 (hypothesis: first component gets extra 2 bits)
+                int fixA = (int)((packed >> 40) & 0x3FFFFF);  // 22 bits
+                int fixB = (int)((packed >> 20) & 0xFFFFF);   // 20 bits
+                int fixC = (int)(packed & 0xFFFFF);            // 20 bits
+                int fixIdx = (int)(packed >> 62) & 3;
+                sb.AppendLine($"    22-20-20: idx={fixIdx} A={fixA} B={fixB} C={fixC}");
+            }
+        }
+
+        // Now test rotation continuity with the fixed decoder
+        int totalJumps = 0;
+        var jumpDetails = new System.Text.StringBuilder();
+        foreach (var track in tracks!)
+        {
+            var rots = track.Rotations;
+            if (rots.Length < 2) continue;
+            var src = tma.Tracks!.First(t => t.Name == track.Name);
+            for (int f = 1; f < rots.Length; f++)
+            {
+                float absDot = MathF.Abs(System.Numerics.Quaternion.Dot(rots[f - 1], rots[f]));
+                float angleDeg = 2f * MathF.Acos(MathF.Min(1f, absDot)) * (180f / MathF.PI);
+                if (angleDeg > 30f)
+                {
+                    totalJumps++;
+                    if (totalJumps <= 10)
+                        jumpDetails.AppendLine($"  {track.Name} enc={src.RotationEncoding} f{f - 1}→{f}: {angleDeg:F1}°");
+                }
+            }
+        }
+
+        if (totalJumps > 0)
+            Assert.Fail($"Quat64 analysis:\n{sb}\n\nStill {totalJumps} rotation jumps > 30°:\n{jumpDetails}");
+        // If no jumps, test passes!
+    }
+
     [SkippableFact]
     public void TmaFile_SakimoriAttack_FullBodyParse()
     {
@@ -1023,7 +1167,8 @@ public class IntegrationTests
         {
             var raw = BarCompression.EnsureDecompressed(entry.ReadDataRaw(stream), out _);
             var tma = new TmaFile(raw);
-            if (!tma.Parsed || tma.Tracks == null) continue;
+            if (!tma.Parsed || tma.Tracks == null)
+                continue;
 
             var decoded = TmaDecoder.DecodeAllTracks(tma);
             Assert.NotNull(decoded);
@@ -1045,6 +1190,7 @@ public class IntegrationTests
                         ulong rawPacked = 0;
                         if (srcTrack.RotationEncoding == TmaEncoding.Quat64 && qi * 8 + 8 <= srcTrack.RotationData.Length)
                             rawPacked = BitConverter.ToUInt64(srcTrack.RotationData, qi * 8);
+                        
                         failures.Add($"{entry.Name}/{dt.Name} kf{qi}: mag={mag:F6} q=[{q.X:F4},{q.Y:F4},{q.Z:F4},{q.W:F4}] raw=0x{rawPacked:X16}");
                         break;
                     }
@@ -1104,6 +1250,9 @@ public class IntegrationTests
 
         await Parallel.ForEachAsync(mythscnFiles, async (filePath, t) =>
         {
+            if (t.IsCancellationRequested)
+                return;
+
             var original = File.ReadAllBytes(filePath);
             if (!((Span<byte>)original).IsL33t()) return;
 
@@ -1260,6 +1409,9 @@ public class IntegrationTests
 
         await Parallel.ForEachAsync(allFiles, async (filePath, t) =>
         {
+            if (t.IsCancellationRequested)
+                return;
+
             var fileName = Path.GetFileName(filePath);
 
             var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath));
@@ -1295,6 +1447,9 @@ public class IntegrationTests
 
         await Parallel.ForEachAsync(allFiles, async (filePath, t) =>
         {
+            if (t.IsCancellationRequested)
+                return;
+
             var fileName = Path.GetFileName(filePath);
             var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath))!;
             var scenario = new ScenarioFile(decompressed);
@@ -1325,6 +1480,9 @@ public class IntegrationTests
 
         await Parallel.ForEachAsync(allFiles, async (filePath, t) =>
         {
+            if (t.IsCancellationRequested)
+                return;
+
             var fileName = Path.GetFileName(filePath);
             var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath))!;
             var scenario = new ScenarioFile(decompressed);
@@ -1349,6 +1507,9 @@ public class IntegrationTests
 
         await Parallel.ForEachAsync(allFiles, async (filePath, t) =>
         {
+            if (t.IsCancellationRequested)
+                return;
+
             var fileName = Path.GetFileName(filePath);
             var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath))!;
             var scenario = new ScenarioFile(decompressed);
@@ -1519,6 +1680,9 @@ public class IntegrationTests
 
         await Parallel.ForEachAsync(allFiles, async (filePath, t) =>
         {
+            if (t.IsCancellationRequested)
+                return;
+
             var fileName = Path.GetFileName(filePath);
             var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath))!;
             var scenario = new ScenarioFile(decompressed);
@@ -1598,6 +1762,9 @@ public class IntegrationTests
 
         await Parallel.ForEachAsync(allFiles, async (filePath, t) =>
         {
+            if (t.IsCancellationRequested)
+                return;
+
             var decompressed = BarCompression.DecompressL33t(File.ReadAllBytes(filePath))!;
             var scenario = new ScenarioFile(decompressed);
             if (!scenario.Parsed) return;

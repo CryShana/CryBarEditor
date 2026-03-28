@@ -116,6 +116,7 @@ public partial class DependencyGraphWindow : SimpleWindow
     static readonly Color TmmDataColor = FbxImportColor;
     static readonly Color TextureColor = Color.Parse("#ce93d8");
     static readonly Color MaterialColor = Color.Parse("#ffb74d");
+    static readonly Color TmaColor = Color.Parse("#4fc3f7");
     static readonly Color XmlColor = Color.Parse("#d9d9d9");
     static readonly Color GenericColor = Color.Parse("#808080");
 
@@ -1818,8 +1819,9 @@ public partial class DependencyGraphWindow : SimpleWindow
             if (data == null) { btn.Content = "(read failed)"; btn.IsEnabled = true; return; }
 
             var fileIndex = _fileIndex;
+            var animfileIdx = _mainWindow.AnimfileIndex;
             var result = await Task.Run(() => DependencyFinder.FindDependenciesForFileAsync(
-                indexEntry.FullRelativePath, data, fileIndex));
+                indexEntry.FullRelativePath, data, fileIndex, animfileIndex: animfileIdx));
 
             var allRefs = result.GetAllReferences().ToList();
             if (allRefs.Count == 0) { btn.Content = "(empty)"; btn.IsEnabled = true; return; }
@@ -2307,6 +2309,8 @@ public partial class DependencyGraphWindow : SimpleWindow
         if (fileName.EndsWith(".material", StringComparison.OrdinalIgnoreCase) ||
             fileName.EndsWith(".material.xmb", StringComparison.OrdinalIgnoreCase))
             return (MaterialColor, MaterialIconKind.Palette);
+        if (fileName.EndsWith(".tma", StringComparison.OrdinalIgnoreCase))
+            return (TmaColor, MaterialIconKind.MovieOpenOutline);
         if (fileName.EndsWith(".fbximport", StringComparison.OrdinalIgnoreCase))
             return (FbxImportColor, MaterialIconKind.Import);
         if (fileName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ||

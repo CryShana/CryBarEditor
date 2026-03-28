@@ -585,7 +585,7 @@ public static partial class DependencyFinder
     /// <summary>
     /// Builds dependencies for a TMM model file: companion .tmm.data and .material files.
     /// </summary>
-    public static DependencyResult FindDependenciesForTmm(string entryPath, FileIndex? index = null)
+    public static DependencyResult FindDependenciesForTmm(string entryPath, FileIndex? index = null, AnimfileIndex? animfileIndex = null)
     {
         var refs = new List<DependencyReference>();
         var tmmFileName = Path.GetFileName(entryPath);
@@ -621,6 +621,23 @@ public static partial class DependencyFinder
         }
         refs.Add(matRef);
 
+        // Companion animfile via reverse index (animfile XML references this TMM in its <component>)
+        if (animfileIndex != null)
+        {
+            var animfileEntry = animfileIndex.Find(tmmStem);
+            if (animfileEntry != null)
+            {
+                var animRef = new DependencyReference
+                {
+                    RawValue = animfileEntry.FileName,
+                    Type = DependencyRefType.FilePath,
+                    SourceTag = "animfile",
+                };
+                animRef.Resolved.Add(animfileEntry);
+                refs.Add(animRef);
+            }
+        }
+
         return new DependencyResult
         {
             EntryPath = entryPath,
@@ -646,13 +663,14 @@ public static partial class DependencyFinder
         SoundsetIndex? soundsetIndex = null,
         string? stringTableLanguage = null,
         Func<FileIndexEntry, ValueTask<PooledBuffer?>>? readFileAsync = null,
-        string? filterEntityName = null)
+        string? filterEntityName = null,
+        AnimfileIndex? animfileIndex = null)
     {
         var ext = Path.GetExtension(entryPath);
 
         // TMM: companion files only
         if (ext.Equals(".tmm", StringComparison.OrdinalIgnoreCase))
-            return FindDependenciesForTmm(entryPath, index);
+            return FindDependenciesForTmm(entryPath, index, animfileIndex);
 
         // Bank: redirect to associated soundset file
         if (ext.Equals(".bank", StringComparison.OrdinalIgnoreCase))

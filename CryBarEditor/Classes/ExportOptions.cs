@@ -34,6 +34,9 @@ public class ExportOptions
     /// <summary>Use glTF/GLB format instead of OBJ for TMM export</summary>
     public bool TmmToGltf { get; set; }
 
+    /// <summary>Discover and embed TMA animations in GLB export</summary>
+    public bool ExportAnimations { get; set; }
+
     /// <summary>Whether any file in the selection is convertible (XMB/DDT)</summary>
     public bool AnyConvertible { get; set; }
 

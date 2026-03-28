@@ -9,6 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace CryBarEditor;
@@ -329,7 +330,11 @@ public partial class MainWindow
         _fileIndex = index;
         ClearSoundCaches();
         _soundsetIndex = null; // will be rebuilt lazily or on demand
+        _animfileIndex = null;
         _cachedStringTableContent = null;
+
+        // build animfile index in background so it's ready by the time user needs it
+        StartAnimfileIndexBuildInBackground();
     }
 
     internal async ValueTask<PooledBuffer?> ReadFromIndexEntryPooledAsync(FileIndexEntry entry)
