@@ -265,7 +265,7 @@ public static class SearchCommand
 
             try
             {
-                var decompressed = entry.ReadDataDecompressed(stream);
+                var decompressed = entry.ReadDataDecompressedPooled(stream);
                 if (decompressed.Length == 0) continue;
 
                 string? text = null;

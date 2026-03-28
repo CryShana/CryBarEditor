@@ -1819,9 +1819,9 @@ public partial class DependencyGraphWindow : SimpleWindow
             if (data == null) { btn.Content = "(read failed)"; btn.IsEnabled = true; return; }
 
             var fileIndex = _fileIndex;
-            var animfileIdx = _mainWindow.AnimfileIndex;
             var result = await Task.Run(() => DependencyFinder.FindDependenciesForFileAsync(
-                indexEntry.FullRelativePath, data, fileIndex, animfileIndex: animfileIdx));
+                indexEntry.FullRelativePath, data, fileIndex,
+                readFileAsync: _mainWindow.ReadFromIndexEntryPooledAsync));
 
             var allRefs = result.GetAllReferences().ToList();
             if (allRefs.Count == 0) { btn.Content = "(empty)"; btn.IsEnabled = true; return; }

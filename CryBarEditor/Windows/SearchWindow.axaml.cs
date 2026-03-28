@@ -337,8 +337,9 @@ public partial class SearchWindow : SimpleWindow
                             if (!filesOnly)
                             {
                                 if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
-                                var ddata = bar_entry.ReadDataDecompressed(_barFileStream);
-                                await SearchData(ddata, file, bar_entry.RelativePath, channel.Writer, searcher, token).ConfigureAwait(false);
+                                using var ddata = bar_entry.ReadDataDecompressedPooled(_barFileStream);
+                                if (ddata == null) continue;
+                                await SearchData(ddata.Memory, file, bar_entry.RelativePath, channel.Writer, searcher, token).ConfigureAwait(false);
                             }
                         }
                         current_items.TryRemove(filename, out _);
@@ -403,8 +404,9 @@ public partial class SearchWindow : SimpleWindow
                                         if (!filesOnly)
                                         {
                                             if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
-                                            var ddata = bar_entry.ReadDataDecompressed(stream);
-                                            await SearchData(ddata, file, bar_entry.RelativePath, channel.Writer, searcher, token).ConfigureAwait(false);
+                                            using var ddata = bar_entry.ReadDataDecompressedPooled(stream);
+                                            if (ddata == null) continue;
+                                            await SearchData(ddata.Memory, file, bar_entry.RelativePath, channel.Writer, searcher, token).ConfigureAwait(false);
                                         }
                                     }
                                 }

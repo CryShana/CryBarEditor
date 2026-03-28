@@ -19,12 +19,9 @@ public partial class MainWindow
 {
     DependenciesWindow? _dependenciesWindow;
     SoundsetIndex? _soundsetIndex;
-    AnimfileIndex? _animfileIndex;
     string? _cachedStringTableContent;
-    CancellationTokenSource? _animfileIndexCts;
 
     internal SoundsetIndex? SoundsetIndex => _soundsetIndex;
-    internal AnimfileIndex? AnimfileIndex => _animfileIndex;
 
     void MenuItem_ShowDependencies(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
@@ -73,16 +70,14 @@ public partial class MainWindow
             }
 
             await EnsureSoundsetIndexAsync();
-            await EnsureAnimfileIndexAsync();
             var fileIndex = _fileIndex;
             var soundsetIndex = _soundsetIndex;
-            var animfileIdx = _animfileIndex;
             var lang = _stringTableLanguage;
             var filterName = resolution.SoundsetName;
             var result = await Task.Run(() => DependencyFinder.FindDependenciesForFileAsync(
                 resolution.SourceFile, data, fileIndex, soundsetIndex,
                 lang, ReadFromIndexEntryPooledAsync,
-                filterEntityName: filterName, animfileIndex: animfileIdx));
+                filterEntityName: filterName));
             ShowDependenciesForResult(result, displayName: resolution.SoundsetName);
         }
         catch (Exception ex)
@@ -104,14 +99,12 @@ public partial class MainWindow
             using var rawData = await entry.ReadDataRawPooledAsync(_barStream);
 
             await EnsureSoundsetIndexAsync();
-            await EnsureAnimfileIndexAsync();
             var fileIndex = _fileIndex;
             var soundsetIndex = _soundsetIndex;
-            var animfileIdx = _animfileIndex;
             var lang = _stringTableLanguage;
             var result = await Task.Run(() => DependencyFinder.FindDependenciesForFileAsync(
                 entryPath, rawData, fileIndex, soundsetIndex,
-                lang, ReadFromIndexEntryPooledAsync, animfileIndex: animfileIdx));
+                lang, ReadFromIndexEntryPooledAsync));
             window.LoadDependenciesFromResult(result, fileIndex: _fileIndex);
         }
         catch (Exception ex)
@@ -138,14 +131,12 @@ public partial class MainWindow
             using var rawData = await PooledBuffer.FromFile(path);
 
             await EnsureSoundsetIndexAsync();
-            await EnsureAnimfileIndexAsync();
             var fileIndex = _fileIndex;
             var soundsetIndex = _soundsetIndex;
-            var animfileIdx = _animfileIndex;
             var lang = _stringTableLanguage;
             var result = await Task.Run(() => DependencyFinder.FindDependenciesForFileAsync(
                 entryPath, rawData, fileIndex, soundsetIndex,
-                lang, ReadFromIndexEntryPooledAsync, animfileIndex: animfileIdx));
+                lang, ReadFromIndexEntryPooledAsync));
             window.LoadDependenciesFromResult(result, fileIndex: _fileIndex);
         }
         catch (Exception ex)
@@ -244,98 +235,6 @@ public partial class MainWindow
         }
 
         _soundsetIndex = index;
-    }
-
-    Task? _animfileIndexTask;
-
-    internal async Task EnsureAnimfileIndexAsync()
-    {
-        // wait for background build if one is running
-        if (_animfileIndexTask is { IsCompleted: false })
-            await _animfileIndexTask;
-
-        if (_animfileIndex == null && _fileIndex != null)
-            await RebuildAnimfileIndexAsync(CancellationToken.None);
-    }
-
-    /// <summary>
-    /// Starts building AnimfileIndex in the background. Safe to call multiple times;
-    /// cancels any previous in-progress build.
-    /// </summary>
-    void StartAnimfileIndexBuildInBackground()
-    {
-        _animfileIndexCts?.Cancel();
-        _animfileIndexCts = new CancellationTokenSource();
-        var ct = _animfileIndexCts.Token;
-        _animfileIndexTask = Task.Run(async () => await RebuildAnimfileIndexAsync(ct));
-    }
-
-    /// <summary>
-    /// Builds the AnimfileIndex by scanning BAR files for animfile XMLs.
-    /// Parses each to extract the TMModel reference and maps TMM stem -> animfile entry.
-    /// </summary>
-    async Task RebuildAnimfileIndexAsync(CancellationToken ct)
-    {
-        if (_fileIndex == null)
-        {
-            _animfileIndex = null;
-            return;
-        }
-
-        var index = new AnimfileIndex();
-
-        var barPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        CollectBarPathsFromRootDirectory(barPaths);
-
-        foreach (var barPath in barPaths)
-        {
-            if (ct.IsCancellationRequested) return;
-
-            try
-            {
-                using var stream = File.OpenRead(barPath);
-                var bar = new BarFile(stream);
-                if (!bar.Load(out _) || bar.Entries == null) continue;
-
-                foreach (var entry in bar.Entries)
-                {
-                    if (ct.IsCancellationRequested) return;
-                    if (!entry.Name.EndsWith(".xml.XMB", StringComparison.OrdinalIgnoreCase)) continue;
-
-                    try
-                    {
-                        var raw = entry.ReadDataDecompressed(stream);
-                        var xmlText = ConversionHelper.ConvertXmbToXmlText(raw.Span);
-                        if (xmlText == null || !xmlText.Contains("<animfile", StringComparison.OrdinalIgnoreCase))
-                            continue;
-
-                        var modelPaths = AnimationDiscovery.FindAllModelsFromAnimXml(xmlText);
-                        if (modelPaths.Count == 0) continue;
-
-                        var fullRelPath = string.IsNullOrEmpty(bar.RootPath)
-                            ? entry.RelativePath
-                            : Path.Combine(bar.RootPath, entry.RelativePath);
-
-                        var animfileEntry = new FileIndexEntry
-                        {
-                            FullRelativePath = fullRelPath,
-                            FileName = entry.Name,
-                            Source = FileIndexSource.BarEntry,
-                            BarFilePath = barPath,
-                            EntryRelativePath = entry.RelativePath,
-                        };
-
-                        foreach (var modelPath in modelPaths)
-                            index.Add(modelPath, animfileEntry);
-                    }
-                    catch { }
-                }
-            }
-            catch { }
-        }
-
-        if (!ct.IsCancellationRequested)
-            _animfileIndex = index;
     }
 
     /// <summary>

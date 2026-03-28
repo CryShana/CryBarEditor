@@ -278,7 +278,7 @@ public class DependencyFinderTests
     }
 
     [Fact]
-    public void Tmm_MaterialResolvesToMaterialXmb_NotTmmFile()
+    public async Task Tmm_MaterialResolvesToMaterialXmb_NotTmmFile()
     {
         var index = new FileIndex();
         index.Add(MakeEntry(@"intermediate\modelcache\greek\armory_a_age2.tmm"));
@@ -286,7 +286,7 @@ public class DependencyFinderTests
         index.Add(MakeEntry(@"game\art\greek\armory_a_age2.material.XMB"));
         index.Add(MakeEntry(@"game\art\greek\armory_a_age2.fbximport"));
 
-        var result = DependencyFinder.FindDependenciesForTmm(
+        var result = await DependencyFinder.FindDependenciesForTmmAsync(
             @"intermediate\modelcache\greek\armory_a_age2.tmm", index);
 
         Assert.Equal(2, result.Groups[0].References.Count);
@@ -305,44 +305,25 @@ public class DependencyFinderTests
     }
 
     [Fact]
-    public void Tmm_AnimfileResolvesViaAnimfileIndex()
-    {
-        var index = new FileIndex();
-        index.Add(MakeEntry(@"intermediate\modelcache\greek\hoplite.tmm"));
-        index.Add(MakeEntry(@"intermediate\modelcache\greek\hoplite.tmm.data"));
-
-        var animfileIndex = new AnimfileIndex();
-        var animfileEntry = MakeEntry(@"game\art\greek\hoplite.xml.XMB");
-        animfileIndex.Add("hoplite", animfileEntry);
-
-        var result = DependencyFinder.FindDependenciesForTmm(
-            @"intermediate\modelcache\greek\hoplite.tmm", index, animfileIndex);
-
-        var animRef = result.Groups[0].References.First(r => r.SourceTag == "animfile");
-        Assert.Single(animRef.Resolved);
-        Assert.Equal("hoplite.xml.XMB", animRef.Resolved[0].FileName);
-    }
-
-    [Fact]
-    public void Tmm_AnimfileNotShown_WhenNoAnimfileIndex()
+    public async Task Tmm_AnimfileNotShown_WhenNoReadDelegate()
     {
         var index = new FileIndex();
         index.Add(MakeEntry(@"intermediate\modelcache\greek\hoplite.tmm"));
 
-        var result = DependencyFinder.FindDependenciesForTmm(
+        var result = await DependencyFinder.FindDependenciesForTmmAsync(
             @"intermediate\modelcache\greek\hoplite.tmm", index);
 
         Assert.DoesNotContain(result.Groups[0].References, r => r.SourceTag == "animfile");
     }
 
     [Fact]
-    public void Tmm_MaterialResolvesEmpty_WhenNoMaterialFileExists()
+    public async Task Tmm_MaterialResolvesEmpty_WhenNoMaterialFileExists()
     {
         var index = new FileIndex();
         index.Add(MakeEntry(@"intermediate\modelcache\greek\armory_a_age2.tmm"));
         index.Add(MakeEntry(@"game\art\greek\armory_a_age2.fbximport"));
 
-        var result = DependencyFinder.FindDependenciesForTmm(
+        var result = await DependencyFinder.FindDependenciesForTmmAsync(
             @"intermediate\modelcache\greek\armory_a_age2.tmm", index);
 
         var matRef = result.Groups[0].References.First(r => r.SourceTag == "material");

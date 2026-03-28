@@ -585,7 +585,9 @@ public static partial class DependencyFinder
     /// <summary>
     /// Builds dependencies for a TMM model file: companion .tmm.data, .material files and anim files.
     /// </summary>
-    public static DependencyResult FindDependenciesForTmm(string entryPath, FileIndex? index = null, AnimfileIndex? animfileIndex = null)
+    public static async Task<DependencyResult> FindDependenciesForTmmAsync(
+        string entryPath, FileIndex? index = null,
+        Func<FileIndexEntry, ValueTask<PooledBuffer?>>? readFileAsync = null)
     {
         var refs = new List<DependencyReference>();
         var tmmFileName = Path.GetFileName(entryPath);
@@ -621,10 +623,10 @@ public static partial class DependencyFinder
         }
         refs.Add(matRef);
 
-        // Companion animfile via reverse index (animfile XML references this TMM in its <component>)
-        if (animfileIndex != null)
+        // Companion animfile: search on-demand by stem-stripping
+        if (index != null && readFileAsync != null)
         {
-            var animfileEntry = animfileIndex.Find(tmmStem);
+            var animfileEntry = await FindAnimfileForTmmAsync(tmmStem, index, readFileAsync);
             if (animfileEntry != null)
             {
                 var animRef = new DependencyReference
@@ -646,6 +648,37 @@ public static partial class DependencyFinder
     }
 
     /// <summary>
+    /// On-demand search for the animfile XML that references a TMM model.
+    /// Tries progressively shorter stems: "hoplite_iron" -> "hoplite".
+    /// Reads only a few candidate files from the index instead of scanning all BARs.
+    /// </summary>
+    public static async Task<FileIndexEntry?> FindAnimfileForTmmAsync(
+        string tmmStem, FileIndex index,
+        Func<FileIndexEntry, ValueTask<PooledBuffer?>> readFileAsync)
+    {
+        var candidate = tmmStem;
+        while (candidate.Length > 0)
+        {
+            var entries = index.Find(candidate + ".xml.XMB");
+            foreach (var entry in entries)
+            {
+                using var data = await readFileAsync(entry);
+                if (data == null) continue;
+
+                using var dec = BarCompression.EnsureDecompressedPooled(data, out _);
+                var text = ConversionHelper.GetTextContent(dec.Span, entry.FileName);
+                if (text != null && text.Contains("<animfile", StringComparison.OrdinalIgnoreCase))
+                    return entry;
+            }
+
+            int lastUnderscore = candidate.LastIndexOf('_');
+            if (lastUnderscore <= 0) break;
+            candidate = candidate[..lastUnderscore];
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Unified entry point: determines file type, reads/decompresses data, and returns dependencies.
     /// Handles .tmm (companion files), .bank (redirects to soundset), and text-based files (XML/JSON/etc).
     /// </summary>
@@ -663,14 +696,13 @@ public static partial class DependencyFinder
         SoundsetIndex? soundsetIndex = null,
         string? stringTableLanguage = null,
         Func<FileIndexEntry, ValueTask<PooledBuffer?>>? readFileAsync = null,
-        string? filterEntityName = null,
-        AnimfileIndex? animfileIndex = null)
+        string? filterEntityName = null)
     {
         var ext = Path.GetExtension(entryPath);
 
-        // TMM: companion files only
+        // TMM: companion files only (animfile searched on-demand)
         if (ext.Equals(".tmm", StringComparison.OrdinalIgnoreCase))
-            return FindDependenciesForTmm(entryPath, index, animfileIndex);
+            return await FindDependenciesForTmmAsync(entryPath, index, readFileAsync);
 
         // Bank: redirect to associated soundset file
         if (ext.Equals(".bank", StringComparison.OrdinalIgnoreCase))

@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using CryBar;
 using CryBar.Bar;
+using CryBar.Dependencies;
 using CryBar.Export;
 using CryBar.TMM;
 using CryBar.Indexing;
@@ -40,8 +41,7 @@ public partial class MainWindow
 
         p.Report("Starting export...");
 
-        if (options?.ExportAnimations == true)
-            await EnsureAnimfileIndexAsync();
+        // animfile lookup is now on-demand, no pre-indexing needed
 
         var sw = Stopwatch.StartNew();
         var isDirectExport = options?.DirectExport == true && !string.IsNullOrEmpty(options.DirectExportPath);
@@ -414,16 +414,17 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Discovers and decodes TMA animations for a TMM model via AnimfileIndex.
+    /// Discovers and decodes TMA animations for a TMM model via on-demand animfile search.
     /// </summary>
     async ValueTask<IReadOnlyList<GlbExporter.GlbAnimation>?> BuildGlbAnimations(string tmmFileName)
     {
-        if (_fileIndex == null || _animfileIndex == null) return null;
+        if (_fileIndex == null) return null;
 
         try
         {
             var tmmStem = Path.GetFileNameWithoutExtension(tmmFileName);
-            var animfileEntry = _animfileIndex.Find(tmmStem);
+            var animfileEntry = await DependencyFinder.FindAnimfileForTmmAsync(
+                tmmStem, _fileIndex, ReadFromIndexEntryPooledAsync);
             if (animfileEntry == null) return null;
 
             // read and parse the animfile XML
@@ -590,7 +591,7 @@ public partial class MainWindow
                     return;
 
                 relative_path_full = GetBARFullRelativePath(SelectedBarEntry);
-                data = SelectedBarEntry.ReadDataDecompressed(_barStream);
+                data = SelectedBarEntry.ReadDataDecompressedPooled(_barStream)?.Memory ?? Memory<byte>.Empty;
                 title = $"Pick image to replace {Path.GetFileName(SelectedBarEntry.RelativePath)}";
             }
             else

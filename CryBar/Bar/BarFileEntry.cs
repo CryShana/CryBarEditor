@@ -127,13 +127,12 @@ public class BarFileEntry
         await stream.ReadExactlyAsync(read_data.Slice(0, SizeInArchive), token);
     }
 
-    public Memory<byte> ReadDataDecompressed(Stream stream)
+    public PooledBuffer? ReadDataDecompressedPooled(Stream stream)
     {
-        var buffer = new byte[Math.Max(SizeInArchive, SizeUncompressed)];
-        var r = ReadDataDecompressed(stream, buffer);
-        if (r == -1) return Memory<byte>.Empty;
-
-        return buffer.AsMemory(0, r);
+        var buffer = new PooledBuffer(Math.Max(SizeInArchive, SizeUncompressed));
+        var r = ReadDataDecompressed(stream, buffer.Span);
+        if (r == -1) return null;
+        return buffer.Slice(0, r);
     }
 
     /// <summary>

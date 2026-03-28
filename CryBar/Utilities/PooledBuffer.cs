@@ -8,6 +8,7 @@ namespace CryBar.Utilities;
 /// </summary>
 public class PooledBuffer : IDisposable
 {
+	private readonly int _offset;
 	private readonly int _size;
 	private byte[]? _buffer;
 	private bool _moved;
@@ -17,7 +18,7 @@ public class PooledBuffer : IDisposable
 		get
 		{
 			var buffer = _buffer ?? throw new ObjectDisposedException(nameof(PooledBuffer));
-			return buffer.AsSpan(0, _size);
+			return buffer.AsSpan(_offset, _size);
 		}
 	}
 
@@ -26,7 +27,7 @@ public class PooledBuffer : IDisposable
 		get
 		{
 			var buffer = _buffer ?? throw new ObjectDisposedException(nameof(PooledBuffer));
-			return buffer.AsMemory(0, _size);
+			return buffer.AsMemory(_offset, _size);
 		}
 	}
 
@@ -38,12 +39,22 @@ public class PooledBuffer : IDisposable
 		_buffer = ArrayPool<byte>.Shared.Rent(size);
 	}
 
-	PooledBuffer(PooledBuffer existing)
+	PooledBuffer(PooledBuffer existing, int? offset = null, int? length = null)
 	{
 		if (existing._moved)
 			throw new InvalidOperationException("Buffer already moved");
 
-		_size = existing._size;
+		if (offset.HasValue && length.HasValue)
+		{
+			_offset = offset.Value;
+			_size = length.Value;
+		}
+		else
+		{
+			_offset = 0;
+			_size = existing._size;
+		}
+
 		_buffer = existing._buffer;
 		Interlocked.Exchange(ref existing._moved, true);
 	}
@@ -75,6 +86,19 @@ public class PooledBuffer : IDisposable
 	/// <returns>New PooledBuffer with same buffer as existing one</returns>
 	public static PooledBuffer MoveFrom(PooledBuffer existing) => new PooledBuffer(existing);
 
+	/// <summary>
+	/// Slices this buffer and returns new one (Ownership is transferred to returned buffer!)
+	/// </summary>
+	/// <param name="start_index">Start index</param>
+	/// <param name="length">Length</param>
+	public PooledBuffer Slice(int start_index, int length)
+	{
+		if (length <= 0 || start_index + length > _size)
+			throw new IndexOutOfRangeException();
+
+		return new PooledBuffer(this, _offset + start_index, length);
+	}
+	
 	public void Dispose()
 	{
 		var buffer = Interlocked.Exchange(ref _buffer, null);

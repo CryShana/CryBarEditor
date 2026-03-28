@@ -445,27 +445,28 @@ public static class BarCommands
         if (convert)
         {
             // For conversion, we need decompressed data
-            var decompressed = entry.ReadDataDecompressed(stream);
+            using var decompressed = entry.ReadDataDecompressedPooled(stream);
+            if (decompressed == null) return null;
             var ext = Path.GetExtension(entry.RelativePath).ToLowerInvariant();
 
             if (ext == ".xmb")
             {
                 var xmlBytes = ConversionHelper.ConvertXmbToXmlBytes(decompressed.Span);
-                return xmlBytes ?? decompressed.ToArray();
+                return xmlBytes ?? decompressed.Span.ToArray();
             }
             else if (ext == ".ddt")
             {
-                var tgaBytes = await ConversionHelper.ConvertDdtToTgaBytes(decompressed);
+                var tgaBytes = await ConversionHelper.ConvertDdtToTgaBytes(decompressed.Memory);
                 return tgaBytes;
             }
             // For other convertible extensions or non-convertible, return decompressed data
-            return decompressed.ToArray();
+            return decompressed.Span.ToArray();
         }
 
         if (decompress)
         {
-            var decompressed = entry.ReadDataDecompressed(stream);
-            return decompressed.ToArray();
+            using var decompressed = entry.ReadDataDecompressedPooled(stream);
+            return decompressed?.Span.ToArray();
         }
 
         return entry.ReadDataRaw(stream);
