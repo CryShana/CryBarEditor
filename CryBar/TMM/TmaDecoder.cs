@@ -8,7 +8,9 @@ namespace CryBar.TMM;
 /// </summary>
 public static class TmaDecoder
 {
-    const float InvSqrt3 = 0.57735026919f; // 1/sqrt(3)
+    const float InvSqrt2 = 0.70710678118f; // 1/sqrt(2)
+    const float Quat64MaxMagnitude = 524287f; // 2^19 - 1
+    const float Quat32MaxMagnitude = 511f;    // 2^9 - 1
 
     /// <summary>Decoded animation data for a single track.</summary>
     public sealed class DecodedTrack
@@ -138,7 +140,7 @@ public static class TmaDecoder
         return result;
     }
 
-    /// <summary>Quat32 "smallest three": 2-bit index + 10+10+10 signed components (4 bytes/kf).</summary>
+    /// <summary>Quat32 "smallest three": 2-bit index + 3×10-bit signed components (4 bytes/kf).</summary>
     static Quaternion[] DecodeQuat32(byte[] data, int keyframeCount)
     {
         int count = Math.Max(1, keyframeCount);
@@ -153,7 +155,7 @@ public static class TmaDecoder
         return result;
     }
 
-    /// <summary>Quat64 "smallest three": 2-bit index + 22+20+20 signed components (8 bytes/kf).</summary>
+    /// <summary>Quat64 "smallest three": 4-bit index + 3×20-bit signed components (8 bytes/kf).</summary>
     static Quaternion[] DecodeQuat64(byte[] data, int keyframeCount)
     {
         int count = Math.Max(1, keyframeCount);
@@ -170,60 +172,52 @@ public static class TmaDecoder
 
     static Quaternion DecodeSmallestThree32(uint packed)
     {
+        // Layout: [2-bit index][10-bit C2][10-bit C1][10-bit C0]
+        // Each 10-bit: bit 9 = sign, bits 8-0 = magnitude
+        // Extraction order: low→high = C0, C1, C2
+        // Index: 0=X, 1=Y, 2=Z, 3=W is reconstructed
         int idx = (int)(packed >> 30) & 3;
-        int rawA = (int)((packed >> 20) & 0x3FF);  // 10 bits
-        int rawB = (int)((packed >> 10) & 0x3FF);
-        int rawC = (int)(packed & 0x3FF);
 
-        // signed two's complement, scaled to [-1/sqrt(3), +1/sqrt(3)]
-        float fa = SignedComponent(rawA, 10) * InvSqrt3;
-        float fb = SignedComponent(rawB, 10) * InvSqrt3;
-        float fc = SignedComponent(rawC, 10) * InvSqrt3;
-        float fw = MathF.Sqrt(MathF.Max(0, 1.0f - fa * fa - fb * fb - fc * fc));
+        float[] q = new float[4];
+        uint bits = packed;
+        for (int comp = 3; comp >= 0; comp--)
+        {
+            if (comp == idx) continue;
+            int magnitude = (int)(bits & 0x1FF);  // 9-bit magnitude
+            bool negative = ((bits >> 9) & 1) != 0;
+            float val = (magnitude / Quat32MaxMagnitude) * InvSqrt2;
+            if (negative) val = -val;
+            q[comp] = val;
+            bits >>= 10;
+        }
+        q[idx] = MathF.Sqrt(MathF.Max(0, 1.0f - q[0] * q[0] - q[1] * q[1] - q[2] * q[2] - q[3] * q[3]));
 
-        return AssembleQuaternion(idx, fa, fb, fc, fw);
+        return new Quaternion(q[0], q[1], q[2], q[3]);
     }
 
     static Quaternion DecodeSmallestThree64(ulong packed)
     {
-        // top 2 bits = index, then 22+20+20 bit components
-        int idx = (int)(packed >> 62) & 3;
-        int rawA = (int)((packed >> 40) & 0x3FFFFF);  // 22 bits
-        int rawB = (int)((packed >> 20) & 0xFFFFF);    // 20 bits
-        int rawC = (int)(packed & 0xFFFFF);             // 20 bits
+        // Layout: [4-bit index][20-bit C2][20-bit C1][20-bit C0]
+        // Each 20-bit: bit 19 = sign, bits 18-0 = magnitude (max 524287)
+        // Extraction order: low→high = C0, C1, C2
+        // Index: 0=X, 1=Y, 2=Z, 3=W is reconstructed
+        int idx = (int)(packed >> 60) & 0xF;
+        if (idx > 3) idx = 3; // safety clamp
 
-        float fa = SignedComponent(rawA, 22) * InvSqrt3;
-        float fb = SignedComponent(rawB, 20) * InvSqrt3;
-        float fc = SignedComponent(rawC, 20) * InvSqrt3;
-        float fw = MathF.Sqrt(MathF.Max(0, 1.0f - fa * fa - fb * fb - fc * fc));
-
-        return AssembleQuaternion(idx, fa, fb, fc, fw);
-    }
-
-    /// <summary>Unsigned N-bit value to signed float via sign-magnitude.
-    /// MSB = sign (0=positive, 1=negative), remaining bits = magnitude.</summary>
-    static float SignedComponent(int raw, int bits)
-    {
-        int signBit = 1 << (bits - 1);
-        int magnitude = raw & (signBit - 1);
-        float value = magnitude / (float)signBit;
-        return (raw & signBit) != 0 ? -value : value;
-    }
-
-    /// <summary>
-    /// Reassembles quaternion from "smallest three" with WXYZ index convention.
-    /// Index 0=W is largest (remaining: X,Y,Z), 1=X, 2=Y, 3=Z.
-    /// The three stored components (a,b,c) are the remaining ones in WXYZ order.
-    /// </summary>
-    static Quaternion AssembleQuaternion(int largestIndex, float a, float b, float c, float reconstructed)
-    {
-        return largestIndex switch
+        float[] q = new float[4];
+        ulong bits = packed;
+        for (int comp = 3; comp >= 0; comp--)
         {
-            0 => new Quaternion(a, b, c, reconstructed),       // W largest → a=X, b=Y, c=Z
-            1 => new Quaternion(reconstructed, b, c, a),       // X largest → a=W, b=Y, c=Z
-            2 => new Quaternion(b, reconstructed, c, a),       // Y largest → a=W, b=X, c=Z
-            3 => new Quaternion(b, c, reconstructed, a),       // Z largest → a=W, b=X, c=Y
-            _ => Quaternion.Identity,
-        };
+            if (comp == idx) continue;
+            int magnitude = (int)(bits & 0x7FFFF);  // 19-bit magnitude
+            bool negative = ((bits >> 19) & 1) != 0;
+            float val = (magnitude / Quat64MaxMagnitude) * InvSqrt2;
+            if (negative) val = -val;
+            q[comp] = val;
+            bits >>= 20;
+        }
+        q[idx] = MathF.Sqrt(MathF.Max(0, 1.0f - q[0] * q[0] - q[1] * q[1] - q[2] * q[2] - q[3] * q[3]));
+
+        return new Quaternion(q[0], q[1], q[2], q[3]);
     }
 }
