@@ -125,9 +125,17 @@ public partial class MainWindow : SimpleWindow
     readonly LruCache<CachedBarFile> _barFileCache = new(64, onEvict: v => v.Dispose());
 
     // Text document cache + async load cancellation
-    readonly LruCache<TextDocument> _docCache = new(maxItems: 4);
+    readonly LruCache<TextDocument> _docCache = new(maxItems: 4, onEvict: OnDocEvicted);
     CancellationTokenSource? _docLoadCts;
     internal Task _docReadyTask = Task.CompletedTask;
+
+    static void OnDocEvicted(TextDocument _)
+    {
+        // Nudge the GC to collect evicted document allocations (TextMate tokens, rope segments).
+        // Non-blocking: the runtime performs a concurrent Gen2 collection without pausing threads.
+        // LOH compaction requires a blocking GC, so this won't compact - but it frees dead objects.
+        GC.Collect(2, GCCollectionMode.Forced, blocking: false);
+    }
 
     /// <summary>
     /// This is used to find relative path for Root directory files
