@@ -615,8 +615,11 @@ public partial class MainWindow
             }
             else
             {
-                // Collect all matches across sibling BARs for disambiguation
-                var matches = new List<(BarFileEntry Entry, CachedBarFile Cached)>();
+                // Collect all matches across sibling BARs for disambiguation.
+                // Store the BAR path instead of the CachedBarFile reference because
+                // iterating many siblings can evict earlier entries from the LRU cache,
+                // disposing them while we still hold a reference.
+                var matches = new List<(BarFileEntry Entry, string BarPath)>();
 
                 foreach (var siblingBarPath in Directory.GetFiles(barDir, "*.bar"))
                 {
@@ -629,22 +632,30 @@ public partial class MainWindow
                     foreach (var e in cached.Bar.Entries)
                     {
                         if (e.Name.Equals(entryName, StringComparison.OrdinalIgnoreCase))
-                            matches.Add((e, cached));
+                            matches.Add((e, siblingBarPath));
                     }
                 }
 
                 if (matches.Count == 0) return default;
 
+                // Re-load the selected BAR so it is fresh in the LRU cache
+                (BarFileEntry Entry, string BarPath) selected;
                 if (matches.Count == 1)
-                    return await factory(matches[0].Entry, matches[0].Cached);
+                {
+                    selected = matches[0];
+                }
+                else
+                {
+                    var bestEntry = BestMatchByDirectorySuffix(
+                        matches.Select(m => m.Entry), preferredRelativeDir);
+                    if (bestEntry == null) return default;
+                    selected = matches.First(m => m.Entry == bestEntry);
+                }
 
-                // Multiple matches: pick best by directory suffix
-                var bestMatch = BestMatchByDirectorySuffix(
-                    matches.Select(m => m.Entry), preferredRelativeDir);
-                if (bestMatch == null) return default;
+                var freshCached = GetOrLoadBar(selected.BarPath);
+                if (freshCached == null) return default;
 
-                var best = matches.First(m => m.Entry == bestMatch);
-                return await factory(best.Entry, best.Cached);
+                return await factory(selected.Entry, freshCached);
             }
         }
         catch { /* ignore directory enumeration errors */ }
