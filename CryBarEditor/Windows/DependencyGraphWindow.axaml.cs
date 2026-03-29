@@ -445,7 +445,7 @@ public partial class DependencyGraphWindow : SimpleWindow
         if (reference.Resolved.Count == 1 && reference.Type != DependencyRefType.StringKey)
         {
             var resolved = reference.Resolved[0];
-            var resolvedName = IOPath.GetFileName(resolved.FileName);
+            var resolvedName = IOPath.GetFileName(resolved.FileName.ToString());
             // Only show if different from raw value
             if (!resolvedName.Equals(IOPath.GetFileName(reference.RawValue), StringComparison.OrdinalIgnoreCase))
             {
@@ -480,8 +480,7 @@ public partial class DependencyGraphWindow : SimpleWindow
         // Expandable file references: any text-based file can be recursively loaded
         if (reference.Type == DependencyRefType.FilePath && reference.Resolved.Count > 0)
         {
-            var resolvedName = reference.Resolved[0].FileName;
-            if (CanExpandRecursively(resolvedName))
+            if (CanExpandRecursively(reference.Resolved[0].FileName))
             {
                 var loadBtn = new Button
                 {
@@ -575,7 +574,7 @@ public partial class DependencyGraphWindow : SimpleWindow
         if (match.IsExternal)
             stack.Children.Add(CreateExternalIndicatorIcon());
 
-        var fileName = IOPath.GetFileName(match.FileName);
+        var fileName = IOPath.GetFileName(match.FileName.ToString());
         if (fileName.Length > 35)
             fileName = "..." + fileName[^32..];
 
@@ -1397,17 +1396,20 @@ public partial class DependencyGraphWindow : SimpleWindow
             }
         }
 
-        if (entry != null)
+        if (entry is { } ent)
         {
             // Skip external entries - try to find a non-external match
-            if (entry.IsExternal && depRef != null)
+            if (ent.IsExternal && depRef != null)
             {
-                entry = depRef.Resolved.FirstOrDefault(e => !e.IsExternal);
+                foreach (var r in depRef.Resolved)
+                {
+                    if (!r.IsExternal) { ent = r; break; }
+                }
             }
 
-            if (entry != null && !entry.IsExternal)
+            if (!ent.IsExternal)
             {
-                await NavigateToEntryAsync(entry);
+                await NavigateToEntryAsync(ent);
 
                 // Highlight the reference value in the previewed document (matching DependenciesWindow behavior)
                 if (depRef != null && _mainWindow != null)
@@ -1524,7 +1526,7 @@ public partial class DependencyGraphWindow : SimpleWindow
         if (!tmm.Parsed) return;
 
         // Find companion .data file in file index
-        var dataFileName = entry.FileName + ".data";
+        var dataFileName = string.Concat(entry.FileName, ".data");
         PooledBuffer? companionData = null;
         if (_fileIndex != null)
         {
@@ -1661,8 +1663,12 @@ public partial class DependencyGraphWindow : SimpleWindow
 
         // Find the bank file for this soundset - DependencyFinder already resolves
         // soundset -> soundset file + bank file via ResolveSoundsetName, so check resolved entries first
-        FileIndexEntry? bankEntry = reference.Resolved.FirstOrDefault(
-            r => r.FileName.EndsWith(".bank", StringComparison.OrdinalIgnoreCase));
+        FileIndexEntry? bankEntry = null;
+        foreach (var r in reference.Resolved)
+        {
+            if (r.FileName.EndsWith(".bank", StringComparison.OrdinalIgnoreCase))
+            { bankEntry = r; break; }
+        }
 
         // Fallback: use SoundsetIndex
         if (bankEntry == null)
@@ -1676,22 +1682,22 @@ public partial class DependencyGraphWindow : SimpleWindow
         {
             foreach (var resolved in reference.Resolved)
             {
-                var culture = SoundsetIndex.ExtractCulture(resolved.FileName);
+                var culture = SoundsetIndex.ExtractCulture(resolved.FileName.ToString());
                 if (culture == null) continue;
                 var matches = _fileIndex.Find(culture + ".bank");
                 if (matches.Count > 0) { bankEntry = matches[0]; break; }
             }
         }
 
-        if (bankEntry == null) return;
+        if (bankEntry is not { } bank) return;
 
         try
         {
             string bankDiskPath;
 
-            if (bankEntry.Source == FileIndexSource.RootFile)
+            if (bank.Source == FileIndexSource.RootFile)
             {
-                var bankRelPath = bankEntry.FullRelativePath;
+                var bankRelPath = bank.FullRelativePath;
                 var rootRelevantPath = _mainWindow.RootFileRootPath;
                 if (rootRelevantPath != "-" && bankRelPath.StartsWith(rootRelevantPath, StringComparison.OrdinalIgnoreCase))
                     bankRelPath = bankRelPath[rootRelevantPath.Length..];
@@ -1703,11 +1709,11 @@ public partial class DependencyGraphWindow : SimpleWindow
                 // BAR entry: extract to temp file (skip if already extracted)
                 var tempDir = IOPath.Combine(IOPath.GetTempPath(), "CryBar_FMOD");
                 Directory.CreateDirectory(tempDir);
-                bankDiskPath = IOPath.Combine(tempDir, bankEntry.FileName);
+                bankDiskPath = IOPath.Combine(tempDir, bank.FileName.ToString());
 
                 if (!File.Exists(bankDiskPath))
                 {
-                    using var data = await _mainWindow.ReadFromIndexEntryPooledAsync(bankEntry);
+                    using var data = await _mainWindow.ReadFromIndexEntryPooledAsync(bank);
                     if (data == null) return;
                     using (var fs = File.Create(bankDiskPath)) await fs.WriteAsync(data.Memory);
                 }
@@ -2033,7 +2039,7 @@ public partial class DependencyGraphWindow : SimpleWindow
         SixLabors.ImageSharp.Image? image = null;
         try
         {
-            var ext = IOPath.GetExtension(entry.FileName).ToLowerInvariant();
+            var ext = IOPath.GetExtension(entry.FileName.ToString()).ToLowerInvariant();
             if (ext == ".ddt")
             {
                 var ddt = new DDTImage(data.Memory);
@@ -2063,14 +2069,22 @@ public partial class DependencyGraphWindow : SimpleWindow
         }
     }
 
-    static bool IsDdtOrImage(string fileName)
+    static bool IsDdtOrImage(ReadOnlySpan<char> fileName)
     {
-        var ext = IOPath.GetExtension(fileName).ToLowerInvariant();
-        return ext is ".ddt" or ".jpg" or ".jpeg" or ".png" or ".tga"
-            or ".gif" or ".webp" or ".avif" or ".jpx" or ".bmp";
+        var ext = IOPath.GetExtension(fileName);
+        return ext.Equals(".ddt", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".jpeg", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".png", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".tga", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".gif", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".webp", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".avif", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".jpx", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".bmp", StringComparison.OrdinalIgnoreCase);
     }
 
-    static bool IsTmm(string fileName)
+    static bool IsTmm(ReadOnlySpan<char> fileName)
     {
         return fileName.EndsWith(".tmm", StringComparison.OrdinalIgnoreCase);
     }
@@ -2081,7 +2095,7 @@ public partial class DependencyGraphWindow : SimpleWindow
     /// and other text-based formats that DependencyFinder can parse.
     /// Excludes binary-only formats (images, .tmm.data, .bank).
     /// </summary>
-    static bool CanExpandRecursively(string fileName)
+    static bool CanExpandRecursively(ReadOnlySpan<char> fileName)
     {
         if (fileName.EndsWith(".xmb", StringComparison.OrdinalIgnoreCase)) return true;
         if (fileName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)) return true;
@@ -2293,7 +2307,7 @@ public partial class DependencyGraphWindow : SimpleWindow
         _ => MaterialIconKind.FileOutline
     };
 
-    static (Color color, MaterialIconKind icon) GetMatchFileStyle(string fileName)
+    static (Color color, MaterialIconKind icon) GetMatchFileStyle(ReadOnlySpan<char> fileName)
     {
         if (fileName.EndsWith(".tmm.data", StringComparison.OrdinalIgnoreCase)) return (TmmDataColor, MaterialIconKind.DatabaseOutline);
         if (fileName.EndsWith(".tmm", StringComparison.OrdinalIgnoreCase)) return (TmmColor, MaterialIconKind.CubeOutline);

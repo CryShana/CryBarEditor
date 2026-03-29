@@ -14,7 +14,6 @@ public class FileIndexTests
         return new FileIndexEntry
         {
             FullRelativePath = fullPath,
-            FileName = fileName,
             Source = barFilePath != null ? FileIndexSource.BarEntry : FileIndexSource.RootFile,
             BarFilePath = barFilePath,
         };
@@ -27,7 +26,7 @@ public class FileIndexTests
         index.Add(MakeEntry(@"game\data\proto.xml.XMB"));
         var results = index.Find(@"game\data\proto.xml.XMB");
         Assert.Single(results);
-        Assert.Equal("proto.xml.XMB", results[0].FileName);
+        Assert.Equal("proto.xml.XMB", results[0].FileName.ToString());
     }
 
     [Fact]
@@ -128,7 +127,7 @@ public class FileIndexTests
         // Searching for ".material" must NOT return ".tmm" or ".fbximport"
         var results = index.Find("armory_a_age2.material");
         Assert.Single(results);
-        Assert.Equal("armory_a_age2.material.XMB", results[0].FileName);
+        Assert.Equal("armory_a_age2.material.XMB", results[0].FileName.ToString());
     }
 
     [Fact]
@@ -140,7 +139,7 @@ public class FileIndexTests
 
         var results = index.Find("armory_a_age2.material.XMB");
         Assert.Single(results);
-        Assert.Equal("armory_a_age2.material.XMB", results[0].FileName);
+        Assert.Equal("armory_a_age2.material.XMB", results[0].FileName.ToString());
     }
 
     [Fact]
@@ -188,7 +187,7 @@ public class FileIndexTests
         // Query with .xmb should find entry without .xmb (known extension stripping)
         var results = index.Find("proto.xml.xmb");
         Assert.Single(results);
-        Assert.Equal("proto.xml", results[0].FileName);
+        Assert.Equal("proto.xml", results[0].FileName.ToString());
     }
 
     // --- FindByPartialPath tests ---
@@ -399,7 +398,6 @@ public class FileIndexTests
         var entry = new FileIndexEntry
         {
             FullRelativePath = @"game\art\test.ddt",
-            FileName = "test.ddt",
             Source = FileIndexSource.BarEntry,
             IsExternal = true,
         };
@@ -419,7 +417,6 @@ public class FileIndexTests
         reference.Resolved.Add(new FileIndexEntry
         {
             FullRelativePath = @"game\art\test.material.XMB",
-            FileName = "test.material.XMB",
             Source = FileIndexSource.BarEntry,
             BarFilePath = @"C:\other\Art.bar",
             IsExternal = true,
@@ -441,7 +438,6 @@ public class FileIndexTests
         reference.Resolved.Add(new FileIndexEntry
         {
             FullRelativePath = @"game\art\test.material.XMB",
-            FileName = "test.material.XMB",
             Source = FileIndexSource.BarEntry,
             BarFilePath = @"C:\game\Art.bar",
             IsExternal = false,
@@ -449,7 +445,6 @@ public class FileIndexTests
         reference.Resolved.Add(new FileIndexEntry
         {
             FullRelativePath = @"game\art\test.material.XMB",
-            FileName = "test.material.XMB",
             Source = FileIndexSource.BarEntry,
             BarFilePath = @"C:\other\Art.bar",
             IsExternal = true,
@@ -483,7 +478,6 @@ public class FileIndexTests
         reference.Resolved.Add(new FileIndexEntry
         {
             FullRelativePath = @"game\art\test.ddt",
-            FileName = "test.ddt",
             Source = FileIndexSource.BarEntry,
             BarFilePath = @"C:\game\Art.bar",
             IsExternal = false,

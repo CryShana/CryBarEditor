@@ -36,7 +36,6 @@ public class DependencyFinderIntegrationTests
             index.Add(new FileIndexEntry
             {
                 FullRelativePath = relPath,
-                FileName = Path.GetFileName(file),
                 Source = FileIndexSource.RootFile,
             });
         }
@@ -127,7 +126,6 @@ public class DependencyFinderIntegrationTests
                 var entry = entries.Count > 0 ? entries[0] : new FileIndexEntry
                 {
                     FullRelativePath = Path.GetRelativePath(Path.GetDirectoryName(GamePath)!, bp),
-                    FileName = fileName,
                     Source = FileIndexSource.RootFile,
                 };
                 var culture = fileName[..^5]; // strip ".bank"
@@ -553,8 +551,8 @@ public class DependencyFinderIntegrationTests
         var index = GetOrBuildIndex();
 
         var entry = await DependencyFinder.FindAnimfileForTmmAsync("hoplite_iron", index, ReadEntryAsync);
-        Assert.NotNull(entry);
-        Assert.Contains("hoplite", entry!.FileName, StringComparison.OrdinalIgnoreCase);
+        var found = Assert.NotNull(entry);
+        Assert.Contains("hoplite", found.FileName.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
     // ========= Composite JSON =========

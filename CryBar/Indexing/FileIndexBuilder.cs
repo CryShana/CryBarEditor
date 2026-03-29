@@ -121,7 +121,6 @@ public static class FileIndexBuilder
                     index.Add(new FileIndexEntry
                     {
                         FullRelativePath = fullRelPath,
-                        FileName = entry.Name,
                         Source = FileIndexSource.BarEntry,
                         BarFilePath = barFilePath,
                         EntryRelativePath = entry.RelativePath,

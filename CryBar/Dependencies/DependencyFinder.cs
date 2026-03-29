@@ -522,12 +522,16 @@ public static partial class DependencyFinder
 
             case DependencyRefType.StringKey:
                 var stringTables = index.Find("string_table.txt");
-                var preferred = stringTables.FirstOrDefault(e =>
-                    e.FullRelativePath.Contains(stringTableLanguage, StringComparison.OrdinalIgnoreCase));
-                if (preferred != null)
-                    reference.Resolved.Add(preferred);
-                else if (stringTables.Count > 0)
-                    reference.Resolved.Add(stringTables[0]); // fallback to first available
+                if (stringTables.Count > 0)
+                {
+                    var resolved = stringTables[0];
+                    foreach (var e in stringTables)
+                    {
+                        if (e.FullRelativePath.Contains(stringTableLanguage, StringComparison.OrdinalIgnoreCase))
+                        { resolved = e; break; }
+                    }
+                    reference.Resolved.Add(resolved);
+                }
                 break;
         }
     }
@@ -627,15 +631,15 @@ public static partial class DependencyFinder
         if (index != null && readFileAsync != null)
         {
             var animfileEntry = await FindAnimfileForTmmAsync(tmmStem, index, readFileAsync);
-            if (animfileEntry != null)
+            if (animfileEntry is { } animfile)
             {
                 var animRef = new DependencyReference
                 {
-                    RawValue = animfileEntry.FileName,
+                    RawValue = animfile.FileName.ToString(),
                     Type = DependencyRefType.FilePath,
                     SourceTag = "animfile",
                 };
-                animRef.Resolved.Add(animfileEntry);
+                animRef.Resolved.Add(animfile);
                 refs.Add(animRef);
             }
         }
@@ -666,7 +670,7 @@ public static partial class DependencyFinder
                 if (data == null) continue;
 
                 using var dec = BarCompression.EnsureDecompressedPooled(data, out _);
-                var text = ConversionHelper.GetTextContent(dec.Span, entry.FileName);
+                var text = ConversionHelper.GetTextContent(dec.Span, entry.FileName.ToString());
                 if (text != null && text.Contains("<animfile", StringComparison.OrdinalIgnoreCase))
                     return entry;
             }
@@ -750,7 +754,7 @@ public static partial class DependencyFinder
         if (entry == null) return;
 
         reference.Resolved.Add(entry.SoundsetFile);
-        if (entry.BankFile != null)
-            reference.Resolved.Add(entry.BankFile);
+        if (entry.BankFile is { } bank)
+            reference.Resolved.Add(bank);
     }
 }

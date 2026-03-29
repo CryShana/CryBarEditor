@@ -9,7 +9,6 @@ public class SoundsetIndexTests
     static FileIndexEntry MakeEntry(string fullPath) => new()
     {
         FullRelativePath = fullPath,
-        FileName = System.IO.Path.GetFileName(fullPath.Replace('\\', '/')),
         Source = FileIndexSource.BarEntry,
     };
 

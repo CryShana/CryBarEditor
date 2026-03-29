@@ -425,14 +425,14 @@ public partial class MainWindow
             var tmmStem = Path.GetFileNameWithoutExtension(tmmFileName);
             var animfileEntry = await DependencyFinder.FindAnimfileForTmmAsync(
                 tmmStem, _fileIndex, ReadFromIndexEntryPooledAsync);
-            if (animfileEntry == null) return null;
+            if (animfileEntry is not { } animfile) return null;
 
             // read and parse the animfile XML
-            using var data = await ReadFromIndexEntryPooledAsync(animfileEntry);
+            using var data = await ReadFromIndexEntryPooledAsync(animfile);
             if (data == null) return null;
 
             using var decompressed = BarCompression.EnsureDecompressedPooled(data, out _);
-            var xmlText = ConversionHelper.GetTextContent(decompressed.Span, animfileEntry.FileName);
+            var xmlText = ConversionHelper.GetTextContent(decompressed.Span, animfile.FileName.ToString());
 
             var animRefs = AnimationDiscovery.FindAnimationsFromAnimXml(xmlText);
             if (animRefs.Count == 0) return null;

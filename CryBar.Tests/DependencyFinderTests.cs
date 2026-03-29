@@ -10,7 +10,6 @@ public class DependencyFinderTests
     static FileIndexEntry MakeEntry(string fullPath) => new()
     {
         FullRelativePath = fullPath,
-        FileName = System.IO.Path.GetFileName(fullPath.Replace('\\', '/')),
         Source = FileIndexSource.BarEntry,
     };
 
@@ -293,12 +292,12 @@ public class DependencyFinderTests
 
         var dataRef = result.Groups[0].References.First(r => r.SourceTag == "geometry");
         Assert.Single(dataRef.Resolved);
-        Assert.Equal("armory_a_age2.tmm.data", dataRef.Resolved[0].FileName);
+        Assert.Equal("armory_a_age2.tmm.data", dataRef.Resolved[0].FileName.ToString());
 
         // Material: .tmm is stripped -> searches for armory_a_age2.material.XMB
         var matRef = result.Groups[0].References.First(r => r.SourceTag == "material");
         Assert.Single(matRef.Resolved);
-        Assert.Equal("armory_a_age2.material.XMB", matRef.Resolved[0].FileName);
+        Assert.Equal("armory_a_age2.material.XMB", matRef.Resolved[0].FileName.ToString());
 
         // No animfile ref - armory_a_age2.xml.XMB doesn't exist in index
         Assert.DoesNotContain(result.Groups[0].References, r => r.SourceTag == "animfile");

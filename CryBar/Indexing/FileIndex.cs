@@ -18,13 +18,12 @@ public class FileIndex
     /// <summary>
     /// Strips all extensions from a filename: "proto.xml.XMB" -> "proto", "hoplite_iron.tmm.data" -> "hoplite_iron"
     /// </summary>
-    static string GetStem(string fileName)
+    static string GetStem(ReadOnlySpan<char> fileName)
     {
-        var name = fileName;
         int dot;
-        while ((dot = name.LastIndexOf('.')) > 0)
-            name = name[..dot];
-        return name;
+        while ((dot = fileName.LastIndexOf('.')) > 0)
+            fileName = fileName[..dot];
+        return fileName.ToString();
     }
 
     /// <summary>
@@ -40,8 +39,7 @@ public class FileIndex
 
     public void Add(FileIndexEntry entry)
     {
-        var normName = Normalize(entry.FileName);
-        var stem = GetStem(normName);
+        var stem = GetStem(entry.FileName);
         lock (_lock)
         {
             if (!_byStem.TryGetValue(stem, out var stemList))
@@ -121,7 +119,7 @@ public class FileIndex
         foreach (var entry in candidates)
         {
             var entryPath = Normalize(entry.FullRelativePath);
-            var entryName = Normalize(entry.FileName);
+            var entryName = entry.FileName.ToString();
 
             if (entryPath.Equals(norm, StringComparison.OrdinalIgnoreCase))
             {
@@ -163,7 +161,7 @@ public class FileIndex
             var prefixMatches = new List<FileIndexEntry>();
             foreach (var entry in candidates)
             {
-                var entryName = Normalize(entry.FileName);
+                var entryName = entry.FileName.ToString();
                 if (entryName.StartsWith(fileName + ".", StringComparison.OrdinalIgnoreCase))
                     prefixMatches.Add(entry);
             }

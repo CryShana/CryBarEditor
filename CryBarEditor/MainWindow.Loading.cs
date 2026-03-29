@@ -310,7 +310,6 @@ public partial class MainWindow
             index.Add(new FileIndexEntry
             {
                 FullRelativePath = fullRelPath,
-                FileName = rootFile.Name,
                 Source = FileIndexSource.RootFile,
             });
         }
@@ -410,15 +409,19 @@ public partial class MainWindow
         {
             var lang = string.IsNullOrWhiteSpace(_stringTableLanguage) ? "English" : _stringTableLanguage;
             var stringTables = _fileIndex.Find("string_table.txt");
-            var preferred = stringTables.FirstOrDefault(e =>
-                e.FullRelativePath.Contains(lang, StringComparison.OrdinalIgnoreCase));
-            var tableEntry = preferred ?? stringTables.FirstOrDefault();
-            if (tableEntry == null) return null;
+            if (stringTables.Count == 0) return null;
+
+            var tableEntry = stringTables[0];
+            foreach (var e in stringTables)
+            {
+                if (e.FullRelativePath.Contains(lang, StringComparison.OrdinalIgnoreCase))
+                { tableEntry = e; break; }
+            }
 
             using var data = await ReadFromIndexEntryPooledAsync(tableEntry);
             if (data == null) return null;
 
-            _cachedStringTableContent = ConversionHelper.GetTextContent(data.Span, tableEntry.FileName);
+            _cachedStringTableContent = ConversionHelper.GetTextContent(data.Span, tableEntry.FileName.ToString());
         }
 
         return StringTableParser.FindValue(_cachedStringTableContent, key);
