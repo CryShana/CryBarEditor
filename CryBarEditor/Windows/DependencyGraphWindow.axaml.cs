@@ -1634,13 +1634,14 @@ public partial class DependencyGraphWindow : SimpleWindow
     {
         if (_mainWindow == null) return;
 
-        if (entry.Source == FileIndexSource.BarEntry && entry.BarFilePath != null && entry.EntryRelativePath != null)
+        var entryRelPath = entry.EntryRelativePath;
+        if (entry.Source == FileIndexSource.BarEntry && entry.BarFilePath != null && entryRelPath.Length > 0)
         {
             var barRelPath = entry.BarFilePath;
             if (Directory.Exists(_mainWindow.RootDirectory) && barRelPath.StartsWith(_mainWindow.RootDirectory))
                 barRelPath = IOPath.GetRelativePath(_mainWindow.RootDirectory, barRelPath);
 
-            await _mainWindow.NavigateToBarEntryAsync(barRelPath, entry.EntryRelativePath);
+            await _mainWindow.NavigateToBarEntryAsync(barRelPath, entryRelPath.ToString());
         }
         else
         {

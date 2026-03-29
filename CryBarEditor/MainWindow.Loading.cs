@@ -333,7 +333,7 @@ public partial class MainWindow
         _cachedStringTableContent = null;
     }
 
-    CachedBarFile? GetOrLoadBar(string barFilePath)
+    internal CachedBarFile? GetOrLoadBar(string barFilePath)
     {
         if (_barFileCache.TryGet(barFilePath, out var cached))
             return cached;
@@ -377,7 +377,8 @@ public partial class MainWindow
             return await PooledBuffer.FromFile(diskPath);
         }
 
-        if (entry.BarFilePath == null || entry.EntryRelativePath == null)
+        var entryRelPath = entry.EntryRelativePath;
+        if (entry.BarFilePath == null || entryRelPath.Length == 0)
             return null;
 
         try
@@ -385,7 +386,7 @@ public partial class MainWindow
             var cached = GetOrLoadBar(entry.BarFilePath);
             if (cached == null) return null;
 
-            var barEntry = cached.FindEntry(entry.EntryRelativePath);
+            var barEntry = cached.FindEntry(entryRelPath.ToString());
             if (barEntry == null) return null;
 
             using var dataRaw = await cached.ReadEntryRawPooledAsync(barEntry);

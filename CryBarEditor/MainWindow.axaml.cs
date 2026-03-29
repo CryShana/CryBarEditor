@@ -122,7 +122,7 @@ public partial class MainWindow : SimpleWindow
     CancellationTokenSource? _meshConversionCts;
 
     // BAR file metadata cache (avoids re-opening and re-parsing BAR headers)
-    readonly LruCache<CachedBarFile> _barFileCache = new(64, onEvict: v => v.Dispose());
+    readonly LruCache<CachedBarFile> _barFileCache = new(4, onEvict: v => v.Dispose());
 
     // Text document cache + async load cancellation
     readonly LruCache<TextDocument> _docCache = new(maxItems: 4, onEvict: OnDocEvicted);

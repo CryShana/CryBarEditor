@@ -273,9 +273,13 @@ public static class DepsCommands
         var barEntry = barEntries.FirstOrDefault(e =>
             e.RelativePath.Equals(entry.FullRelativePath.Replace("/", "\\"), StringComparison.OrdinalIgnoreCase));
 
-        barEntry ??= barEntries.FirstOrDefault(e =>
-            entry.EntryRelativePath != null &&
-            e.RelativePath.Equals(entry.EntryRelativePath.Replace("/", "\\"), StringComparison.OrdinalIgnoreCase));
+        var entryRelPath = entry.EntryRelativePath;
+        if (barEntry == null && entryRelPath.Length > 0)
+        {
+            var entryRelStr = entryRelPath.ToString().Replace("/", "\\");
+            barEntry = barEntries.FirstOrDefault(e =>
+                e.RelativePath.Equals(entryRelStr, StringComparison.OrdinalIgnoreCase));
+        }
 
         if (barEntry == null) return null;
         return await barEntry.ReadDataRawPooledAsync(barStream, token);

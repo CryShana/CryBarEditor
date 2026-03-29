@@ -189,13 +189,15 @@ public class DependencyFinderIntegrationTests
                 return await PooledBuffer.FromFile(path);
             }
 
-            if (entry.BarFilePath == null || entry.EntryRelativePath == null) return null;
+            var entryRelPath = entry.EntryRelativePath;
+            if (entry.BarFilePath == null || entryRelPath.Length == 0) return null;
+            var entryRelStr = entryRelPath.ToString();
             using var stream = File.OpenRead(entry.BarFilePath);
             var bar = new BarFile(stream);
             if (!bar.Load(out _) || bar.Entries == null) return null;
 
             var barEntry = bar.Entries.FirstOrDefault(e =>
-                e.RelativePath.Equals(entry.EntryRelativePath, StringComparison.OrdinalIgnoreCase));
+                e.RelativePath.Equals(entryRelStr, StringComparison.OrdinalIgnoreCase));
             
             if (barEntry == null) 
                 return null;

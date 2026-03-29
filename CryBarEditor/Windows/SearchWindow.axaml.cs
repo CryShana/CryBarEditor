@@ -54,9 +54,8 @@ public partial class SearchWindow : SimpleWindow
 
     readonly string? _rootDirectory;
     readonly List<RootFileEntry>? _rootEntries;
+    readonly Action<BarFile?, FileStream?>? _barFileLoadedHandler;
 
-    BarFile? _barFile;
-    FileStream? _barFileStream;
     MainWindow? _owner;
 
     public SearchWindow()
@@ -81,8 +80,9 @@ public partial class SearchWindow : SimpleWindow
             OnPropertyChanged(nameof(HasFilterWarning));
         }
 
-        OnBarFileChanged(owner.BarFile, owner.BarFileStream);
-        owner.OnBarFileLoaded += OnBarFileChanged;
+        OnBarFileChanged();
+        _barFileLoadedHandler = (_, _) => OnBarFileChanged();
+        owner.OnBarFileLoaded += _barFileLoadedHandler;
 
         ExclusionFilter = _owner._searchExclusionFilter;
         IsCaseSensitive = _owner._searchCaseSensitive;
@@ -101,22 +101,17 @@ public partial class SearchWindow : SimpleWindow
         base.OnClosed(e);
         EnsureSettingsSaved();
     }
-    void OnBarFileChanged(BarFile? file, FileStream? stream)
+    void OnBarFileChanged()
     {
-        // different BAR file opened
-        _barFile = file;
-        _barFileStream = stream;
-
-        // adjust this count
-        var count = (_barFile != null ? 1 : 0) + (_rootEntries?.Count ?? 0);
+        var count = (_owner?.BarFile != null ? 1 : 0) + (_rootEntries?.Count ?? 0);
         Title = $"Search in [{count}] captured files";
     }
 
     protected override void OnClosing(WindowClosingEventArgs e)
     {
         _csc?.Cancel();
-        if (_owner != null)
-            _owner.OnBarFileLoaded -= OnBarFileChanged;
+        if (_owner != null && _barFileLoadedHandler != null)
+            _owner.OnBarFileLoaded -= _barFileLoadedHandler;
         _rebuildSemaphore.Dispose();
         base.OnClosing(e);
     }
@@ -241,8 +236,7 @@ public partial class SearchWindow : SimpleWindow
             {
                 var i = txt.IndexOf(query, si, comparer);
                 return (i, query.Length);
-            }
-        :
+            } :
             (txt, si) =>
             {
                 try
@@ -310,47 +304,43 @@ public partial class SearchWindow : SimpleWindow
 
         try
         {
-            // go through bar file if opened (it's not always included with root files)
-            if (_barFile?.Entries != null && _barFileStream != null)
+            // Search entries inside a BAR file (each call owns its stream — no shared cache)
+            async ValueTask SearchBar(BarFile bar, Stream barStream, string file, CancellationToken token)
             {
-                var file = _barFileStream.Name;
-                if (searched.TryAdd(file, 0))
+                if (bar.Entries == null) return;
+                foreach (var bar_entry in bar.Entries)
                 {
-                    var filename = Path.GetFileName(file);
-                    if (!IsFileExcluded(filename))
+                    if (token.IsCancellationRequested) break;
+                    if (IsFileExcluded(bar_entry.Name))
+                        continue;
+
+                    var (name_index, matched_length) = searcher(bar_entry.RelativePath, 0);
+                    if (name_index >= 0)
                     {
-                        current_items.TryAdd(filename, 0);
-                        foreach (var bar_entry in _barFile.Entries)
-                        {
-                            if (token.IsCancellationRequested) break;
-                            if (IsFileExcluded(bar_entry.Name))
-                                continue;
+                        var context = MakeContext(name_index, bar_entry.RelativePath.AsSpan(name_index, matched_length), bar_entry.RelativePath);
+                        var result = new SearchResult(file, bar_entry.RelativePath, name_index, context.left, context.mid, context.right, false);
+                        await channel.Writer.WriteAsync(result, token).ConfigureAwait(false);
+                    }
 
-                            // check the filename itself
-                            var (name_index, matched_length) = searcher(bar_entry.RelativePath, 0);
-                            if (name_index >= 0)
-                            {
-                                var context = MakeContext(name_index, bar_entry.RelativePath.AsSpan(name_index, matched_length), bar_entry.RelativePath);
-                                var result = new SearchResult(file, bar_entry.RelativePath, name_index, context.left, context.mid, context.right, false);
-                                await channel.Writer.WriteAsync(result, token).ConfigureAwait(false);
-                            }
-
-                            if (!filesOnly)
-                            {
-                                if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
-                                using var ddata = bar_entry.ReadDataDecompressedPooled(_barFileStream);
-                                if (ddata == null) continue;
-                                await SearchData(ddata.Memory, file, bar_entry.RelativePath, channel.Writer, searcher, token).ConfigureAwait(false);
-                            }
-                        }
-                        current_items.TryRemove(filename, out _);
+                    if (!filesOnly)
+                    {
+                        if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
+                        using var rawData = await bar_entry.ReadDataRawPooledAsync(barStream);
+                        using var ddata = BarCompression.EnsureDecompressedPooled(rawData, out _);
+                        await SearchData(ddata.Memory, file, bar_entry.RelativePath, channel.Writer, searcher, token).ConfigureAwait(false);
                     }
                 }
             }
 
             // go through all root files (in parallel)
-            if (root_files != null && _rootDirectory != null)
+            if (root_files != null && _rootDirectory != null && _owner != null)
             {
+                // Capture the currently-open BAR path now (before going parallel)
+                // so a mid-search BAR switch can't cause ObjectDisposedException.
+                var currentBarPath = _owner.BarFileStream?.Name;
+                if (currentBarPath != null)
+                    searched.TryAdd(currentBarPath, 0); // mark as searched below
+
                 await Parallel.ForEachAsync(root_files, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = token },
                     async (entry, token) =>
                     {
@@ -360,17 +350,14 @@ public partial class SearchWindow : SimpleWindow
                         Interlocked.Increment(ref processed_root_files_count);
                         var file = Path.Combine(_rootDirectory, entry.RelativePath);
 
-                        // check if file is being processed by different thread
                         if (!searched.TryAdd(file, 0))
                             return;
 
-                        // status update
                         var file_name = Path.GetFileName(file);
                         current_items.TryAdd(file_name, 0);
 
                         try
                         {
-                            // check the filename itself
                             var (name_index, matched_length) = searcher(file, 0);
                             if (name_index >= 0)
                             {
@@ -382,41 +369,15 @@ public partial class SearchWindow : SimpleWindow
                             var ext = Path.GetExtension(file).ToLower();
                             if (ext == ".bar")
                             {
-                                // load bar
-                                using var stream = File.OpenRead(file);
-                                var bar_file = new BarFile(stream);
-                                if (bar_file.Load(out _))
-                                {
-                                    foreach (var bar_entry in bar_file.Entries)
-                                    {
-                                        if (token.IsCancellationRequested) break;
-                                        if (IsFileExcluded(bar_entry.Name))
-                                            continue;
-
-                                        // check the filename itself
-                                        (name_index, matched_length) = searcher(bar_entry.RelativePath, 0);
-                                        if (name_index >= 0)
-                                        {
-                                            var context = MakeContext(name_index, bar_entry.RelativePath.AsSpan(name_index, matched_length), bar_entry.RelativePath);
-                                            var result = new SearchResult(file, bar_entry.RelativePath, name_index, context.left, context.mid, context.right, false);
-                                            await channel.Writer.WriteAsync(result, token).ConfigureAwait(false);
-                                        }
-
-                                        if (!filesOnly)
-                                        {
-                                            if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
-                                            using var ddata = bar_entry.ReadDataDecompressedPooled(stream);
-                                            if (ddata == null) continue;
-                                            await SearchData(ddata.Memory, file, bar_entry.RelativePath, channel.Writer, searcher, token).ConfigureAwait(false);
-                                        }
-                                    }
-                                }
+                                using var barStream = File.OpenRead(file);
+                                var barFile = new BarFile(barStream);
+                                if (barFile.Load(out _))
+                                    await SearchBar(barFile, barStream, file, token);
                             }
                             else if (!filesOnly)
                             {
                                 if (new FileInfo(file).Length > MAX_FILE_SIZE) return;
 
-                                // process file directly
                                 var data = await File.ReadAllBytesAsync(file).ConfigureAwait(false);
                                 var ddata = BarCompression.EnsureDecompressed(data, out _);
                                 await SearchData(ddata, file, null, channel.Writer, searcher, token).ConfigureAwait(false);
@@ -428,13 +389,24 @@ public partial class SearchWindow : SimpleWindow
                         }
                     })
                     .ConfigureAwait(false);
+
+                // search the currently open BAR (may not be in root files list)
+                if (currentBarPath != null)
+                {
+                    var file_name = Path.GetFileName(currentBarPath);
+                    if (!IsFileExcluded(file_name))
+                    {
+                        current_items.TryAdd(file_name, 0);
+                        using var ownStream = File.OpenRead(currentBarPath);
+                        var barFile = new BarFile(ownStream);
+                        if (barFile.Load(out _))
+                            await SearchBar(barFile, ownStream, currentBarPath, token);
+                        current_items.TryRemove(file_name, out _);
+                    }
+                }
             }
 
             search_finished = true;
-            channel.Writer.Complete();
-            await consumer.ConfigureAwait(false);
-            await updater.ConfigureAwait(false);
-            // wait a bit
             await Task.Delay(50).ConfigureAwait(false);
             Status = "Done";
         }
@@ -448,6 +420,10 @@ public partial class SearchWindow : SimpleWindow
         }
         finally
         {
+            search_finished = true;
+            channel.Writer.TryComplete();
+            try { await consumer.ConfigureAwait(false); } catch { }
+            try { await updater.ConfigureAwait(false); } catch { }
             _csc.Cancel();
             CurrentlySearching = false;
         }

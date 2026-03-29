@@ -25,7 +25,8 @@ public class BarFileEntry
         if (lastSlash >= 0)
         {
             Name = relative_path[(lastSlash + 1)..];
-            DirectoryPath = relative_path[..(lastSlash + 1)]; // includes trailing backslash
+            // Pool directory paths - many entries share the same directory
+            DirectoryPath = StringPool.Shared.GetOrAdd(relative_path.AsSpan(0, lastSlash + 1));
         }
         else
         {

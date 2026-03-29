@@ -112,18 +112,24 @@ public static class FileIndexBuilder
                 var entries = bar.Entries;
                 if (entries == null) return;
 
+                var hasRoot = !string.IsNullOrEmpty(barRootPath);
+                // Path.Combine only inserts a separator if root doesn't already end with one
+                ushort rootPrefixLen = hasRoot
+                    ? (ushort)(barRootPath![^1] is '\\' or '/' ? barRootPath.Length : barRootPath.Length + 1)
+                    : (ushort)0;
+
                 foreach (var entry in entries)
                 {
-                    var fullRelPath = string.IsNullOrEmpty(barRootPath)
-                        ? entry.RelativePath
-                        : Path.Combine(barRootPath, entry.RelativePath);
+                    var fullRelPath = hasRoot
+                        ? Path.Combine(barRootPath!, entry.RelativePath)
+                        : entry.RelativePath;
 
                     index.Add(new FileIndexEntry
                     {
                         FullRelativePath = fullRelPath,
                         Source = FileIndexSource.BarEntry,
                         BarFilePath = barFilePath,
-                        EntryRelativePath = entry.RelativePath,
+                        BarRootPrefixLength = rootPrefixLen,
                         IsExternal = isExternal,
                     });
                 }

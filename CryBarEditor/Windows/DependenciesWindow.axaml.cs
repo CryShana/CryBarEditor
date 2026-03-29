@@ -238,14 +238,15 @@ public partial class DependenciesWindow : SimpleWindow
 
     async Task NavigateToIndexEntry(FileIndexEntry entry)
     {
-        if (entry.Source == FileIndexSource.BarEntry && entry.BarFilePath != null && entry.EntryRelativePath != null)
+        var entryRelPath = entry.EntryRelativePath;
+        if (entry.Source == FileIndexSource.BarEntry && entry.BarFilePath != null && entryRelPath.Length > 0)
         {
             // Navigate to a BAR file entry
             var barRelPath = entry.BarFilePath;
             if (Directory.Exists(_owner.RootDirectory) && barRelPath.StartsWith(_owner.RootDirectory))
                 barRelPath = Path.GetRelativePath(_owner.RootDirectory, barRelPath);
 
-            await _owner.NavigateToBarEntryAsync(barRelPath, entry.EntryRelativePath);
+            await _owner.NavigateToBarEntryAsync(barRelPath, entryRelPath.ToString());
         }
         else
         {
