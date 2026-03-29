@@ -256,12 +256,17 @@ public partial class MainWindow
         var resolved = await ResolveTmmMaterialsAsync(tmmFileName);
         if (resolved == null) return null;
 
-        // Launch all texture conversions in parallel
+        // Only convert textures that glTF actually uses (Masks/Masks2 have no standard PBR slot)
+        // TODO: map Masks channels to metallicRoughnessTexture/occlusionTexture, Masks2 to emissiveTexture
         var textureTasks = new Dictionary<string, Task<byte[]?>>();
         foreach (var mat in resolved.Value.Materials)
         {
-            foreach (var (_, texPath) in mat.Textures)
+            foreach (var (texName, texPath) in mat.Textures)
             {
+                var lower = texName.ToLowerInvariant();
+                if (lower is not "basecolor" and not "diffuse" and not "normals" and not "normal")
+                    continue;
+
                 if (!textureTasks.ContainsKey(texPath) &&
                     resolved.Value.Textures.TryGetValue(texPath, out var texInfo))
                 {
