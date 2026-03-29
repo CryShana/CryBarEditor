@@ -272,35 +272,13 @@ public partial class MainWindow
                     var dataRelativeDir = Path.GetDirectoryName(relative_path);
                     TmmFile? companionTmm = null;
 
-                    // First: check current BAR
-                    if (_barFile?.Entries != null && _barStream != null)
+                    using (var tmmRawData = await ResolveCompanionDataAsync(tmmBaseName, dataRelativeDir))
                     {
-                        var candidates = _barFile.Entries.Where(
-                            e => e.Name.Equals(tmmBaseName, StringComparison.OrdinalIgnoreCase));
-                        var tmmEntry = BestMatchByDirectorySuffix(candidates, dataRelativeDir);
-                        if (tmmEntry != null)
+                        if (tmmRawData != null)
                         {
-                            using var tmmData = await tmmEntry.ReadDataRawPooledAsync(_barStream);
-                            using var tmmRawData = BarCompression.EnsureDecompressedPooled(tmmData, out _);
-                            companionTmm = new TmmFile(tmmRawData.Memory);
-                            if (!companionTmm.Parsed) companionTmm = null;
+                            var tmm = new TmmFile(tmmRawData.Memory);
+                            if (tmm.Parsed) companionTmm = tmm;
                         }
-                    }
-
-                    // Second: search all .bar files in the same directory
-                    if (companionTmm == null && _barStream != null)
-                    {
-                        companionTmm = await FindCompanionInSiblingBars<TmmFile>(
-                            _barStream.Name, tmmBaseName,
-                            async (entry, cachedBar) =>
-                            {
-                                using var rawData = await cachedBar.ReadEntryRawPooledAsync(entry);
-                                if (rawData == null) return null;
-                                using var data = BarCompression.EnsureDecompressedPooled(rawData, out _);
-                                var tmm = new TmmFile(data.Memory);
-                                return tmm.Parsed ? tmm : null;
-                            },
-                            dataRelativeDir);
                     }
 
                     if (companionTmm != null)
