@@ -231,7 +231,7 @@ public class PooledBufferTests
     {
         byte[] data = [1, 2, 3, 4, 5];
 
-        var result = BarCompression.EnsureDecompressedPooled((Memory<byte>)data, out var type);
+        var result = BarCompression.TryEnsureDecompressedPooled((Memory<byte>)data, out var type);
 
         Assert.Null(result);
         Assert.Equal(CompressionType.None, type);
@@ -243,7 +243,7 @@ public class PooledBufferTests
         byte[] plaintext = "Pooled decompression test data"u8.ToArray();
         var compressed = BarCompression.CompressAlz4(plaintext);
 
-        using var result = BarCompression.EnsureDecompressedPooled(compressed, out var type);
+        using var result = BarCompression.TryEnsureDecompressedPooled(compressed, out var type);
 
         Assert.NotNull(result);
         Assert.Equal(CompressionType.Alz4, type);

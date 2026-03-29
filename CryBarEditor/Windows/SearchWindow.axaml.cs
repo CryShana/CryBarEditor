@@ -20,6 +20,7 @@ using System.Threading.Channels;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Avalonia.Interactivity;
+using CryBar.Utilities;
 
 namespace CryBarEditor.Windows;
 
@@ -327,7 +328,7 @@ public partial class SearchWindow : SimpleWindow
                         if (bar_entry.SizeUncompressed > MAX_FILE_SIZE) continue;
                         using var rawData = await bar_entry.ReadDataRawPooledAsync(barStream);
                         using var ddata = BarCompression.EnsureDecompressedPooled(rawData, out _);
-                        await SearchData(ddata.Memory, file, bar_entry.RelativePath, channel.Writer, searcher, token).ConfigureAwait(false);
+                        SearchContent(ddata.Memory, file, bar_entry.RelativePath, channel.Writer, query, comparer, regex, token);
                     }
                 }
             }
@@ -378,9 +379,9 @@ public partial class SearchWindow : SimpleWindow
                             {
                                 if (new FileInfo(file).Length > MAX_FILE_SIZE) return;
 
-                                var data = await File.ReadAllBytesAsync(file).ConfigureAwait(false);
-                                var ddata = BarCompression.EnsureDecompressed(data, out _);
-                                await SearchData(ddata, file, null, channel.Writer, searcher, token).ConfigureAwait(false);
+                                using var buffer = await PooledBuffer.FromFile(file, token);
+                                using var ddata = BarCompression.EnsureDecompressedPooled(buffer, out _);
+                                SearchContent(ddata.Memory, file, null, channel.Writer, query, comparer, regex, token);
                             }
                         }
                         finally
@@ -440,14 +441,12 @@ public partial class SearchWindow : SimpleWindow
         else
             Status += $" [{time_elapsed.TotalMinutes:0.0}min]";
 
-        static async ValueTask SearchData(ReadOnlyMemory<byte> decompressed_data, string file_path, string? bar_entry_path,
-                ChannelWriter<SearchResult> channel, Func<string, int, (int index, int matched_length)> searcher, CancellationToken token)
+        static void SearchContent(ReadOnlyMemory<byte> decompressed_data, string file_path, string? bar_entry_path,
+                ChannelWriter<SearchResult> channel, string query, StringComparison comparer, Regex? regex, CancellationToken token)
         {
             if (token.IsCancellationRequested) return;
 
             ReadOnlySpan<byte> span = decompressed_data.Span;
-
-            var text = "";
 
             var ext = Path.GetExtension(bar_entry_path ?? file_path).ToLower();
             if (InvalidSearchExtensions.Contains(ext)) return;
@@ -456,57 +455,66 @@ public partial class SearchWindow : SimpleWindow
             {
                 var xmlText = ConversionHelper.ConvertXmbToXmlText(span);
                 if (xmlText == null) return;
-
-                text = xmlText;
-            }
-            else
-            {
-                var unicode = MainWindow.DetectIfUnicode(span);
-                var encoding = unicode ? Encoding.Unicode : Encoding.UTF8;
-                var charCount = encoding.GetCharCount(span);
-                var chars = ArrayPool<char>.Shared.Rent(charCount);
-                try
-                {
-                    var actualCount = encoding.GetChars(span, chars);
-                    text = new string(chars, 0, actualCount);
-                }
-                finally
-                {
-                    ArrayPool<char>.Shared.Return(chars);
-                }
+                SearchText(xmlText.AsSpan(), file_path, bar_entry_path, channel, query, comparer, regex, token);
+                return;
             }
 
-            // now search
-            var start_index = 0;
-            while (true)
+            var unicode = MainWindow.DetectIfUnicode(span);
+            var encoding = unicode ? Encoding.Unicode : Encoding.UTF8;
+            var charCount = encoding.GetCharCount(span);
+            var chars = ArrayPool<char>.Shared.Rent(charCount);
+            try
             {
-                var (found_index, matched_length) = searcher(text, start_index);
-                if (found_index == -1) break;
-                start_index = found_index + 1;
-
-                var context = MakeContext(found_index, text.AsSpan(found_index, matched_length), text);
-
-                if (token.IsCancellationRequested) break;
-
-                var result = new SearchResult(file_path, bar_entry_path, found_index, context.left, context.mid, context.right, true);
-                await channel.WriteAsync(result, token).ConfigureAwait(false);
+                var actualCount = encoding.GetChars(span, chars);
+                SearchText(chars.AsSpan(0, actualCount), file_path, bar_entry_path, channel, query, comparer, regex, token);
+            }
+            finally
+            {
+                ArrayPool<char>.Shared.Return(chars);
             }
         }
 
-        static (string left, string mid, string right) MakeContext(int index, ReadOnlySpan<char> matched_text, string text)
+        static void SearchText(ReadOnlySpan<char> text, string file_path, string? bar_entry_path,
+                ChannelWriter<SearchResult> channel, string query, StringComparison comparer, Regex? regex, CancellationToken token)
+        {
+            if (regex != null)
+            {
+                foreach (var match in regex.EnumerateMatches(text))
+                {
+                    if (token.IsCancellationRequested) break;
+                    var context = MakeContext(match.Index, text.Slice(match.Index, match.Length), text);
+                    channel.TryWrite(new SearchResult(file_path, bar_entry_path, match.Index, context.left, context.mid, context.right, true));
+                }
+            }
+            else
+            {
+                var querySpan = query.AsSpan();
+                var startIndex = 0;
+                while (true)
+                {
+                    var found = text[startIndex..].IndexOf(querySpan, comparer);
+                    if (found == -1) break;
+                    var actualIndex = startIndex + found;
+                    if (token.IsCancellationRequested) break;
+                    var context = MakeContext(actualIndex, text.Slice(actualIndex, querySpan.Length), text);
+                    channel.TryWrite(new SearchResult(file_path, bar_entry_path, actualIndex, context.left, context.mid, context.right, true));
+                    startIndex = actualIndex + 1;
+                }
+            }
+        }
+
+        static (string left, string mid, string right) MakeContext(int index, ReadOnlySpan<char> matched_text, ReadOnlySpan<char> text)
         {
             const int LEFT_CONTEXT_SIZE = 15;
             const int RIGHT_CONTEXT_SIZE = 25;
 
-            var match_begin = index;
             var match_end = index + matched_text.Length;
-
-            var from = Math.Max(0, match_begin - LEFT_CONTEXT_SIZE);
+            var from = Math.Max(0, index - LEFT_CONTEXT_SIZE);
             var to = Math.Min(text.Length, match_end + RIGHT_CONTEXT_SIZE);
-            var full_context = text[from..to];
-            var left_context = MakeItSafe(full_context[..(match_begin - from)]);
-            var right_context = MakeItSafe(full_context[(match_begin - from + matched_text.Length)..]);
-            var mid_context = MakeItSafe(text[match_begin..match_end]);
+
+            var left_context = MakeItSafe(text[from..index].ToString());
+            var mid_context = MakeItSafe(matched_text.ToString());
+            var right_context = MakeItSafe(text[match_end..to].ToString());
 
             return (left_context, mid_context, right_context);
         }
@@ -572,19 +580,22 @@ public partial class SearchWindow : SimpleWindow
 
             // Wait for the full document to finish loading (may be async for large files)
             await _owner._docReadyTask;
-            await Task.Delay(100);
 
-            // this is index of character within file
-            var index = result.IndexWithinContent;
-
-            // Cancel any pending scroll-to-top from SetEditorText
+            // Cancel scroll-to-top that SetEditorText just scheduled (its 50ms timer hasn't fired yet)
             _owner._scrollVersion++;
 
-            var location = _owner._txtEditor.Document.GetLocation(index);
-            _owner._txtEditor.ScrollTo(location.Line, location.Column);
+            // Let editor finish layout before scrolling
+            await Task.Delay(50);
+
+            var index = result.IndexWithinContent;
 
             if (index >= 0 && index + result.ContextMain.Length < text.Length)
+            {
+                var location = _owner._txtEditor.Document.GetLocation(index);
+                _owner._txtEditor.ScrollTo(location.Line, location.Column);
                 _owner._txtEditor.Select(index, result.ContextMain.Length);
+                _owner._txtEditor.CaretOffset = index;
+            }
         }
         finally
         {

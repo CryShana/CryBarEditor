@@ -35,7 +35,15 @@ public static class BarCompression
         }
 
         var buffer = new PooledBuffer(size_uncompressed);
-        DecompressAlz4(data, buffer.Span);
+        try
+        {
+            DecompressAlz4(data, buffer.Span);
+        }
+        catch
+        {
+            buffer.Dispose();
+            throw;
+        }
         return buffer;
     }
 
@@ -127,7 +135,15 @@ public static class BarCompression
         }
 
         var buffer = new PooledBuffer(size_uncompressed);
-        DecompressL33t(data, buffer.Span);
+        try
+        {
+            DecompressL33t(data, buffer.Span);
+        }
+        catch
+        {
+            buffer.Dispose();
+            throw;
+        }
         return buffer;
     }
 
@@ -259,12 +275,12 @@ public static class BarCompression
 
     public static PooledBuffer EnsureDecompressedPooled(PooledBuffer buffer, out CompressionType type)
     {
-        var data = EnsureDecompressedPooled(buffer.Memory, out type);
+        var data = TryEnsureDecompressedPooled(buffer.Memory, out type);
         if (data == null) return PooledBuffer.MoveFrom(buffer);
         return data;
     }
     
-    public static PooledBuffer? EnsureDecompressedPooled(Memory<byte> buffer, out CompressionType type)
+    public static PooledBuffer? TryEnsureDecompressedPooled(Memory<byte> buffer, out CompressionType type)
     {
         var l33 = buffer.Span.IsL33t();
         if (l33)

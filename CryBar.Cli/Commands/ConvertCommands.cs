@@ -5,6 +5,7 @@ using System.Xml;
 using CryBar.Bar;
 using CryBar.Cli.Helpers;
 using CryBar.Scenario;
+using CryBar.Utilities;
 
 using Spectre.Console;
 
@@ -16,11 +17,11 @@ public static class ConvertCommands
     {
         var convertCommand = new Command("convert", "Format conversions");
 
-        convertCommand.Add(Build("xmb-to-xml", "Convert XMB to XML", "Path to .xmb file", ".xml",
-            (input, output) =>
+        convertCommand.Add(BuildAsync("xmb-to-xml", "Convert XMB to XML", "Path to .xmb file", ".xml",
+            async (input, output) =>
             {
-                var raw = File.ReadAllBytes(input);
-                var data = BarCompression.EnsureDecompressed(raw, out _);
+                using var raw = await PooledBuffer.FromFile(input);
+                using var data = BarCompression.EnsureDecompressedPooled(raw, out _);
                 var xml = ConversionHelper.ConvertXmbToXmlBytes(data.Span);
                 if (xml == null) { OutputHelper.Error("Failed to convert XMB to XML."); return false; }
                 File.WriteAllBytes(output, xml);
@@ -42,9 +43,9 @@ public static class ConvertCommands
         convertCommand.Add(BuildAsync("ddt-to-png", "Convert DDT texture to PNG", "Path to .ddt file", ".png",
             async (input, output) =>
             {
-                var raw = File.ReadAllBytes(input);
-                var data = BarCompression.EnsureDecompressed(raw, out _);
-                var png = await ConversionHelper.ConvertDdtToPngBytes(data);
+                using var raw = await PooledBuffer.FromFile(input);
+                using var data = BarCompression.EnsureDecompressedPooled(raw, out _);
+                var png = await ConversionHelper.ConvertDdtToPngBytes(data.Memory);
                 if (png == null) { OutputHelper.Error("Failed to convert DDT to PNG."); return false; }
                 await File.WriteAllBytesAsync(output, png);
                 return true;
@@ -53,42 +54,46 @@ public static class ConvertCommands
         convertCommand.Add(BuildAsync("ddt-to-tga", "Convert DDT texture to TGA", "Path to .ddt file", ".tga",
             async (input, output) =>
             {
-                var raw = File.ReadAllBytes(input);
-                var data = BarCompression.EnsureDecompressed(raw, out _);
-                var tga = await ConversionHelper.ConvertDdtToTgaBytes(data);
+                using var raw = await PooledBuffer.FromFile(input);
+                using var data = BarCompression.EnsureDecompressedPooled(raw, out _);
+                var tga = await ConversionHelper.ConvertDdtToTgaBytes(data.Memory);
                 if (tga == null) { OutputHelper.Error("Failed to convert DDT to TGA."); return false; }
                 await File.WriteAllBytesAsync(output, tga);
                 return true;
             }));
 
-        convertCommand.Add(Build("tmm-to-obj", "Convert TMM model to OBJ", "Path to .tmm file", ".obj",
-            (input, output) =>
+        convertCommand.Add(BuildAsync("tmm-to-obj", "Convert TMM model to OBJ", "Path to .tmm file", ".obj",
+            async (input, output) =>
             {
-                var pair = LoadTmmPair(input);
+                var pair = await LoadTmmPairAsync(input);
                 if (pair is null) return false;
-                var obj = ConversionHelper.ConvertTmmToObjBytes(pair.Value.tmm, pair.Value.data);
+                using var tmmBuf = pair.Value.tmm;
+                using var dataBuf = pair.Value.data;
+                var obj = ConversionHelper.ConvertTmmToObjBytes(tmmBuf.Memory, dataBuf.Memory);
                 if (obj == null) { OutputHelper.Error("Failed to convert TMM to OBJ."); return false; }
                 File.WriteAllBytes(output, obj);
                 return true;
             }));
 
-        convertCommand.Add(Build("tmm-to-glb", "Convert TMM model to GLB (binary glTF)", "Path to .tmm file", ".glb",
-            (input, output) =>
+        convertCommand.Add(BuildAsync("tmm-to-glb", "Convert TMM model to GLB (binary glTF)", "Path to .tmm file", ".glb",
+            async (input, output) =>
             {
-                var pair = LoadTmmPair(input);
+                var pair = await LoadTmmPairAsync(input);
                 if (pair is null) return false;
-                var glb = ConversionHelper.ConvertTmmToGlbBytes(pair.Value.tmm, pair.Value.data);
+                using var tmmBuf = pair.Value.tmm;
+                using var dataBuf = pair.Value.data;
+                var glb = ConversionHelper.ConvertTmmToGlbBytes(tmmBuf.Memory, dataBuf.Memory);
                 if (glb == null) { OutputHelper.Error("Failed to convert TMM to GLB."); return false; }
                 File.WriteAllBytes(output, glb);
                 return true;
             }));
 
-        convertCommand.Add(Build("scenario-to-xml", "Convert .mythscn scenario to XML", "Path to .mythscn file", ".xml",
-            (input, output) =>
+        convertCommand.Add(BuildAsync("scenario-to-xml", "Convert .mythscn scenario to XML", "Path to .mythscn file", ".xml",
+            async (input, output) =>
             {
-                var raw = File.ReadAllBytes(input);
-                var data = BarCompression.EnsureDecompressed(raw, out _);
-                var scenario = new ScenarioFile(data);
+                using var raw = await PooledBuffer.FromFile(input);
+                using var data = BarCompression.EnsureDecompressedPooled(raw, out _);
+                var scenario = new ScenarioFile(data.Memory);
                 if (!scenario.Parsed) { OutputHelper.Error("Failed to parse scenario file."); return false; }
                 File.WriteAllText(output, scenario.ToXml(), Encoding.UTF8);
                 return true;
@@ -105,12 +110,12 @@ public static class ConvertCommands
                 return true;
             }));
 
-        convertCommand.Add(Build("trg-to-xml", "Convert .trg trigger file to XML", "Path to .trg file", ".xml",
-            (input, output) =>
+        convertCommand.Add(BuildAsync("trg-to-xml", "Convert .trg trigger file to XML", "Path to .trg file", ".xml",
+            async (input, output) =>
             {
-                var raw = File.ReadAllBytes(input);
-                var data = BarCompression.EnsureDecompressed(raw, out _);
-                var trg = new TriggerFile(data);
+                using var raw = await PooledBuffer.FromFile(input);
+                using var data = BarCompression.EnsureDecompressedPooled(raw, out _);
+                var trg = new TriggerFile(data.Memory);
                 if (!trg.Parsed) { OutputHelper.Error("Failed to parse trigger file."); return false; }
                 File.WriteAllText(output, trg.ToXml(), Encoding.UTF8);
                 return true;
@@ -178,9 +183,9 @@ public static class ConvertCommands
     }
 
     static Command BuildAsync(string name, string description, string inputDesc, string outputExt,
-        Func<string, string, Task<bool>> convert) =>
+        Func<string, string, Task<bool>> convert, bool stripExtension = false) =>
         BuildAsync(name, description, inputDesc,
-            (input, output) => ResolveOutputPath(input, output, outputExt), convert);
+            (input, output) => ResolveOutputPath(input, output, outputExt, stripExtension), convert);
 
     static Command Build(string name, string description, string inputDesc,
         Func<string, string?, string> resolveOutput, Func<string, string, bool> convert) =>
@@ -216,7 +221,7 @@ public static class ConvertCommands
         OutputHelper.Success($"{Markup.Escape(Path.GetFileName(inputPath))} -> {Markup.Escape(outputPath)}");
     }
 
-    static (Memory<byte> tmm, Memory<byte> data)? LoadTmmPair(string inputPath)
+    static async Task<(PooledBuffer tmm, PooledBuffer data)?> LoadTmmPairAsync(string inputPath)
     {
         var dataPath = inputPath + ".data";
         if (!File.Exists(dataPath))
@@ -225,10 +230,20 @@ public static class ConvertCommands
             return null;
         }
 
-        var rawTmm = File.ReadAllBytes(inputPath);
-        var tmmBytes = BarCompression.EnsureDecompressed(rawTmm, out _);
-        var rawData = File.ReadAllBytes(dataPath);
-        var tmmDataBytes = BarCompression.EnsureDecompressed(rawData, out _);
+        using var rawTmm = await PooledBuffer.FromFile(inputPath);
+        var tmmBytes = BarCompression.EnsureDecompressedPooled(rawTmm, out _);
+
+        PooledBuffer tmmDataBytes;
+        try
+        {
+            using var rawData = await PooledBuffer.FromFile(dataPath);
+            tmmDataBytes = BarCompression.EnsureDecompressedPooled(rawData, out _);
+        }
+        catch
+        {
+            tmmBytes.Dispose();
+            throw;
+        }
 
         return (tmmBytes, tmmDataBytes);
     }

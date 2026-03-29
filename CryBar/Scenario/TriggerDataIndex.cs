@@ -67,8 +67,9 @@ public class TriggerDataIndex
             if (entry == null) return null;
 
             // Read, decompress, and convert to XML text
-            var raw = entry.ReadDataRaw(stream);
-            var decompressed = BarCompression.EnsureDecompressed(raw, out _);
+            using var rawPooled = new PooledBuffer(entry.SizeInArchive);
+            entry.ReadDataRaw(stream, rawPooled.Span);
+            using var decompressed = BarCompression.EnsureDecompressedPooled(rawPooled, out _);
             var xmlText = ConversionHelper.ConvertXmbToXmlText(decompressed.Span);
             if (xmlText == null) return null;
 

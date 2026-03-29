@@ -132,7 +132,7 @@ public class BarFileEntry
     {
         var buffer = new PooledBuffer(Math.Max(SizeInArchive, SizeUncompressed));
         var r = ReadDataDecompressed(stream, buffer.Span);
-        if (r == -1) return null;
+        if (r == -1) { buffer.Dispose(); return null; }
         return buffer.Slice(0, r);
     }
 

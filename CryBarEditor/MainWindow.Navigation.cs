@@ -17,7 +17,8 @@ public partial class MainWindow
     public async Task HighlightTextInPreviewAsync(string text)
     {
         await _docReadyTask;
-        await Task.Delay(100);
+        _scrollVersion++;
+        await Task.Delay(50);
 
         var content = _txtEditor.Document.Text;
         if (string.IsNullOrEmpty(content)) return;
@@ -25,10 +26,10 @@ public partial class MainWindow
         var index = content.IndexOf(text, StringComparison.OrdinalIgnoreCase);
         if (index < 0) return;
 
-        _scrollVersion++;
         var location = _txtEditor.Document.GetLocation(index);
         _txtEditor.ScrollTo(location.Line, location.Column);
         _txtEditor.Select(index, text.Length);
+        _txtEditor.CaretOffset = index;
     }
 
     /// <summary>
