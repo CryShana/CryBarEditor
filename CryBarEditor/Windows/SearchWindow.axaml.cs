@@ -12,6 +12,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Runtime;
 using System.Text.RegularExpressions;
 
 using System.Buffers;
@@ -450,6 +451,11 @@ public partial class SearchWindow : SimpleWindow
             _csc.Cancel();
             CurrentlySearching = false;
         }
+
+        // Search allocates many short-lived buffers (BAR streams, decompressed data, char arrays).
+        // Force a compacting GC to reclaim that memory now that the search is done.
+        GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+        GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
 
         // show elapsed time at end
         var time_elapsed = Stopwatch.GetElapsedTime(time_started);
