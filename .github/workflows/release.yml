@@ -35,7 +35,7 @@ jobs:
         shell: pwsh
         run: |
           [xml]$csproj = Get-Content CryBarEditor/CryBarEditor.csproj
-          $version = $csproj.Project.PropertyGroup[0].AssemblyVersion
+          $version = $csproj.Project.PropertyGroup[0].Version
           echo "VERSION=$version" >> $env:GITHUB_OUTPUT
 
       - name: Clean build output
