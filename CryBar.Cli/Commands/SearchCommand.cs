@@ -266,7 +266,7 @@ public static class SearchCommand
             try
             {
                 var decompressed = entry.ReadDataDecompressedPooled(stream);
-                if (decompressed.Length == 0) continue;
+                if (decompressed?.Length  is null or 0) continue;
 
                 string? text = null;
                 if (ext == ".xmb")
