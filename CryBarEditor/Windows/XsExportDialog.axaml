@@ -8,7 +8,7 @@
         x:Class="CryBarEditor.Windows.XsExportDialog"
 		x:DataType="ce:XsExportDialog"
 		WindowStartupLocation="CenterOwner"
-		ExtendClientAreaChromeHints="NoChrome"
+		WindowDecorations="None"
 		ExtendClientAreaToDecorationsHint="True"
 		Foreground="#d9d9d9"
 		Background="#141414"

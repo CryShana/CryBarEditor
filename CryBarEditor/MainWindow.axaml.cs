@@ -275,7 +275,7 @@ public partial class MainWindow : SimpleWindow
                 return;
 
             // sometimes it can be called outside UI thread, so we use Dispatcher to be safe
-            Dispatcher.UIThread.Post(() =>
+            Dispatcher.Post(() =>
             {
                 _ = Preview(value);
             });
@@ -397,7 +397,7 @@ public partial class MainWindow : SimpleWindow
                 {
                     SaveConfiguration();
 
-                    Dispatcher.UIThread.Post(async () =>
+                    Dispatcher.Post(async () =>
                     {
                         var prompt = new Prompt(PromptType.Information, "Version " + s.Result.version, "New version is available for download:") { LinkUrl = s.Result.link };
                         await prompt.ShowDialog(this);

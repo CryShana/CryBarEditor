@@ -54,7 +54,7 @@
 		<!-- Filter -->
 		<Grid DockPanel.Dock="Top" Margin="0,0,0,8">
 			<TextBox Classes="clearable" Text="{Binding Filter, Mode=TwoWay}"
-					 Watermark="Filter quick access items"
+					 PlaceholderText="Filter quick access items"
 					 TextChanged="FilterTextBox_TextChanged" />
 			<Button Classes="filterClear" HorizontalAlignment="Right" VerticalAlignment="Center"
 					Focusable="False" IsTabStop="False" Click="FilterClear_Click"

@@ -277,7 +277,7 @@ public partial class SearchWindow : SimpleWindow
                     var toAdd = batch.ToArray();
                     batch.Clear();
 
-                    await Dispatcher.UIThread.InvokeAsync(() =>
+                    await Dispatcher.InvokeAsync(() =>
                     {
                         foreach (var r in toAdd)
                             SearchResults.Add(r);
@@ -287,7 +287,7 @@ public partial class SearchWindow : SimpleWindow
             // flush remaining items 
             if (batch.Count > 0)
             {
-                await Dispatcher.UIThread.InvokeAsync(() =>
+                await Dispatcher.InvokeAsync(() =>
                 {
                     foreach (var r in batch)
                         SearchResults.Add(r);

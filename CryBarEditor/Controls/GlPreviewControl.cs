@@ -1,6 +1,7 @@
 using System;
 using System.Numerics;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.OpenGL;
 using Avalonia.OpenGL.Controls;
@@ -142,7 +143,7 @@ public class GlPreviewControl : OpenGlControlBase, ICustomHitTest
         gl.BindFramebuffer(GL_FRAMEBUFFER, fb);
 
         // Viewport with DPI scaling
-        var scaling = VisualRoot?.RenderScaling ?? 1.0;
+        var scaling = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1.0;
         int w = (int)(Bounds.Width * scaling);
         int h = (int)(Bounds.Height * scaling);
         if (w <= 0 || h <= 0) return;
