@@ -1,0 +1,3 @@
+[submodule "external/AvaloniaEdit"]
+	path = external/AvaloniaEdit
+	url = https://github.com/CryShana/AvaloniaEdit.git

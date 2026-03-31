@@ -28,17 +28,17 @@
 
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.0.0-rc1" />
-    <PackageReference Include="Avalonia.AvaloniaEdit" Version="12.0.0-rc1" />
     <PackageReference Include="Avalonia.Desktop" Version="12.0.0-rc1" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.0-rc1" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="12.0.0-rc1" />
-    <PackageReference Include="AvaloniaEdit.TextMate" Version="12.0.0-rc1" />
     <PackageReference Include="Material.Icons.Avalonia" Version="3.0.0-avalonia12" />
     <PackageReference Include="TextMateSharp.Grammars" Version="2.0.3" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\CryBar\CryBar.csproj" />
+    <ProjectReference Include="..\external\AvaloniaEdit\src\AvaloniaEdit\AvaloniaEdit.csproj" />
+    <ProjectReference Include="..\external\AvaloniaEdit\src\AvaloniaEdit.TextMate\AvaloniaEdit.TextMate.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
