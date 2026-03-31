@@ -14,12 +14,8 @@ public class ObservableCollectionExtended<T> : ObservableCollection<T>
 
     protected override void InsertItem(int index, T item)
     {
-        CheckReentrancy();
+        // base.InsertItem already fires Count/Item[] PropertyChanged and CollectionChanged Add
         base.InsertItem(index, item);
-
-        OnPropertyChanged(CountPropertyChanged);
-        OnPropertyChanged(IndexerPropertyChanged);
-        OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, item, index));
     }
 
     public void AddItems(IEnumerable<T> items_to_add)

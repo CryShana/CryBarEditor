@@ -149,7 +149,7 @@ public class BarFileEntry
         if (!IsCompressed)
         {
             // read directly into output
-            stream.ReadExactly(read_data);
+            stream.ReadExactly(read_data.Slice(0, SizeInArchive));
             return SizeInArchive;
         }
 

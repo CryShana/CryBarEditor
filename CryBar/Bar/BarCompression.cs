@@ -277,6 +277,7 @@ public static class BarCompression
     {
         var data = TryEnsureDecompressedPooled(buffer.Memory, out type);
         if (data == null) return PooledBuffer.MoveFrom(buffer);
+        buffer.Dispose();
         return data;
     }
     

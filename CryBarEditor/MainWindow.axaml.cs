@@ -142,6 +142,7 @@ public partial class MainWindow : SimpleWindow
     /// </summary>
     const string ROOT_DIRECTORY_NAME = "game";
     const string CONFIG_FILE = "config.json";
+    static readonly HttpClient _httpClient = new();
 
     FoldingManager? _foldingManager;
     readonly RegistryOptions _registryOptions;
@@ -414,7 +415,7 @@ public partial class MainWindow : SimpleWindow
         const string ReleasesLink = @"https://github.com/CryShana/CryBarEditor/releases";
         try
         {
-            var response = await new HttpClient().GetAsync(ReleasesLink);
+            var response = await _httpClient.GetAsync(ReleasesLink);
             response.EnsureSuccessStatusCode();
 
             var content = await response.Content.ReadAsStringAsync();
@@ -840,6 +841,14 @@ public partial class MainWindow : SimpleWindow
         _meshConversionCts?.Dispose();
         _docLoadCts?.Cancel();
         _docLoadCts?.Dispose();
+        _previewCsc?.Cancel();
+        _previewCsc?.Dispose();
+        _previewImage?.Dispose();
+        _textMateInstallation?.Dispose();
+        _rootWatcher.Dispose();
+        _exportWatcher.Dispose();
+        _barStream?.Dispose();
+        _fmodBank?.Dispose();
         _glPreview = null;
         _meshCache.Clear();
         _docCache.Clear();

@@ -590,13 +590,15 @@ public partial class MainWindow
             string? relative_path_full;
             string title;
             Memory<byte> data;
+            PooledBuffer? pooledData = null;
             if (IsContextFromBAR(list))
             {
                 if (SelectedBarEntry == null || _barStream == null)
                     return;
 
                 relative_path_full = GetBARFullRelativePath(SelectedBarEntry);
-                data = SelectedBarEntry.ReadDataDecompressedPooled(_barStream)?.Memory ?? Memory<byte>.Empty;
+                pooledData = SelectedBarEntry.ReadDataDecompressedPooled(_barStream);
+                data = pooledData?.Memory ?? Memory<byte>.Empty;
                 title = $"Pick image to replace {Path.GetFileName(SelectedBarEntry.RelativePath)}";
             }
             else
@@ -610,6 +612,7 @@ public partial class MainWindow
             }
 
             var ddt = new DDTImage(data);
+            pooledData?.Dispose();
             if (!ddt.ParseHeader())
             {
                 _ = ShowError("Failed to parse DDT header");

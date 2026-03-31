@@ -111,6 +111,7 @@ public partial class SearchWindow : SimpleWindow
     protected override void OnClosing(WindowClosingEventArgs e)
     {
         _csc?.Cancel();
+        _csc?.Dispose();
         if (_owner != null && _barFileLoadedHandler != null)
             _owner.OnBarFileLoaded -= _barFileLoadedHandler;
         _rebuildSemaphore.Dispose();
@@ -199,6 +200,7 @@ public partial class SearchWindow : SimpleWindow
 
         EnsureSettingsSaved();
 
+        _csc?.Dispose();
         _csc = new();
         var token = _csc.Token;
         var query = Query;

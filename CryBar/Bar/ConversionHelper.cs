@@ -200,13 +200,10 @@ public static class ConversionHelper
     /// </summary>
     public static string? GetConvertedExtension(string extension, bool tmmToGltf = false)
     {
-        return extension.ToLower() switch
-        {
-            ".xmb" => null, // XMB extension is removed, revealing the underlying extension (e.g. .xml.xmb -> .xml)
-            ".ddt" => ".tga",
-            ".tmm" => tmmToGltf ? ".glb" : ".obj",
-            _ => null
-        };
+        if (extension.Equals(".xmb", StringComparison.OrdinalIgnoreCase)) return null;
+        if (extension.Equals(".ddt", StringComparison.OrdinalIgnoreCase)) return ".tga";
+        if (extension.Equals(".tmm", StringComparison.OrdinalIgnoreCase)) return tmmToGltf ? ".glb" : ".obj";
+        return null;
     }
 
     /// <summary>
@@ -214,6 +211,8 @@ public static class ConversionHelper
     /// </summary>
     public static bool IsConvertibleExtension(string extension)
     {
-        return extension.ToLower() is ".xmb" or ".ddt" or ".tmm";
+        return extension.Equals(".xmb", StringComparison.OrdinalIgnoreCase) ||
+               extension.Equals(".ddt", StringComparison.OrdinalIgnoreCase) ||
+               extension.Equals(".tmm", StringComparison.OrdinalIgnoreCase);
     }
 }

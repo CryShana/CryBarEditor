@@ -192,10 +192,6 @@ public class DDTImage
             return decoded_pixels;
         }
         catch (OperationCanceledException) { return null; }
-        catch
-        {
-            throw;
-        }
     }
     public async Task<Image<Rgba32>?> DecodeMipmapToImage(int mipmap_index = 0, CancellationToken token = default)
     {
@@ -261,7 +257,7 @@ public class DDTImage
 
         byte[][] mipmaps = await encoder.EncodeToRawBytesAsync(ImageToPixels(image), token);
 
-        var memory = new MemoryStream();
+        using var memory = new MemoryStream();
         using var writer = new BinaryWriter(memory, Encoding.UTF8, true);
 
         switch (version)

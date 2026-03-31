@@ -517,6 +517,7 @@ public partial class MainWindow
         }
         catch (Exception ex)
         {
+            stream.Dispose();
             _barStream = null;
             _ = ShowError("Failed to load BAR archive:\n" + ex.Message);
         }

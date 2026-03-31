@@ -94,7 +94,7 @@ public static class BarFormatConverter
         static XmlElement? GetNextNode(XmlDocument doc, ReadOnlySpan<byte> data, ref int offset, List<string> elements, List<string> attributes)
         {
             // node is marked by XN header
-            if (data is not [88, 78, ..])
+            if (offset + 2 > data.Length || data[offset] != 88 || data[offset + 1] != 78)
                 return null;
 
             offset += 2;
@@ -299,9 +299,11 @@ public static class BarFormatConverter
 
         // get all elements and attributes (sorted by order of appearance)
         var elements = new List<string>();
+        var elementIndex = new Dictionary<string, int>();
         var attributes = new List<string>();
-        FindNames(xml.DocumentElement, elements, attributes);
-        
+        var attributeIndex = new Dictionary<string, int>();
+        FindNames(xml.DocumentElement, elements, elementIndex, attributes, attributeIndex);
+
         // elements
         writer.Write(elements.Count);
         for (int i = 0; i < elements.Count; ++i)
@@ -319,7 +321,7 @@ public static class BarFormatConverter
         }
 
         // write all nodes
-        WriteNode(xml.FirstChild, writer, elements, attributes);
+        WriteNode(xml.FirstChild, writer, elementIndex, attributeIndex);
         
         // fill out the data length
         int data_length = (int)(memory.Position - (2 + 4)); // (XR + data length) size is subtracted
@@ -340,25 +342,31 @@ public static class BarFormatConverter
                 return BarCompression.CompressL33t(underlying_memory.Span);
         }
 
-        static void FindNames(XmlNode node, List<string> elements, List<string> attributes)
+        static void FindNames(XmlNode node, List<string> elements, Dictionary<string, int> elementIndex, List<string> attributes, Dictionary<string, int> attributeIndex)
         {
             // handle element
-            if (!elements.Contains(node.Name))
+            if (!elementIndex.ContainsKey(node.Name))
+            {
+                elementIndex[node.Name] = elements.Count;
                 elements.Add(node.Name);
+            }
 
             // handle attributes
             if (node.Attributes != null)
                 foreach (XmlAttribute? attr in node.Attributes)
-                    if (attr != null && !attributes.Contains(attr.Name))
+                    if (attr != null && !attributeIndex.ContainsKey(attr.Name))
+                    {
+                        attributeIndex[attr.Name] = attributes.Count;
                         attributes.Add(attr.Name);
+                    }
 
             // handle children
             foreach (XmlNode? child in node.ChildNodes)
                 if (child?.NodeType == XmlNodeType.Element)
-                    FindNames(child, elements, attributes);
+                    FindNames(child, elements, elementIndex, attributes, attributeIndex);
         }
 
-        static void WriteNode(XmlNode node, BinaryWriter writer, List<string> elements, List<string> attributes)
+        static void WriteNode(XmlNode node, BinaryWriter writer, Dictionary<string, int> elementIndex, Dictionary<string, int> attributeIndex)
         {
             // XN
             writer.Write((byte)88);
@@ -383,7 +391,7 @@ public static class BarFormatConverter
             }
 
             // name id
-            writer.Write(elements.IndexOf(node.Name));
+            writer.Write(elementIndex[node.Name]);
 
             // line num (original files don't use this, so we leave 0)
             writer.Write(0);
@@ -394,7 +402,7 @@ public static class BarFormatConverter
             for (int i = 0; i < attribute_count; i++)
             {
                 var attribute = node.Attributes![i];
-                writer.Write(attributes.IndexOf(attribute.Name));
+                writer.Write(attributeIndex[attribute.Name]);
                 writer.Write(attribute.InnerText.Length);
                 writer.Write(Encoding.Unicode.GetBytes(attribute.InnerText));
             }
@@ -412,7 +420,7 @@ public static class BarFormatConverter
                 var child = node.ChildNodes[i];
                 if (child?.NodeType == XmlNodeType.Element)
                 {
-                    WriteNode(child, writer, elements, attributes);
+                    WriteNode(child, writer, elementIndex, attributeIndex);
                 }
             }
 

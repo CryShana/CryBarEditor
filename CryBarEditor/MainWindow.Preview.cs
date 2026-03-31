@@ -47,6 +47,7 @@ public partial class MainWindow
         }
 
         _previewCsc?.Cancel();
+        _previewCsc?.Dispose();
         _previewCsc = new();
         PreviewedFileData = $"File Size: {new FileInfo(path).Length}";
         await Preview(entry, F_GetFullRelativePathRoot, F_ReadSizeRoot, F_ReadRoot, _previewCsc.Token);
@@ -58,6 +59,7 @@ public partial class MainWindow
             return;
 
         _previewCsc?.Cancel();
+        _previewCsc?.Dispose();
         _previewCsc = new();
 
         PreviewedFileData = $"BAR Offset: {entry.ContentOffset},   BAR Size: {entry.SizeInArchive},   Actual Size: {entry.SizeUncompressed},   Compressed: {(entry.IsCompressed ? "true" : "false")}";

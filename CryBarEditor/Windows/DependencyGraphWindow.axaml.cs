@@ -2346,6 +2346,7 @@ public partial class DependencyGraphWindow : SimpleWindow
     protected override void OnClosed(EventArgs e)
     {
         SnapAnimationToEnd();
+        StopDuplicatePulse();
         _thumbnailCts?.Cancel();
         _thumbnailCts?.Dispose();
         DisposePlaybackBank();

@@ -101,6 +101,10 @@ public class BarFile
         var span = buffer.Span;
         str.ReadExactly(span);
 
+        // separate buffer for variable-length reads (entry names can be up to MAX_TEXT_LENGTH bytes)
+        using var varLenBuffer = SpanOwner<byte>.Allocate(MAX_TEXT_LENGTH + 4);
+        var varSpan = varLenBuffer.Span;
+
         // must start with ESPN
         if (span is not [0x45, 0x53, 0x50, 0x4E, ..])
         {
@@ -170,7 +174,7 @@ public class BarFile
             return false;
         }
 
-        temp_span = span.Slice(0, root_name_length + 4);
+        temp_span = varSpan.Slice(0, root_name_length + 4);
         str.ReadExactly(temp_span);
 
         var root_path = Encoding.Unicode.GetString(temp_span.Slice(0, root_name_length));
@@ -214,7 +218,7 @@ public class BarFile
                 return false;
             }
 
-            temp_span = span.Slice(0,
+            temp_span = varSpan.Slice(0,
                 file_path_length +  // file name
                 4);                 // is compressed flag [uint32]
 
