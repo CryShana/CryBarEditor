@@ -67,7 +67,7 @@ public class TmaFile
     /// <summary>Error flags from the animation error section (0 = no errors).</summary>
     public uint ErrorFlags { get; private set; }
 
-    /// <summary>Error strings reported by the exporter, if any.</summary>
+    /// <summary>Error strings reported by the TMA exporter, if any.</summary>
     public string[]? ErrorStrings { get; private set; }
 
     public TmaFile(ReadOnlyMemory<byte> data)
@@ -118,7 +118,7 @@ public class TmaFile
 
     /// <summary>
     /// Attempts to parse the full TMA body (bounding box, bones, tracks, controllers, errors).
-    /// Returns false if any read fails; caller ignores the return value.
+    /// Returns false if any read fails;
     /// </summary>
     bool TryParseBody(ReadOnlySpan<byte> data, ref int offset)
     {

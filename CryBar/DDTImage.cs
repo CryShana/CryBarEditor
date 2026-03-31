@@ -208,11 +208,10 @@ public class DDTImage
     {
         var output = new Image<Rgba32>(colors.Width, colors.Height);
 
-        if (colors.TryGetMemory(out var srcMemory))
+        var destGroup = output.GetPixelMemoryGroup();
+        if (colors.TryGetMemory(out var srcMemory) && destGroup.Count == 1)
         {
-            // contiguous - single bulk copy
-            var dest = output.GetPixelMemoryGroup()[0].Span;
-            MemoryMarshal.Cast<ColorRgba32, Rgba32>(srcMemory.Span).CopyTo(dest);
+            MemoryMarshal.Cast<ColorRgba32, Rgba32>(srcMemory.Span).CopyTo(destGroup[0].Span);
         }
         else
         {

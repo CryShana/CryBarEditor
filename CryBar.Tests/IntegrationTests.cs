@@ -2240,4 +2240,115 @@ public class IntegrationTests
     }
 
     #endregion
+
+    #region Diagnostic - Cyclops GLB with Materials
+
+    /// <summary>
+    /// Finds a BAR entry by name across all BAR files, returning the entry and its stream.
+    /// Caller must dispose the stream.
+    /// </summary>
+    static (BarFileEntry entry, FileStream stream)? FindEntryInAllBars(string nameContains)
+    {
+        foreach (var bf in FindBarFiles())
+        {
+            FileStream? bfs = null;
+            try
+            {
+                bfs = File.OpenRead(bf);
+                var bfBar = new BarFile(bfs);
+                bfBar.Load(out _);
+                if (bfBar.Entries == null) { bfs.Dispose(); continue; }
+                var found = bfBar.Entries.FirstOrDefault(e =>
+                    e.Name.Contains(nameContains, StringComparison.OrdinalIgnoreCase));
+                if (found != null)
+                    return (found, bfs);
+                bfs.Dispose();
+            }
+            catch { bfs?.Dispose(); }
+        }
+        return null;
+    }
+
+    [SkippableFact]
+    public async Task GlbExport_Cyclops_WithRealMaterials()
+    {
+        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+
+        // Load cyclops.tmm
+        var (_, tmmEntry, tmmStream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "cyclops.tmm");
+        using var _s1 = tmmStream;
+        var tmmRaw = BarCompression.EnsureDecompressed(tmmEntry.ReadDataRaw(tmmStream), out _);
+        var tmm = new TmmFile(tmmRaw);
+        Assert.True(tmm.Parsed, "cyclops.tmm should parse");
+
+        // Load cyclops.tmm.data
+        var (_, dataEntry, dataStream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheModelDataGreek.bar", "cyclops.tmm.data");
+        using var _s2 = dataStream;
+        var dataRaw = BarCompression.EnsureDecompressed(dataEntry.ReadDataRaw(dataStream), out _);
+        var dataFile = new TmmDataFile(dataRaw, tmm);
+        Assert.True(dataFile.Parsed, "cyclops.tmm.data should parse");
+
+        // Find cyclops.material across all BARs
+        var matResult = FindEntryInAllBars("cyclops.material");
+        Skip.If(matResult == null, "cyclops.material not found in any BAR");
+        using var matBarStream = matResult.Value.stream;
+        var matEntry = matResult.Value.entry;
+
+        var matRaw = BarCompression.EnsureDecompressed(matEntry.ReadDataRaw(matBarStream), out _);
+        var xmlText = ConversionHelper.GetTextContent(matRaw.Span, matEntry.Name);
+
+        var parsedMats = MaterialExporter.ParseMaterialXml(xmlText);
+        Assert.True(parsedMats.Count > 0, "Should have at least one submaterial");
+
+        // Find and convert DDT textures to PNG
+        var texPaths = MaterialExporter.GetAllTexturePaths(parsedMats);
+        var pngCache = new Dictionary<string, byte[]?>();
+        foreach (var texPath in texPaths)
+        {
+            var texFileName = Path.GetFileName(texPath.Replace('\\', '/'));
+            var texResult = FindEntryInAllBars(texFileName + ".ddt");
+            if (texResult != null)
+            {
+                using var texStream = texResult.Value.stream;
+                var texRaw = BarCompression.EnsureDecompressed(texResult.Value.entry.ReadDataRaw(texStream), out _);
+                var pngBytes = await ConversionHelper.ConvertDdtToPngBytes(texRaw);
+                pngCache[texPath] = pngBytes;
+                Assert.NotNull(pngBytes);
+            }
+        }
+
+        // Build GlbMaterials
+        var glbMats = new List<GlbExporter.GlbMaterial>();
+        foreach (var pm in parsedMats)
+        {
+            byte[]? baseColor = null, normal = null;
+            foreach (var (texName, texPath2) in pm.Textures)
+            {
+                if (pngCache.TryGetValue(texPath2, out var png) && png != null)
+                {
+                    switch (texName.ToLowerInvariant())
+                    {
+                        case "basecolor": case "diffuse": baseColor = png; break;
+                        case "normals": case "normal": normal = png; break;
+                    }
+                }
+            }
+            glbMats.Add(new GlbExporter.GlbMaterial { Name = pm.Name, BaseColorPng = baseColor, NormalMapPng = normal });
+        }
+
+        // Export with materials (2048x2048 textures - previously crashed with "Destination is too short")
+        var glb = GlbExporter.ExportGlb(tmm, dataFile, glbMats);
+        Assert.NotNull(glb);
+        Assert.True(glb.Length > 100_000, "GLB with 2K textures should be substantial");
+
+        // Validate GLB JSON is parseable
+        uint jsonLen = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(glb.AsSpan(12, 4));
+        var jsonStr = System.Text.Encoding.UTF8.GetString(glb, 20, (int)jsonLen).TrimEnd();
+        using var doc = System.Text.Json.JsonDocument.Parse(jsonStr);
+        Assert.True(doc.RootElement.TryGetProperty("materials", out _), "JSON should contain materials");
+        Assert.True(doc.RootElement.TryGetProperty("textures", out _), "JSON should contain textures");
+        Assert.True(doc.RootElement.TryGetProperty("images", out _), "JSON should contain images");
+    }
+
+    #endregion
 }

@@ -161,9 +161,9 @@ public partial class MainWindow
                     copy(f, file);
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                failed.Add(relative_path);
+                failed.Add($"{Path.GetFileName(relative_path)}: {ex.Message}");
             }
         }
 
@@ -172,7 +172,7 @@ public partial class MainWindow
         if (failed.Count > 0)
         {
             p.Report($"Finished in {sw.Elapsed.TotalSeconds:0.00} seconds with {failed.Count} failed exports:\n"
-                + string.Join(",", failed.Select(x => Path.GetFileName(x))));
+                + string.Join("\n", failed));
         }
         else
         {
