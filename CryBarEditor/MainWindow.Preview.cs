@@ -569,7 +569,7 @@ public partial class MainWindow
     void ScrollEditorToTop()
     {
         var version = ++_scrollVersion;
-        Task.Delay(50).ContinueWith(_ => Dispatcher.UIThread.Post(() =>
+        Task.Delay(50).ContinueWith(_ => Dispatcher.Post(() =>
         {
             if (_scrollVersion == version)
                 _txtEditor.ScrollTo(0, 0);
@@ -634,7 +634,7 @@ public partial class MainWindow
 
     void Update3DStatus(string text)
     {
-        Dispatcher.UIThread.Post(() => _3dStatusText.Text = text);
+        Dispatcher.Post(() => _3dStatusText.Text = text);
     }
 
     async Task LoadTmm3DPreview(string tmmFileName, Memory<byte> tmmData,

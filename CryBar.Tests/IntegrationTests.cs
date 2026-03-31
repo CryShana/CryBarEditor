@@ -254,7 +254,7 @@ public class IntegrationTests
         using var s = stream;
 
         // Use the built-in decompression method
-        var decompressed = entry.ReadDataDecompressedPooled(stream);
+        var decompressed = entry.ReadDataDecompressedPooled(stream)!;
         Assert.True(decompressed.Length > 0);
 
         // Should start with X1 (XMB header)
@@ -489,7 +489,7 @@ public class IntegrationTests
         using var s = stream;
 
         // Use the BarFileEntry decompression path
-        var decompressed = entry.ReadDataDecompressedPooled(stream);
+        var decompressed = entry.ReadDataDecompressedPooled(stream)!;
         Assert.True(decompressed.Length > 0, "Decompressed data should not be empty");
     }
 
@@ -2195,7 +2195,7 @@ public class IntegrationTests
         Skip.If(entry == null, "hoplite.xml.XMB not found");
 
         var raw = entry!.ReadDataDecompressedPooled(stream);
-        var xmlText = ConversionHelper.ConvertXmbToXmlText(raw.Span);
+        var xmlText = ConversionHelper.ConvertXmbToXmlText(raw!.Span);
         Assert.NotNull(xmlText);
 
         var animRefs = AnimationDiscovery.FindAnimationsFromAnimXml(xmlText);

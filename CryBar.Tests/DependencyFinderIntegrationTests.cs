@@ -60,8 +60,8 @@ public class DependencyFinderIntegrationTests
         var entry = bar.Entries!.First(e =>
             e.RelativePath.Contains(entryPathContains, StringComparison.OrdinalIgnoreCase));
 
-        var raw = entry.ReadDataDecompressedPooled(stream);
-        var xml = ConversionHelper.ConvertXmbToXmlText(raw.Span);
+        using var raw = entry.ReadDataDecompressedPooled(stream);
+        var xml = ConversionHelper.ConvertXmbToXmlText(raw!.Span);
         return xml!;
     }
 
@@ -86,7 +86,7 @@ public class DependencyFinderIntegrationTests
                 if (entry == null) continue;
 
                 var raw = entry.ReadDataDecompressedPooled(stream);
-                var xml = ConversionHelper.ConvertXmbToXmlText(raw.Span);
+                var xml = ConversionHelper.ConvertXmbToXmlText(raw!.Span);
                 if (xml == null) continue;
 
                 var entryPath = string.IsNullOrEmpty(bar.RootPath)
@@ -146,7 +146,7 @@ public class DependencyFinderIntegrationTests
             try
             {
                 var raw = barEntry.ReadDataDecompressedPooled(stream);
-                var xml = ConversionHelper.ConvertXmbToXmlText(raw.Span);
+                var xml = ConversionHelper.ConvertXmbToXmlText(raw!.Span);
                 if (xml == null) continue;
 
                 var definitions = SoundsetParser.ParseSoundsetXml(xml);
@@ -375,7 +375,7 @@ public class DependencyFinderIntegrationTests
         Skip.If(entry == null, "hoplite.xml.XMB soundset not found in Sound.bar");
 
         var raw = entry!.ReadDataDecompressedPooled(stream);
-        var xml = ConversionHelper.ConvertXmbToXmlText(raw.Span);
+        var xml = ConversionHelper.ConvertXmbToXmlText(raw!.Span);
         Assert.NotNull(xml);
 
         var entryPath = Path.Combine(bar.RootPath!, entry.RelativePath);
@@ -416,7 +416,7 @@ public class DependencyFinderIntegrationTests
         Skip.If(entry == null, "No tactics file found");
 
         var raw = entry!.ReadDataDecompressedPooled(stream);
-        var xml = ConversionHelper.ConvertXmbToXmlText(raw.Span);
+        var xml = ConversionHelper.ConvertXmbToXmlText(raw!.Span);
         Assert.NotNull(xml);
 
         var entryPath = Path.Combine(bar.RootPath!, entry.RelativePath);

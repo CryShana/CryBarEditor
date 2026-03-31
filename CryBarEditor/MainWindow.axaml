@@ -203,7 +203,7 @@
 							<micons:MaterialIcon Kind="FileExportOutline" Width="16" Height="16" />
 						</ToggleButton>
 						<Grid>
-							<TextBox Classes="clearable" Text="{Binding FilesQuery, Mode=TwoWay}" Watermark="Filter files" TextChanged="FilterTextBox_TextChanged" />
+							<TextBox Classes="clearable" Text="{Binding FilesQuery, Mode=TwoWay}" PlaceholderText="Filter files" TextChanged="FilterTextBox_TextChanged" />
 							<Button Classes="filterClear" HorizontalAlignment="Right" VerticalAlignment="Center"
 									Focusable="False" IsTabStop="False" Click="FilterClear_Click"
 									IsVisible="False" Background="Transparent" BorderThickness="0"
@@ -276,7 +276,7 @@
 							<micons:MaterialIcon Kind="FileExportOutline" Width="16" Height="16" />
 						</ToggleButton>
 						<Grid>
-							<TextBox Classes="clearable" Text="{Binding EntryQuery, Mode=TwoWay}" Watermark="Filter BAR entries" TextChanged="FilterTextBox_TextChanged" />
+							<TextBox Classes="clearable" Text="{Binding EntryQuery, Mode=TwoWay}" PlaceholderText="Filter BAR entries" TextChanged="FilterTextBox_TextChanged" />
 							<Button Classes="filterClear" HorizontalAlignment="Right" VerticalAlignment="Center"
 									Focusable="False" IsTabStop="False" Click="FilterClear_Click"
 									IsVisible="False" Background="Transparent" BorderThickness="0"
@@ -345,7 +345,7 @@
 							<Label DockPanel.Dock="Top" Content="{Binding LoadedBankFilePathOrRelative}" Foreground="Gray" Margin="0,2,0,0" />
 						</DockPanel>
 						<Grid DockPanel.Dock="Top">
-							<TextBox Classes="clearable" Text="{Binding BankQuery, Mode=TwoWay}" Watermark="Filter events" TextChanged="FilterTextBox_TextChanged" />
+							<TextBox Classes="clearable" Text="{Binding BankQuery, Mode=TwoWay}" PlaceholderText="Filter events" TextChanged="FilterTextBox_TextChanged" />
 							<Button Classes="filterClear" HorizontalAlignment="Right" VerticalAlignment="Center"
 									Focusable="False" IsTabStop="False" Click="FilterClear_Click"
 									IsVisible="False" Background="Transparent" BorderThickness="0"
