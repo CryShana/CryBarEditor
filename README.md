@@ -77,6 +77,8 @@ You should always prefer the Additive method if possible
 ## XS scripting reference
 If you are writing XS scripts, you can also checkout my personal reference I wrote [here](Documentation/XSScriptingReference.md) 
 
+Otherwise I recommend you check out the official documentation in game's folder.
+
 ## Screenshots
 ### Previewing XMB content
 ![CryBarEditor_1](https://assets.cryshana.me/34Cmg3iPHLA9.png)
