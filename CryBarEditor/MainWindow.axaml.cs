@@ -631,6 +631,19 @@ public partial class MainWindow : SimpleWindow
         return unicode;
     }
 
+    // Checks for null bytes in the first 512 bytes - a reliable binary file indicator.
+    // Binary formats (PE, ELF, etc.) always have null bytes in their headers.
+    // Kept small to avoid false positives on text/XML files with null padding at the end.
+    public static bool DetectIfBinary(ReadOnlySpan<byte> data)
+    {
+        int checkLen = Math.Min(data.Length, 512);
+        for (int i = 0; i < checkLen; i++)
+        {
+            if (data[i] == 0) return true;
+        }
+        return false;
+    }
+
     [GeneratedRegex(@"<\w+[^>]+>[^<]+</\w+\>")]
     public static partial Regex GetXMLTagRegex();
     #endregion

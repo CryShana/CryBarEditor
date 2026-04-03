@@ -375,14 +375,17 @@ public partial class MainWindow
                     }
 
                     var unicode = DetectIfUnicode(data.Span);
-                    PreviewedFileNote = unicode ? "[Unicode]" : "[UTF-8]";
+                    var isBinary = !unicode && DetectIfBinary(data.Span);
+                    PreviewedFileNote = isBinary ? "[Binary]" : (unicode ? "[Unicode]" : "[UTF-8]");
 
                     // set text
                     text = unicode ?
                         Encoding.Unicode.GetString(data.Span) :
                         Encoding.UTF8.GetString(data.Span);
 
-                    if (ext is not ".xml" && GetXMLTagRegex().IsMatch(text))
+                    // skip XML sniffing for binary content - PE/binary files often contain embedded
+                    // XML manifests that would otherwise trigger XML grammar and spike RAM usage
+                    if (!isBinary && ext is not ".xml" && GetXMLTagRegex().IsMatch(text))
                         ext = ".xml";
 
                     //if (ext == ".simjson")
