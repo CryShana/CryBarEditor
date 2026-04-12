@@ -619,6 +619,107 @@ public class IntegrationTests
             $"No TMM files fully parsed out of {tmmEntries.Count}");
     }
 
+    /// <summary>
+    /// Verifies that GLB export applies a pure X-axis reflection to TMM bone data:
+    /// glTF bone world.X = -TMM WS.X, world.Y = TMM WS.Y, world.Z = TMM WS.Z.
+    /// This guards against regressing to the Z-flip convention (which made exported
+    /// models face opposite to the dev FBX).
+    /// </summary>
+    [SkippableFact]
+    public void ToxotesBronze_GlbExport_BoneWorldMatchesTmmWithXFlip()
+    {
+        Skip.IfNot(GameInstalled, "AoM:Retold game directory not found");
+
+        var (_, tmmEntry, stream) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheMeta.bar", "toxotes_bronze.tmm");
+        var tmmRaw = BarCompression.EnsureDecompressed(tmmEntry.ReadDataRaw(stream), out _);
+        var tmm = new TmmFile(tmmRaw);
+        Assert.True(tmm.Parsed);
+        stream.Dispose();
+
+        var (_, dataEntry, stream2) = OpenBarAndFindEntry(@"modelcache\ArtModelCacheModelDataGreek.bar", "toxotes_bronze.tmm.data");
+        using var s = stream2;
+        var dataRaw = BarCompression.EnsureDecompressed(dataEntry.ReadDataRaw(stream2), out _);
+        var dataFile = new TmmDataFile(dataRaw, tmm);
+        Assert.True(dataFile.Parsed);
+
+        var glb = GlbExporter.ExportGlb(tmm, dataFile);
+        Assert.NotNull(glb);
+
+        // Parse GLB JSON chunk to extract bone matrices
+        var jsonLen = BitConverter.ToInt32(glb, 12);
+        var json = System.Text.Encoding.UTF8.GetString(glb, 20, jsonLen).TrimEnd('\0', ' ');
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        var nodes = doc.RootElement.GetProperty("nodes");
+
+        // Build parent map and locate bone nodes by name
+        int nodeCount = nodes.GetArrayLength();
+        var parent = new int[nodeCount];
+        Array.Fill(parent, -1);
+        var nodeName = new string?[nodeCount];
+        var nodeLocal = new System.Numerics.Matrix4x4[nodeCount];
+        for (int i = 0; i < nodeCount; i++)
+        {
+            var n = nodes[i];
+            nodeName[i] = n.TryGetProperty("name", out var nm) ? nm.GetString() : null;
+            if (n.TryGetProperty("children", out var kids))
+                foreach (var k in kids.EnumerateArray()) parent[k.GetInt32()] = i;
+            if (n.TryGetProperty("matrix", out var mat))
+            {
+                var m = new float[16];
+                int j = 0;
+                foreach (var f in mat.EnumerateArray()) m[j++] = f.GetSingle();
+                // Column-major flat -> System.Numerics (row-vector) matrix
+                nodeLocal[i] = new System.Numerics.Matrix4x4(
+                    m[0], m[1], m[2], m[3],
+                    m[4], m[5], m[6], m[7],
+                    m[8], m[9], m[10], m[11],
+                    m[12], m[13], m[14], m[15]);
+            }
+            else
+            {
+                nodeLocal[i] = System.Numerics.Matrix4x4.Identity;
+            }
+        }
+
+        System.Numerics.Matrix4x4 World(int i)
+        {
+            var m = nodeLocal[i];
+            for (int p = parent[i]; p >= 0; p = parent[p])
+                m = m * nodeLocal[p];
+            return m;
+        }
+
+        string[] probe = ["Hips", "Head", "HeadTop_End", "LeftArm", "RightArm", "LeftFoot", "RightFoot"];
+        int checks = 0;
+        foreach (var bone in tmm.Bones!)
+        {
+            bool wanted = false;
+            foreach (var p in probe)
+                if (bone.Name.EndsWith(p, StringComparison.OrdinalIgnoreCase)) { wanted = true; break; }
+            if (!wanted) continue;
+
+            int nodeIdx = Array.FindIndex(nodeName, n => n == bone.Name);
+            Assert.True(nodeIdx >= 0, $"Bone {bone.Name} not found in GLB nodes");
+
+            var worldM = World(nodeIdx);
+            // S.N Matrix4x4 translation lives in M41/M42/M43
+            float gx = worldM.M41, gy = worldM.M42, gz = worldM.M43;
+            float tx = bone.WorldSpaceMatrix[12];
+            float ty = bone.WorldSpaceMatrix[13];
+            float tz = bone.WorldSpaceMatrix[14];
+
+            // Expect pure X-flip: gltf = (-tmm.x, tmm.y, tmm.z)
+            Assert.True(Math.Abs(gx - (-tx)) < 1e-3f,
+                $"{bone.Name} X mismatch: glb={gx} expected={-tx} (tmm={tx})");
+            Assert.True(Math.Abs(gy - ty) < 1e-3f,
+                $"{bone.Name} Y mismatch: glb={gy} expected={ty}");
+            Assert.True(Math.Abs(gz - tz) < 1e-3f,
+                $"{bone.Name} Z mismatch: glb={gz} expected={tz}");
+            checks++;
+        }
+        Assert.True(checks >= 5, $"Expected to verify several bones, only checked {checks}");
+    }
+
     #endregion
 
     #region TMM.DATA Full Parsing (TmmDataFile)

@@ -44,12 +44,12 @@ public static class MeshDataBuilder
         for (int i = 0; i < vertexCount; i++)
         {
             var v = srcVerts[i];
-            float px = (float)v.PosX;
+            float px = -(float)v.PosX; // negate X for LH->RH (preserves facing direction)
             float py = (float)v.PosY;
-            float pz = -(float)v.PosZ; // negate Z for LH->RH
+            float pz = (float)v.PosZ;
 
             var (nx, ny, nz) = TbnDecoder.DecodeNormal(v.TbnX, v.TbnY, v.TbnZ);
-            nz = -nz; // negate Z for LH->RH
+            nx = -nx; // negate X for LH->RH
 
             float u = (float)v.U;
             float vCoord = (float)v.V; // no flip - TMM top-left origin matches OpenGL

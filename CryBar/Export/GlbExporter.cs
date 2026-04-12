@@ -36,14 +36,16 @@ public static class GlbExporter
     const uint ChunkTypeBin = 0x004E4942;
 
     /// <summary>
-    /// Column-major 4x4 matrix indices that get negated for LH->RH Z-flip.
-    /// Bool lookup is O(1) vs Array.IndexOf's O(N) scan per element.
+    /// Column-major 4x4 matrix indices that get negated for LH->RH X-flip.
+    /// For similarity transform F*M*F with F = diag(-1,1,1,1), an entry M[i,j]
+    /// flips sign when exactly one of {i,j} is 0. Column-major flat indices:
+    ///   (1,0)=1  (2,0)=2  (3,0)=3  (0,1)=4  (0,2)=8  (0,3)=12
     /// </summary>
-    static readonly bool[] ZNegateMask = CreateZNegateMask();
-    static bool[] CreateZNegateMask()
+    static readonly bool[] AxisNegateMask = CreateAxisNegateMask();
+    static bool[] CreateAxisNegateMask()
     {
         var mask = new bool[16];
-        foreach (var i in new[] { 2, 6, 8, 9, 14 }) mask[i] = true;
+        foreach (var i in new[] { 1, 2, 3, 4, 8, 12 }) mask[i] = true;
         return mask;
     }
 
@@ -330,9 +332,9 @@ public static class GlbExporter
         for (int i = 0; i < vertices.Length; i++)
         {
             var v = vertices[i];
-            float px = (float)v.PosX;
+            float px = -(float)v.PosX; // negate X for LH->RH (preserves facing direction)
             float py = (float)v.PosY;
-            float pz = -(float)v.PosZ; // negate Z for RH
+            float pz = (float)v.PosZ;
             BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), px); offset += 4;
             BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), py); offset += 4;
             BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), pz); offset += 4;
@@ -350,17 +352,17 @@ public static class GlbExporter
             var (qx, qy, qz, qw, handedness) = TbnDecoder.QuatFromPacked(v.TbnX, v.TbnY, v.TbnZ);
             var (tangent, _, normal) = TbnDecoder.QuatToTbn(qx, qy, qz, qw, handedness);
 
-            // Normals: negate Z for RH
-            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(normalOffset), normal.x); normalOffset += 4;
+            // Normals: negate X for RH
+            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(normalOffset), -normal.x); normalOffset += 4;
             BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(normalOffset), normal.y); normalOffset += 4;
-            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(normalOffset), -normal.z); normalOffset += 4;
+            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(normalOffset), normal.z); normalOffset += 4;
 
-            // Tangents: negate Z for RH
-            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(tangentOffset), tangent.x); tangentOffset += 4;
+            // Tangents: negate X for RH
+            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(tangentOffset), -tangent.x); tangentOffset += 4;
             BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(tangentOffset), tangent.y); tangentOffset += 4;
-            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(tangentOffset), -tangent.z); tangentOffset += 4;
+            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(tangentOffset), tangent.z); tangentOffset += 4;
 
-            // Z-negate (LH->RH) flips the TBN determinant, so tangent.w is inverted:
+            // X-negate (LH->RH) flips the TBN determinant, so tangent.w is inverted:
             //   hand=0 (det=+1 in game) -> det=-1 in glTF -> w = -1
             //   hand=1 (det=-1 in game) -> det=+1 in glTF -> w = +1
             float w = handedness == 0 ? -1.0f : 1.0f;
@@ -453,7 +455,7 @@ public static class GlbExporter
             for (int j = 0; j < 16; j++)
             {
                 float val = ibm[j];
-                if (ZNegateMask[j]) val = -val;
+                if (AxisNegateMask[j]) val = -val;
                 BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), val); offset += 4;
             }
         }
@@ -499,7 +501,7 @@ public static class GlbExporter
 
     /// <summary>
     /// TMA translations are deltas from bind pose in parent space.
-    /// Composes: final_T = bind_T + anim_T, then Z-negate for RH.
+    /// Composes: final_T = bind_T + anim_T, then X-negate for RH.
     /// </summary>
     static void WriteComposedTranslations(byte[] buf, int offset,
         Vector3[] translations, Vector3 bindT, int frameCount)
@@ -507,16 +509,16 @@ public static class GlbExporter
         for (int i = 0; i < frameCount; i++)
         {
             var finalT = bindT + translations[i];
-            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), finalT.X); offset += 4;
+            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), -finalT.X); offset += 4;
             BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), finalT.Y); offset += 4;
-            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), -finalT.Z); offset += 4;
+            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(offset), finalT.Z); offset += 4;
         }
     }
 
     /// <summary>
     /// TMA rotation deltas composed with bind pose in bone-local frame.
     /// Game uses conjugated quaternion convention - conj(delta) applied after bind.
-    /// Z-mirror for LH->RH: q' = (-x, -y, z, w).
+    /// X-mirror for LH->RH: q' = (x, -y, -z, w).
     /// Hemisphere consistency prevents SLERP flipping between frames.
     /// </summary>
     static void WriteAnimationRotations(byte[] buf, int offset,
@@ -527,7 +529,7 @@ public static class GlbExporter
         {
             var finalR = Quaternion.Normalize(
                 Quaternion.Multiply(bindR, Quaternion.Conjugate(rotations[i])));
-            finalR = new Quaternion(-finalR.X, -finalR.Y, finalR.Z, finalR.W);
+            finalR = new Quaternion(finalR.X, -finalR.Y, -finalR.Z, finalR.W);
             if (i > 0 && Quaternion.Dot(prev, finalR) < 0)
                 finalR = Quaternion.Negate(finalR);
             prev = finalR;
@@ -540,7 +542,7 @@ public static class GlbExporter
 
     /// <summary>
     /// Writes animation scales (component-wise multiply with bind scale).
-    /// Scale is unaffected by Z-mirror.
+    /// Scale is unaffected by axis reflection.
     /// </summary>
     static void WriteAnimationScales(byte[] buf, int offset,
         Vector3[] scales, Vector3 bindS, int frameCount)
@@ -646,7 +648,7 @@ public static class GlbExporter
             if (animBuffers.Count > 0)
                 WriteBoneTrsJson(w, bones[i].ParentSpaceMatrix);
             else
-                WriteZNegatedMatrixJson(w, bones[i].ParentSpaceMatrix);
+                WriteAxisNegatedMatrixJson(w, bones[i].ParentSpaceMatrix);
 
             // Children: child bones + attachments parented to this bone
             var childIndices = new List<int>();
@@ -677,8 +679,8 @@ public static class GlbExporter
             w.WriteStartObject();
             w.WriteString("name", attachments[i].Name);
 
-            // Convert row-major 3×4 attachment transform to column-major 4×4 for glTF
-            WriteZNegatedMatrixJson(w, RowMajor3x4ToColumnMajor4x4(attachments[i].AdjustmentTransformMatrix));
+            // Convert row-major 3x4 attachment transform to column-major 4x4 for glTF
+            WriteAxisNegatedMatrixJson(w, RowMajor3x4ToColumnMajor4x4(attachments[i].AdjustmentTransformMatrix));
 
             w.WriteEndObject();
         }
@@ -689,11 +691,11 @@ public static class GlbExporter
             var pt = impactPoints![i];
             w.WriteStartObject();
             w.WriteString("name", $"ImpactPoint_{i}");
-            // LH->RH: negate Z
+            // LH->RH: negate X
             w.WriteStartArray("translation");
-            w.WriteNumberValue(pt[0]);
+            w.WriteNumberValue(-pt[0]);
             w.WriteNumberValue(pt[1]);
-            w.WriteNumberValue(-pt[2]);
+            w.WriteNumberValue(pt[2]);
             w.WriteEndArray();
             w.WriteEndObject();
         }
@@ -1114,7 +1116,7 @@ public static class GlbExporter
 
     /// <summary>
     /// Decomposes a column-major parent-space matrix to TRS and writes as glTF
-    /// "translation", "rotation", "scale" properties with Z-mirror for LH->RH.
+    /// "translation", "rotation", "scale" properties with X-mirror for LH->RH.
     /// Required for nodes targeted by animation (glTF spec forbids "matrix" on animated nodes).
     /// </summary>
     static void WriteBoneTrsJson(Utf8JsonWriter w, float[] matrix)
@@ -1122,15 +1124,15 @@ public static class GlbExporter
         DecomposeColumnMajor(matrix, out var t, out var r, out var s);
 
         w.WriteStartArray("translation");
-        w.WriteNumberValue(t.X);
+        w.WriteNumberValue(-t.X);
         w.WriteNumberValue(t.Y);
-        w.WriteNumberValue(-t.Z);
+        w.WriteNumberValue(t.Z);
         w.WriteEndArray();
 
         w.WriteStartArray("rotation");
-        w.WriteNumberValue(-r.X);
+        w.WriteNumberValue(r.X);
         w.WriteNumberValue(-r.Y);
-        w.WriteNumberValue(r.Z);
+        w.WriteNumberValue(-r.Z);
         w.WriteNumberValue(r.W);
         w.WriteEndArray();
 
@@ -1142,16 +1144,16 @@ public static class GlbExporter
     }
 
     /// <summary>
-    /// Writes a column-major 4×4 matrix as a glTF "matrix" JSON array,
-    /// negating the Z-axis components for LH->RH conversion.
+    /// Writes a column-major 4x4 matrix as a glTF "matrix" JSON array,
+    /// negating the X-axis components for LH->RH conversion.
     /// </summary>
-    static void WriteZNegatedMatrixJson(Utf8JsonWriter w, float[] matrix)
+    static void WriteAxisNegatedMatrixJson(Utf8JsonWriter w, float[] matrix)
     {
         w.WriteStartArray("matrix");
         for (int j = 0; j < 16; j++)
         {
             float val = matrix[j];
-            if (ZNegateMask[j]) val = -val;
+            if (AxisNegateMask[j]) val = -val;
             w.WriteNumberValue(val);
         }
         w.WriteEndArray();
@@ -1182,9 +1184,9 @@ public static class GlbExporter
         int end = start + count;
         for (int i = start; i < end; i++)
         {
-            float px = (float)vertices[i].PosX;
+            float px = -(float)vertices[i].PosX; // negated X for RH
             float py = (float)vertices[i].PosY;
-            float pz = -(float)vertices[i].PosZ; // negated Z for RH
+            float pz = (float)vertices[i].PosZ;
 
             if (px < min[0]) min[0] = px;
             if (py < min[1]) min[1] = py;

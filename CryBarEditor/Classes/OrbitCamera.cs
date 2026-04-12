@@ -80,7 +80,7 @@ public class OrbitCamera
         TargetZ = cz;
         float fovRad = Fov * System.MathF.PI / 180f;
         Distance = radius > 0 ? radius / System.MathF.Sin(fovRad / 2f) * 1.1f : 5f;
-        Azimuth = 142f;
+        Azimuth = 322f;
         Elevation = 23f;
     }
 }
