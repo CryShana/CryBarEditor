@@ -679,6 +679,10 @@ public partial class MainWindow : SimpleWindow
 
             if (config.ShowScenarioWater == false)
                 _showScenarioWaterCheckbox.IsChecked = false;
+
+            _screenshotScaleFactor = config.ScreenshotScaleFactor ?? 1;
+            _screenshotTransparent = config.ScreenshotTransparent ?? true;
+            _screenshotFormat = config.ScreenshotFormat ?? "webp";
         }
         catch
         {
@@ -727,6 +731,9 @@ public partial class MainWindow : SimpleWindow
             _lastConfiguration.Show3DTextured = _useTextured3D;
             _lastConfiguration.ShowScenarioEntities = _showScenarioEntitiesCheckbox.IsChecked == true;
             _lastConfiguration.ShowScenarioWater = _showScenarioWaterCheckbox.IsChecked == true;
+            _lastConfiguration.ScreenshotScaleFactor = _screenshotScaleFactor;
+            _lastConfiguration.ScreenshotTransparent = _screenshotTransparent;
+            _lastConfiguration.ScreenshotFormat = _screenshotFormat;
 
             File.WriteAllText(config_path, JsonSerializer.Serialize(_lastConfiguration, CryBarJsonContext.Default.Configuration));
         }

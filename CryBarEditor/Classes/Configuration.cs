@@ -35,6 +35,9 @@ public class Configuration
     public bool? ShowScenarioEntities { get; set; }
     public bool? ShowScenarioWater { get; set; }
     public string? ScenarioLastSaveDirectory { get; set; }
+    public double? ScreenshotScaleFactor { get; set; }
+    public bool? ScreenshotTransparent { get; set; }
+    public string? ScreenshotFormat { get; set; }
 }
 
 [JsonSourceGenerationOptions(DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]

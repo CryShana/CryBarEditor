@@ -15,6 +15,7 @@ using CryBar.TMM;
 using CryBar.Utilities;
 using CryBarEditor.Classes;
 using CryBarEditor.Controls;
+using CryBarEditor.Windows;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Advanced;
 using SixLabors.ImageSharp.PixelFormats;
@@ -45,6 +46,9 @@ public partial class MainWindow
     CancellationTokenSource? _textureLoadCts;
     string? _currentTmmFileName;
     bool _useTextured3D;
+    double _screenshotScaleFactor = 1;
+    bool _screenshotTransparent = true;
+    string _screenshotFormat = "webp";
 
     CancellationToken RestartTextureLoadCts()
     {
@@ -1226,6 +1230,46 @@ public partial class MainWindow
     void ResetCamera_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         FitCameraToScene();
+    }
+
+    async void Screenshot_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (_glPreview == null || _glPreview.GetMeshData() == null)
+            return;
+
+        var scaling = GetTopLevel(_glPreview)?.RenderScaling ?? 1.0;
+        int baseW = (int)(_glPreview.Bounds.Width * scaling);
+        int baseH = (int)(_glPreview.Bounds.Height * scaling);
+        if (baseW <= 0 || baseH <= 0)
+            return;
+
+        var suggestedBase = Path.GetFileNameWithoutExtension(_currentTmmFileName ?? "model");
+        var dialog = new CaptureScreenshotWindow(baseW, baseH,
+            _screenshotScaleFactor, _screenshotTransparent, _screenshotFormat,
+            suggestedBase, async (options, file) =>
+            {
+                int w = (int)(baseW * options.Factor);
+                int h = (int)(baseH * options.Factor);
+                var capture = await _glPreview.CaptureScreenshotAsync(w, h, options.Transparent);
+
+                await using var stream = await file.OpenWriteAsync();
+                await ScreenshotHelpers.EncodeAsync(capture.Rgba, capture.Width, capture.Height, options.Format, stream);
+            });
+        await dialog.ShowDialog(this);
+
+        var result = dialog.GetResult();
+        if (result != null)
+        {
+            _screenshotScaleFactor = result.Factor;
+            _screenshotTransparent = result.Transparent;
+            _screenshotFormat = result.Format;
+            SaveConfiguration();
+
+            Update3DStatus("Screenshot saved");
+            await Task.Delay(2000);
+            if (_3dStatusText.Text == "Screenshot saved")
+                Update3DStatus("");
+        }
     }
     #endregion
 

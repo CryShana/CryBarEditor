@@ -536,6 +536,13 @@
 										<TextBlock x:Name="_3dStatusText"
 											VerticalAlignment="Center" Margin="0,0,8,0"
 											Foreground="Gray" />
+										<Button Click="Screenshot_Click" Padding="6,2" Margin="0,0,8,0"
+											ToolTip.Tip="Render current view to an image file">
+											<StackPanel Orientation="Horizontal" Spacing="4">
+												<micons:MaterialIcon Kind="CameraOutline" Width="14" Height="14"/>
+												<TextBlock Text="Screenshot"/>
+											</StackPanel>
+										</Button>
 										<Button Content="Reset Camera"
 											Click="ResetCamera_Click" Padding="6,2" />
 									</StackPanel>

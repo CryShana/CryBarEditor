@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Numerics;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -36,6 +37,8 @@ public class GlPreviewControl : OpenGlControlBase, ICustomHitTest
     const int GL_TEXTURE0                 = 0x84C0;
     const int GL_TEXTURE1                 = 0x84C1;
     const int GL_DYNAMIC_DRAW             = 0x88E8;
+    const int GL_DEPTH_COMPONENT24        = 0x81A6;
+    const int GL_MAX_RENDERBUFFER_SIZE    = 0x84E8;
     // OpenGlControlBase has no background, so implement ICustomHitTest for pointer events
     bool ICustomHitTest.HitTest(Point point) => Bounds.Contains(point);
 
@@ -162,6 +165,97 @@ public class GlPreviewControl : OpenGlControlBase, ICustomHitTest
 
     /// <summary>Returns the currently loaded mesh, or null if no mesh has been loaded yet.</summary>
     public PreviewMeshData? GetMeshData() => _meshData;
+
+    public readonly record struct CaptureResult(byte[] Rgba, int Width, int Height);
+
+    TaskCompletionSource<CaptureResult>? _pendingCapture;
+
+    /// <summary>
+    /// Renders the current mesh (no grid/markers/gizmo) into an offscreen framebuffer at the
+    /// given pixel size and returns the RGBA pixels, top row first. Uses the current camera.
+    /// </summary>
+    public Task<CaptureResult> CaptureScreenshotAsync(int width, int height, bool transparentBackground)
+    {
+        if (_meshData == null)
+            return Task.FromException<CaptureResult>(new InvalidOperationException("No model loaded"));
+        if (_pendingCapture != null)
+            return Task.FromException<CaptureResult>(new InvalidOperationException("Capture already in progress"));
+
+        var tcs = new TaskCompletionSource<CaptureResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _pendingCapture = tcs;
+        QueueGlAction(gl =>
+        {
+            _pendingCapture = null;
+            try { tcs.TrySetResult(RenderCapture(gl, width, height, transparentBackground)); }
+            catch (Exception ex) { tcs.TrySetException(ex); }
+        });
+        return tcs.Task;
+    }
+
+    unsafe CaptureResult RenderCapture(GlInterface gl, int width, int height, bool transparent)
+    {
+        var mesh = _meshData ?? throw new InvalidOperationException("No model loaded");
+        if (!_glInitialized || _glReadPixels == null)
+            throw new InvalidOperationException("GL not initialized");
+
+        gl.GetIntegerv(GL_MAX_RENDERBUFFER_SIZE, out int maxSize);
+        width = Math.Clamp(width, 1, maxSize);
+        height = Math.Clamp(height, 1, maxSize);
+
+        gl.GetIntegerv(GL_FRAMEBUFFER_BINDING, out int prevFb);
+
+        int fbo = gl.GenFramebuffer();
+        int colorRb = gl.GenRenderbuffer();
+        int depthRb = gl.GenRenderbuffer();
+        try
+        {
+            gl.BindRenderbuffer(GL_RENDERBUFFER, colorRb);
+            gl.RenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, width, height);
+            gl.BindRenderbuffer(GL_RENDERBUFFER, depthRb);
+            gl.RenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width, height);
+            gl.BindRenderbuffer(GL_RENDERBUFFER, 0);
+
+            gl.BindFramebuffer(GL_FRAMEBUFFER, fbo);
+            gl.FramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, colorRb);
+            gl.FramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthRb);
+            if (gl.CheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+                throw new InvalidOperationException("Offscreen framebuffer incomplete");
+
+            gl.Viewport(0, 0, width, height);
+            if (transparent) gl.ClearColor(0f, 0f, 0f, 0f);
+            else gl.ClearColor(0.04f, 0.04f, 0.04f, 1f);
+            gl.Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+            float aspect = (float)width / height;
+            var view = _camera.GetViewMatrix(out var eye);
+            var proj = _camera.GetProjectionMatrix(aspect);
+            var mvp = view * proj;
+            var target = new Vector3(_camera.TargetX, _camera.TargetY, _camera.TargetZ);
+            var lightDir = Vector3.Normalize(eye - target);
+
+            gl.Enable(GL_DEPTH_TEST);
+            gl.BindVertexArray(_vao);
+            EnsureMeshUploaded(gl, mesh);
+            DrawMeshPass(gl, mesh, mvp, lightDir);
+            gl.BindVertexArray(0);
+            gl.UseProgram(0);
+            gl.Disable(GL_DEPTH_TEST);
+
+            var pixels = new byte[(long)width * height * 4];
+            fixed (byte* p = pixels)
+                _glReadPixels(0, 0, width, height, (uint)GL_RGBA, (uint)GL_UNSIGNED_BYTE, p);
+            ScreenshotHelpers.FlipRowsInPlace(pixels, width, height);
+
+            return new CaptureResult(pixels, width, height);
+        }
+        finally
+        {
+            gl.BindFramebuffer(GL_FRAMEBUFFER, prevFb);
+            gl.DeleteFramebuffer(fbo);
+            gl.DeleteRenderbuffer(colorRb);
+            gl.DeleteRenderbuffer(depthRb);
+        }
+    }
 
     /// <summary>
     /// Uploads RGBA8 pixels to a fresh GL texture and returns the handle.
@@ -534,6 +628,9 @@ public class GlPreviewControl : OpenGlControlBase, ICustomHitTest
         // Notify hosts first so they drop their GL-bound caches before tear-down.
         GlContextLost?.Invoke();
 
+        _pendingCapture?.TrySetException(new InvalidOperationException("GL context lost"));
+        _pendingCapture = null;
+
         gl.BindBuffer(GL_ARRAY_BUFFER, 0);
         gl.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
         gl.BindVertexArray(0);
@@ -609,23 +706,40 @@ public class GlPreviewControl : OpenGlControlBase, ICustomHitTest
 
         gl.BindVertexArray(_vao);
 
-        // Upload mesh data if dirty
-        if (_meshDirty)
-        {
-            _meshDirty = false;
-            gl.BindBuffer(GL_ARRAY_BUFFER, _vbo);
-            fixed (float* ptr = mesh.Vertices)
-                gl.BufferData(GL_ARRAY_BUFFER, (IntPtr)(mesh.Vertices.Length * sizeof(float)), (IntPtr)ptr, GL_STATIC_DRAW);
-
-            gl.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, _ebo);
-            fixed (uint* ptr = mesh.Indices)
-                gl.BufferData(GL_ELEMENT_ARRAY_BUFFER, (IntPtr)(mesh.Indices.Length * sizeof(uint)), (IntPtr)ptr, GL_STATIC_DRAW);
-        }
+        EnsureMeshUploaded(gl, mesh);
 
         // Light direction follows camera so the visible side is always well-lit
         var target = new Vector3(_camera.TargetX, _camera.TargetY, _camera.TargetZ);
         var lightDir = Vector3.Normalize(eye - target);
 
+        DrawMeshPass(gl, mesh, mvp, lightDir);
+
+        gl.BindVertexArray(0);
+        gl.UseProgram(0);
+        gl.Disable(GL_DEPTH_TEST);
+
+        DrawMarkers(gl, mvp);
+        ProjectAndEmitMarkers(mvp, scaling, w, h);
+        DrawGizmo(gl, w, h, scaling);
+        ProjectAndEmitGizmoLabels(scaling, w, h);
+    }
+
+    unsafe void EnsureMeshUploaded(GlInterface gl, PreviewMeshData mesh)
+    {
+        if (!_meshDirty) return;
+        _meshDirty = false;
+
+        gl.BindBuffer(GL_ARRAY_BUFFER, _vbo);
+        fixed (float* ptr = mesh.Vertices)
+            gl.BufferData(GL_ARRAY_BUFFER, (IntPtr)(mesh.Vertices.Length * sizeof(float)), (IntPtr)ptr, GL_STATIC_DRAW);
+
+        gl.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, _ebo);
+        fixed (uint* ptr = mesh.Indices)
+            gl.BufferData(GL_ELEMENT_ARRAY_BUFFER, (IntPtr)(mesh.Indices.Length * sizeof(uint)), (IntPtr)ptr, GL_STATIC_DRAW);
+    }
+
+    unsafe void DrawMeshPass(GlInterface gl, PreviewMeshData mesh, in Matrix4x4 mvp, Vector3 lightDir)
+    {
         // Snapshot once; the UI thread can null _activeTextures between this read and the deref below.
         var activeTextures = _activeTextures;
         bool textured = _useTextured && activeTextures != null;
@@ -675,15 +789,6 @@ public class GlPreviewControl : OpenGlControlBase, ICustomHitTest
                 gl.DrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, (IntPtr)(offset * sizeof(uint)));
             }
         }
-
-        gl.BindVertexArray(0);
-        gl.UseProgram(0);
-        gl.Disable(GL_DEPTH_TEST);
-
-        DrawMarkers(gl, mvp);
-        ProjectAndEmitMarkers(mvp, scaling, w, h);
-        DrawGizmo(gl, w, h, scaling);
-        ProjectAndEmitGizmoLabels(scaling, w, h);
     }
 
     unsafe void BindSolidProgram(GlInterface gl, in Matrix4x4 mvp, Vector3 lightDir)
