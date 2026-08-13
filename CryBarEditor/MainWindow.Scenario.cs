@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
@@ -10,6 +11,7 @@ using Avalonia.Threading;
 using CryBar.Bar;
 using CryBar.Scenario;
 using CryBar.Scenario.Editor;
+using CryBar.Utilities;
 using CryBarEditor.Classes;
 using CryBarEditor.Controls;
 
@@ -81,6 +83,8 @@ public partial class MainWindow
         _scenarioInspector.ExecuteCommand = cmd => data.Editor.Execute(cmd);
         _scenarioInspector.LoadProtoNamesAsync = async () => await GetOrLoadProtoNamesAsync(data);
         _scenarioInspector.LoadTerrainTypesAsync = async () => await GetOrLoadTerrainTypesAsync(data);
+        _scenarioInspector.LoadMajorGodNamesAsync = async () => await GetOrLoadMajorGodNamesAsync(data);
+        _scenarioInspector.SetWorld(data);
 
         _scenarioInspector.BindEditor(data.Editor, sourcePath: ResolveScenarioSourcePath());
         _scenarioInspector.SaveRequested    -= OnToolbarSave;
@@ -89,6 +93,8 @@ public partial class MainWindow
         _scenarioInspector.SaveRequested    += OnToolbarSave;
         _scenarioInspector.SaveAsRequested  += OnToolbarSaveAs;
         _scenarioInspector.DiscardRequested += OnToolbarDiscard;
+        _scenarioInspector.SelectGodBarRequested -= SelectGodBarRequested;
+        _scenarioInspector.SelectGodBarRequested += SelectGodBarRequested;
 
         if (_scenarioGl is not null)
         {
@@ -142,7 +148,8 @@ public partial class MainWindow
         // Discard() sets LastChange = null -> rebuild everything.
         var hint = data.Editor.LastChange?.Hint;
         var effective = hint ?? (RenderHint.TerrainTexture | RenderHint.TerrainGeometry
-                                | RenderHint.TerrainWater   | RenderHint.EntityList);
+                                | RenderHint.TerrainWater   | RenderHint.EntityList
+                                | RenderHint.Players);
 
         // Selection may reference dead ids; prune before renderer rebuilds.
         // Also invalidate the id->index cache: DeleteEntities shifts indices.
@@ -242,7 +249,7 @@ public partial class MainWindow
             // Offload sync compression off the UI thread.
             await Task.Run(() =>
             {
-                data.Scenario.FlushParsedViews(data.Terrain, data.Entities, data.ProtoTable);
+                data.Scenario.FlushParsedViews(data.Terrain, data.Entities, data.ProtoTable, data.Players);
                 var bytes = data.Scenario.ToBytes();
                 var compressed = BarCompression.CompressL33t(bytes);
                 using var f = File.Create(path);
@@ -400,26 +407,42 @@ public partial class MainWindow
 
         Dispatcher.UIThread.Post(() => _scenarioProgressOverlay.IsVisible = true);
 
-        var manualBarPath = _manualTextureBarPath;
+        // User-picked BAR opens eagerly for immediate failure feedback; the
+        // auto-probed game BAR opens lazily on the first index miss so the
+        // common indexed-root case never pays the TOC parse.
+        var userBarPath = _manualTextureBarPath;
+        var manualBarPath = userBarPath ?? GameInstall.TryFindFile("art", "ArtTerrainTextures.bar");
         ManualTextureBar? manualBar = null;
-        if (manualBarPath is not null)
+        Lazy<Task<ManualTextureBar?>>? lazyBar = null;
+        if (userBarPath is not null)
         {
-            manualBar = await Task.Run(() => ManualTextureBar.TryOpen(manualBarPath), ct);
+            manualBar = await Task.Run(() => ManualTextureBar.TryOpen(userBarPath), ct);
             if (manualBar is null)
             {
                 Dispatcher.UIThread.Post(() =>
-                    _scenarioInspector.SetManualBarStatus(manualBarPath, loadFailed: true));
+                    _scenarioInspector.SetManualBarStatus(userBarPath, loadFailed: true));
                 _manualTextureBarPath = null;
                 manualBarPath = null;
             }
         }
+        else if (manualBarPath is not null)
+        {
+            var probedPath = manualBarPath;
+            lazyBar = new(() => Task.Run(() => ManualTextureBar.TryOpen(probedPath)));
+        }
 
         try
         {
+            ScenarioTextureLoader.NameResolver.ResolveFromManualBarAsync? barResolver =
+                manualBar is not null ? manualBar.ResolveTextureAsync
+                : lazyBar is not null ? async (name, innerCt) =>
+                    await lazyBar.Value is { } bar ? await bar.ResolveTextureAsync(name, innerCt) : null
+                : null;
+
             var resolver = new ScenarioTextureLoader.NameResolver(
                 _fileIndex,
                 ReadFromIndexEntryPooledAsync,
-                manualBar is not null ? manualBar.ResolveTextureAsync : null);
+                barResolver);
 
             await ScenarioTextureLoader.LoadAllAsync(
                 data,
@@ -431,7 +454,11 @@ public partial class MainWindow
             Dispatcher.UIThread.Post(() =>
             {
                 _scenarioInspector.UpdateAfterLoad(data);
-                if (manualBarPath is not null)
+
+                bool usedBar = data.TextureSources.Contains(TextureSource.ManualBar);
+
+                // Auto-probed path is only worth showing when it actually supplied textures.
+                if (manualBarPath is not null && (usedBar || _manualTextureBarPath is not null))
                     _scenarioInspector.SetManualBarStatus(manualBarPath, loadFailed: false);
             });
         }
@@ -439,24 +466,158 @@ public partial class MainWindow
         finally
         {
             manualBar?.Dispose();
+            if (lazyBar is { IsValueCreated: true })
+                (await lazyBar.Value)?.Dispose();
             Dispatcher.UIThread.Post(() => _scenarioProgressOverlay.IsVisible = false);
         }
     }
 
-    async void SelectManualTextureBarClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    // Shared "find XMB in index -> decompress -> XML text" step used by the
+    // proto, terrain-type, and god-name caches.
+    async ValueTask<string?> LoadXmbXmlFromIndexAsync(string fileName)
+    {
+        if (_fileIndex is null) return null;
+
+        var entries = _fileIndex.Find(fileName);
+        if (entries.Count == 0) return null;
+
+        try
+        {
+            using var raw = await ReadFromIndexEntryPooledAsync(entries[0]);
+            if (raw == null) return null;
+
+            using var decompressed = BarCompression.EnsureDecompressedPooled(raw, out _);
+            return ConversionHelper.ConvertXmbToXmlText(decompressed.Span);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    // Major god names in major_gods.xml civ order (P2 god id is a 1-based index
+    // into this list). Resolved from the FileIndex when the root covers the game
+    // dir, otherwise from Data.bar (auto-probed or user-selected).
+    async ValueTask<List<string>?> GetOrLoadMajorGodNamesAsync(ScenarioPreviewData data)
+    {
+        if (data.MajorGodNamesCache is not null) return data.MajorGodNamesCache;
+        if (data.MajorGodNamesUnavailable) return null;
+
+        List<string>? names = null;
+        if (await LoadXmbXmlFromIndexAsync("major_gods.xml.XMB") is { } xmlText)
+        {
+            var parsed = ParseMajorGodNamesFromXml(xmlText);
+            if (parsed.Count > 0) names = parsed;
+        }
+
+        if (names is null && GameInstall.TryFindFile("data", "Data.bar") is { } dataBar)
+            names = await LoadGodNamesFromBarAsync(dataBar);
+
+        if (names is null)
+        {
+            data.MajorGodNamesUnavailable = true;
+            return null;
+        }
+
+        data.MajorGodNamesCache = names;
+        return names;
+    }
+
+    static async Task<List<string>?> LoadGodNamesFromBarAsync(string barPath)
+    {
+        var xmlText = await Task.Run(() => LoadMajorGodsXmlFromBarAsync(barPath));
+        if (xmlText is null) return null;
+
+        var names = ParseMajorGodNamesFromXml(xmlText);
+        return names.Count > 0 ? names : null;
+    }
+
+    static async Task<string?> LoadMajorGodsXmlFromBarAsync(string barPath)
+    {
+        try
+        {
+            var stream = File.OpenRead(barPath);
+            var bar = new BarFile(stream);
+            if (!bar.Load(out _)) { stream.Dispose(); return null; }
+
+            using var cached = new CachedBarFile(bar, stream);
+            var entry = bar.Entries?.FirstOrDefault(e =>
+                e.RelativePath.EndsWith("major_gods.xml.XMB", StringComparison.OrdinalIgnoreCase));
+            if (entry is null) return null;
+
+            using var raw = await cached.ReadEntryRawPooledAsync(entry);
+            if (raw is null) return null;
+
+            using var decompressed = BarCompression.EnsureDecompressedPooled(raw, out _);
+            return ConversionHelper.ConvertXmbToXmlText(decompressed.Span);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    // <civs><civ><name>Zeus</name>... - god id is the 1-based civ position.
+    static List<string> ParseMajorGodNamesFromXml(string xmlText)
+    {
+        var names = new List<string>();
+        using var reader = System.Xml.XmlReader.Create(new System.IO.StringReader(xmlText));
+        while (reader.Read())
+        {
+            if (reader.NodeType != System.Xml.XmlNodeType.Element || reader.Name != "civ") continue;
+
+            string? name = null;
+            using (var civ = reader.ReadSubtree())
+            {
+                while (civ.Read())
+                {
+                    if (civ.NodeType == System.Xml.XmlNodeType.Element && civ.Name == "name")
+                    {
+                        name = civ.ReadElementContentAsString();
+                        break;
+                    }
+                }
+            }
+            names.Add(name ?? "");
+        }
+        return names;
+    }
+
+    async Task<string?> PickBarFileAsync(string title)
     {
         var picker = await StorageProvider.OpenFilePickerAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions
         {
-            Title = "Select fallback ArtTerrainTextures.bar",
+            Title = title,
             AllowMultiple = false,
             FileTypeFilter =
             [
                 new Avalonia.Platform.Storage.FilePickerFileType("BAR archive") { Patterns = ["*.bar"] },
             ],
         });
-        if (picker.Count == 0) return;
+        if (picker.Count == 0) return null;
         var local = picker[0].Path.LocalPath;
-        if (string.IsNullOrEmpty(local)) return;
+        return string.IsNullOrEmpty(local) ? null : local;
+    }
+
+    async void SelectGodBarRequested()
+    {
+        if (_scenarioData is not { } data) return;
+
+        var local = await PickBarFileAsync("Select Data.bar (contains major_gods.xml)");
+        if (local is null) return;
+
+        if (await LoadGodNamesFromBarAsync(local) is { } names)
+        {
+            data.MajorGodNamesCache = names;
+            data.MajorGodNamesUnavailable = false;
+        }
+        _scenarioInspector.SetWorld(data);
+    }
+
+    async void SelectManualTextureBarClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var local = await PickBarFileAsync("Select fallback ArtTerrainTextures.bar");
+        if (local is null) return;
 
         _manualTextureBarPath = local;
 
@@ -470,28 +631,12 @@ public partial class MainWindow
     async ValueTask<List<string>?> GetOrLoadProtoNamesAsync(ScenarioPreviewData data)
     {
         if (data.ProtoNamesCache is not null) return data.ProtoNamesCache;
-        if (_fileIndex is null) return null;
 
-        var entries = _fileIndex.Find("proto.xml.XMB");
-        if (entries.Count == 0) return null;
+        if (await LoadXmbXmlFromIndexAsync("proto.xml.XMB") is not { } xmlText) return null;
 
-        try
-        {
-            using var raw = await ReadFromIndexEntryPooledAsync(entries[0]);
-            if (raw == null) return null;
-
-            using var decompressed = BarCompression.EnsureDecompressedPooled(raw, out _);
-            var xmlText = ConversionHelper.ConvertXmbToXmlText(decompressed.Span);
-            if (xmlText == null) return null;
-
-            var names = ParseProtoNamesFromXml(xmlText);
-            data.ProtoNamesCache = names;
-            return names;
-        }
-        catch
-        {
-            return null;
-        }
+        var names = ParseProtoNamesFromXml(xmlText);
+        data.ProtoNamesCache = names;
+        return names;
     }
 
     // XmlReader (not XDocument) for AOT-friendliness. Alphabetical for browse-ability.
@@ -515,28 +660,12 @@ public partial class MainWindow
     async ValueTask<TerrainTypesCache?> GetOrLoadTerrainTypesAsync(ScenarioPreviewData data)
     {
         if (data.TerrainTypesCache is not null) return data.TerrainTypesCache;
-        if (_fileIndex is null) return null;
 
-        var entries = _fileIndex.Find("terrain_types.xml.XMB");
-        if (entries.Count == 0) return null;
+        if (await LoadXmbXmlFromIndexAsync("terrain_types.xml.XMB") is not { } xmlText) return null;
 
-        try
-        {
-            using var raw = await ReadFromIndexEntryPooledAsync(entries[0]);
-            if (raw == null) return null;
-
-            using var decompressed = BarCompression.EnsureDecompressedPooled(raw, out _);
-            var xmlText = ConversionHelper.ConvertXmbToXmlText(decompressed.Span);
-            if (xmlText == null) return null;
-
-            var cache = ParseTerrainTypesFromXml(xmlText);
-            data.TerrainTypesCache = cache;
-            return cache;
-        }
-        catch
-        {
-            return null;
-        }
+        var cache = ParseTerrainTypesFromXml(xmlText);
+        data.TerrainTypesCache = cache;
+        return cache;
     }
 
     // <terraintypes><type name=...><uiclass><subtype>TEX</subtype>...
@@ -601,6 +730,8 @@ public partial class MainWindow
         _scenarioInspector.ExecuteCommand = null;
         _scenarioInspector.LoadProtoNamesAsync = null;
         _scenarioInspector.LoadTerrainTypesAsync = null;
+        _scenarioInspector.LoadMajorGodNamesAsync = null;
+        _scenarioInspector.SetWorld(null);
         if (_scenarioGl is not null)
         {
             _scenarioGl.GestureCommitted -= OnGestureCommitted;

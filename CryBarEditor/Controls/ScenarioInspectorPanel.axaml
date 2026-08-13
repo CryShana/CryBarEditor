@@ -86,7 +86,8 @@
                     </Button>
                 </Grid>
                 <Button x:Name="_selectBarButton"
-                        Content="Select fallback BAR..."
+                        Content="Select ArtTerrainTextures.bar..."
+                        ToolTip.Tip="Missing terrain textures are stored in your game installation under game\art\ArtTerrainTextures.bar - select that file to load them"
                         Click="SelectBarClick"
                         IsVisible="False"
                         HorizontalAlignment="Stretch"
@@ -104,6 +105,60 @@
         <!-- Scrollable middle: cursor + unified Selected section. -->
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="8" Spacing="6">
+                <StackPanel x:Name="_worldSection" IsVisible="False" Spacing="4">
+                    <Button Click="OnWorldToggleClick"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Stretch"
+                            Background="Transparent" BorderThickness="0" Padding="0,2"
+                            Cursor="Hand">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0" Text="World" FontWeight="Bold" Foreground="#888"
+                                       VerticalAlignment="Center"/>
+                            <micons:MaterialIcon x:Name="_worldToggleIcon" Grid.Column="1"
+                                                 Kind="ChevronDown" Width="16" Height="16"
+                                                 Foreground="#888"/>
+                        </Grid>
+                    </Button>
+                    <StackPanel x:Name="_worldContent" IsVisible="False" Spacing="6">
+                        <Button x:Name="_selectGodBarButton"
+                                Content="Select Data.bar..."
+                                ToolTip.Tip="God names could not be resolved - select your game installation's game\data\Data.bar (contains major_gods.xml) to show god names instead of numbers"
+                                Click="OnSelectGodBarClick"
+                                IsVisible="False"
+                                HorizontalAlignment="Stretch"
+                                Background="#2c3a4f" Foreground="#cfd8e8" Padding="8,4"/>
+                        <StackPanel x:Name="_worldPlayers" Spacing="6">
+                            <StackPanel.Styles>
+                                <Style Selector="NumericUpDown /template/ TextBox">
+                                    <Setter Property="MinHeight" Value="0"/>
+                                    <Setter Property="Height" Value="26"/>
+                                    <Setter Property="Padding" Value="6,3"/>
+                                    <Setter Property="VerticalContentAlignment" Value="Center"/>
+                                </Style>
+                            </StackPanel.Styles>
+                        </StackPanel>
+                        <TextBlock Text="Diplomacy" FontWeight="Bold" Foreground="#888" Margin="0,4,0,0"/>
+                        <Grid x:Name="_diplomacyGrid" HorizontalAlignment="Left"/>
+                        <TextBlock FontSize="11" Foreground="#7e8aa0"
+                                   Text="Row = that player's stance toward the column player. Click to cycle."/>
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <Rectangle Width="12" Height="12" Fill="#3f9950"/>
+                                <TextBlock Text="Ally" FontSize="11" Foreground="#7e8aa0"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <Rectangle Width="12" Height="12" Fill="#666666"/>
+                                <TextBlock Text="Neutral" FontSize="11" Foreground="#7e8aa0"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <Rectangle Width="12" Height="12" Fill="#a03535"/>
+                                <TextBlock Text="Enemy" FontSize="11" Foreground="#7e8aa0"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                    <Separator Background="#333"/>
+                </StackPanel>
+
                 <TextBlock Text="Cursor" FontWeight="Bold" Foreground="#888"/>
                 <TextBlock x:Name="_cursorInfo" Text="(hover map)" Foreground="#ddd" FontFamily="Cascadia Code,Consolas"/>
 

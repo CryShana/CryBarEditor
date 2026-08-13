@@ -8,7 +8,7 @@ public partial class ScenarioFile
     /// Replaces the J1.TN and J1.Z1 section bytes from parsed views.
     /// Throws if J1 / TN / Z1 are missing or unparseable -- silently dropping
     /// edits would corrupt user work.
-    public void FlushParsedViews(ScenarioTerrain terrain, IReadOnlyList<ScenarioEntity> entities, IReadOnlyList<string>? protoTable = null)
+    public void FlushParsedViews(ScenarioTerrain terrain, IReadOnlyList<ScenarioEntity> entities, IReadOnlyList<string>? protoTable = null, ScenarioPlayersView? players = null)
     {
         ArgumentNullException.ThrowIfNull(terrain);
         ArgumentNullException.ThrowIfNull(entities);
@@ -20,16 +20,23 @@ public partial class ScenarioFile
         var j1 = new ScenarioJ1(j1Section.Data);
         if (!j1.Parsed) throw new InvalidOperationException("J1 section did not parse; cannot flush edits.");
 
-        ScenarioSection? tmSection = null, tn = null, z1 = null;
+        ScenarioSection? tmSection = null, tn = null, z1 = null, pl = null;
         foreach (var sub in j1.Sections)
         {
             if (tmSection is null && (sub.Marker == "TM" || sub.Marker == "PT")) tmSection = sub;
             else if (tn is null && sub.Marker == "TN") tn = sub;
             else if (z1 is null && sub.Marker == "Z1") z1 = sub;
-            if (tmSection is not null && tn is not null && z1 is not null) break;
+            else if (pl is null && sub.Marker == "PL") pl = sub;
         }
         if (tn is null) throw new InvalidOperationException("J1 has no TN sub-section; cannot flush terrain.");
         if (z1 is null) throw new InvalidOperationException("J1 has no Z1 sub-section; cannot flush entities.");
+
+        if (players is not null)
+        {
+            var plTarget = pl ?? FindSection("PL")
+                ?? throw new InvalidOperationException("Scenario has no PL section; cannot flush player edits.");
+            plTarget.Data = WritePlayersView(players);
+        }
 
         if (tmSection is not null && protoTable is not null)
         {

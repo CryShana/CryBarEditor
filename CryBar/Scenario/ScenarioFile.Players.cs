@@ -206,7 +206,8 @@ public partial class ScenarioFile
             writer.WriteAttributeString("wood", FormatFloat(wood));
             writer.WriteAttributeString("food", FormatFloat(food));
             writer.WriteAttributeString("favor", FormatFloat(favor));
-            writer.WriteAttributeString("total", FormatFloat(total));
+            // "total" is always gold+wood+food+favor, so it is derived on import instead of exported
+            if (total != gold + wood + food + favor) writer.WriteAttributeString("total", FormatFloat(total));
             if (resMagic != 4) writer.WriteAttributeString("resMagic", resMagic.ToString());
             if (p6Unk1Str.Length > 0) writer.WriteAttributeString("list1", p6Unk1Str);
             if (p6Unk2Str.Length > 0) writer.WriteAttributeString("list2", p6Unk2Str);
@@ -518,11 +519,16 @@ public partial class ScenarioFile
                     WriteCsvInt32List(p6Bw, reader.GetAttribute("list1"));
                     WriteCsvInt32List(p6Bw, reader.GetAttribute("list2"));
                     p6Bw.Write(int.Parse(reader.GetAttribute("resMagic") ?? "4"));
-                    p6Bw.Write(float.Parse(reader.GetAttribute("gold") ?? "0"));
-                    p6Bw.Write(float.Parse(reader.GetAttribute("wood") ?? "0"));
-                    p6Bw.Write(float.Parse(reader.GetAttribute("food") ?? "0"));
-                    p6Bw.Write(float.Parse(reader.GetAttribute("favor") ?? "0"));
-                    p6Bw.Write(float.Parse(reader.GetAttribute("total") ?? "0"));
+                    var gold = float.Parse(reader.GetAttribute("gold") ?? "0");
+                    var wood = float.Parse(reader.GetAttribute("wood") ?? "0");
+                    var food = float.Parse(reader.GetAttribute("food") ?? "0");
+                    var favor = float.Parse(reader.GetAttribute("favor") ?? "0");
+                    var totalAttr = reader.GetAttribute("total");
+                    p6Bw.Write(gold);
+                    p6Bw.Write(wood);
+                    p6Bw.Write(food);
+                    p6Bw.Write(favor);
+                    p6Bw.Write(totalAttr is not null ? float.Parse(totalAttr) : gold + wood + food + favor);
                     for (int i = 0; i < 17; i++) p6Bw.Write((byte)0);
 
                     if (!reader.IsEmptyElement)

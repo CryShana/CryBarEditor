@@ -4,6 +4,7 @@ using System.Xml;
 
 using CryBar.Bar;
 using CryBar.BCnEncoder.Shared;
+using CryBar.Cli.Config;
 using CryBar.Cli.Helpers;
 using CryBar.Scenario;
 using CryBar.Utilities;
@@ -145,6 +146,49 @@ public static class ConvertCommands
                 if (!trg.Parsed) { OutputHelper.Error("Failed to parse trigger XML."); return false; }
                 File.WriteAllBytes(output, trg.ToBytes());
                 return true;
+            }));
+
+        convertCommand.Add(BuildWithLossless("trg-to-xs", "Convert .trg trigger file to XS trigger script", "Path to .trg file",
+            async (input, output, lossless) =>
+            {
+                using var raw = await PooledBuffer.FromFile(input);
+                using var data = BarCompression.EnsureDecompressedPooled(raw, out _);
+
+                var trg = new TriggerFile(data.Memory);
+                if (!trg.Parsed) { OutputHelper.Error("Failed to parse trigger file."); return false; }
+
+                var xs = ScenarioFile.ConvertTriggersXmlToXs(trg.ToXml(), lossless);
+                await File.WriteAllTextAsync(output, xs);
+                return true;
+            }));
+
+        convertCommand.Add(Build("xs-to-trg", "Convert XS trigger script to .trg trigger file", "Path to .xs file", ".trg",
+            (input, output) =>
+            {
+                var xs = File.ReadAllText(input);
+                var xml = ScenarioFile.ParseXsToTriggersXml(xs, LoadTriggerDataFromRoot(), Path.GetDirectoryName(input));
+                var trg = TriggerFile.FromXml(xml);
+                if (!trg.Parsed) { OutputHelper.Error("Failed to convert XS to TRG."); return false; }
+                File.WriteAllBytes(output, trg.ToBytes());
+                return true;
+            }));
+
+        convertCommand.Add(Build("xs-to-xml", "Convert XS trigger script to triggers XML", "Path to .xs file", ".xml",
+            (input, output) =>
+            {
+                var xs = File.ReadAllText(input);
+                var xml = ScenarioFile.ParseXsToTriggersXml(xs, LoadTriggerDataFromRoot(), Path.GetDirectoryName(input));
+                File.WriteAllText(output, xml, Encoding.UTF8);
+                return true;
+            }));
+
+        convertCommand.Add(BuildWithLossless("xml-to-xs", "Convert triggers XML to XS trigger script", "Path to triggers XML file",
+            (input, output, lossless) =>
+            {
+                var xml = File.ReadAllText(input);
+                var xs = ScenarioFile.ConvertTriggersXmlToXs(xml, lossless);
+                File.WriteAllText(output, xs);
+                return Task.FromResult(true);
             }));
 
         convertCommand.Add(CreateXsToRm());
@@ -311,6 +355,58 @@ public static class ConvertCommands
                 using var image = Image.Load<Rgba32>(inputPath);
                 var bytes = await ConversionHelper.EncodeImageToDdsBytes(image, format, srgb, mipmaps);
                 await File.WriteAllBytesAsync(outputPath, bytes);
+            }
+            catch (Exception ex)
+            {
+                OutputHelper.Error($"Conversion failed: {ex.Message}");
+                return 1;
+            }
+
+            ReportSuccess(inputPath, outputPath);
+            return 0;
+        });
+
+        return cmd;
+    }
+
+    static TriggerDataIndex? LoadTriggerDataFromRoot()
+    {
+        var root = CliConfig.GetRoot();
+        if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) return null;
+        return TriggerDataIndex.Load(root);
+    }
+
+    // Like BuildAsync but with a --lossless flag and a fixed .xs output extension.
+    static Command BuildWithLossless(string name, string description, string inputDesc,
+        Func<string, string, bool, Task<bool>> convert)
+    {
+        var inputArg = new Argument<FileInfo>("input") { Description = inputDesc };
+        var outputOption = new Option<string?>("-o", "--output") { Description = "Output file path" };
+        var losslessOption = new Option<bool>("--lossless") { Description = "Embed round-trip metadata in the XS output (lossless re-import)" };
+
+        var cmd = new Command(name, description) { inputArg, outputOption, losslessOption };
+
+        cmd.SetAction(async parseResult =>
+        {
+            OutputHelper.ApplyGlobalOptions(parseResult);
+
+            var inputFile = parseResult.GetValue(inputArg);
+            if (inputFile == null || !inputFile.Exists)
+            {
+                OutputHelper.Error($"Input file not found: {inputFile?.FullName ?? "(null)"}");
+                return 1;
+            }
+
+            var inputPath = inputFile.FullName;
+            var outputPath = ResolveOutputPath(inputPath, parseResult.GetValue(outputOption), ".xs");
+            var lossless = parseResult.GetValue(losslessOption);
+
+            OutputHelper.EnsureDir(outputPath);
+
+            try
+            {
+                if (!await convert(inputPath, outputPath, lossless))
+                    return 1;
             }
             catch (Exception ex)
             {

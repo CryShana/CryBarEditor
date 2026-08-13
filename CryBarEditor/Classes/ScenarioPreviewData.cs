@@ -60,9 +60,19 @@ public sealed class ScenarioPreviewData : IDisposable
     // are visible to both via in-place edits.
     public ScenarioEditor Editor { get; private set; } = null!;
 
+    // Null when the PL section is missing or has an unexpected layout;
+    // the World inspector section hides itself in that case.
+    public ScenarioPlayersView? Players { get; private set; }
+
     // Lazy game-wide proto names (proto.xml.XMB). Null until first picker open;
     // picker falls back to ProtoTable when null.
     public List<string>? ProtoNamesCache { get; set; }
+
+    // Lazy major god names in major_gods.xml civ order (god id is 1-based index).
+    // Null until resolved; UI falls back to raw numbers. Unavailable is set on a
+    // failed resolve so every World rebuild doesn't re-probe Data.bar.
+    public List<string>? MajorGodNamesCache { get; set; }
+    public bool MajorGodNamesUnavailable { get; set; }
 
     // Lazy game-wide terrain (group, texture) list. Null until first picker open;
     // picker falls back to a synthetic cache built from the scenario's TerrainGroups.
@@ -138,6 +148,7 @@ public sealed class ScenarioPreviewData : IDisposable
             }
         }
 
+        data.Players = scenario.ParsePlayersView();
         data.Editor = new ScenarioEditor(scenario, terrain, data.Entities);
         return data;
     }

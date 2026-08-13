@@ -1522,6 +1522,104 @@ public class IntegrationTests
     }
 
     [SkippableFact]
+    public async Task ScenarioFile_PlayersView_Roundtrip_BytePerfect()
+    {
+        var cached = CachedScenarioData.Value;
+        Skip.If(cached.Length == 0, "No .mythscn files found");
+        var failures = new ConcurrentQueue<string>();
+        int parsedCount = 0;
+
+        await Parallel.ForEachAsync(cached, async (entry, t) =>
+        {
+            if (t.IsCancellationRequested)
+                return;
+
+            var scenario = new ScenarioFile(entry.data);
+            Assert.True(scenario.Parsed, $"{entry.fileName}: parse failed");
+
+            var view = scenario.ParsePlayersView();
+            if (view is null)
+            {
+                failures.Enqueue($"{entry.fileName}: PlayersView failed to parse");
+                return;
+            }
+            Interlocked.Increment(ref parsedCount);
+
+            Assert.True(view.Players.Count > 0, $"{entry.fileName}: no players");
+
+            var original = scenario.GetJ1()?.FindSection("PL")?.Data
+                ?? scenario.FindSection("PL")?.Data;
+            Assert.NotNull(original);
+
+            var rewritten = ScenarioFile.WritePlayersView(view);
+            if (!original.AsSpan().SequenceEqual(rewritten))
+            {
+                var minLen = Math.Min(original.Length, rewritten.Length);
+                int firstDiff = -1;
+                for (int i = 0; i < minLen; i++)
+                    if (original[i] != rewritten[i]) { firstDiff = i; break; }
+
+                failures.Enqueue($"{entry.fileName}: size orig={original.Length} rt={rewritten.Length}, first diff at {firstDiff}");
+            }
+        });
+
+        Assert.True(failures.Count == 0, $"PlayersView roundtrip failures:\n{string.Join("\n", failures)}");
+        Assert.True(parsedCount > 0, "No PlayersViews parsed");
+    }
+
+    [SkippableFact]
+    public void ScenarioFile_PlayersView_EditUndoRoundtrip()
+    {
+        var cached = CachedScenarioData.Value;
+        Skip.If(cached.Length == 0, "No .mythscn files found");
+
+        var entry = cached.First(c => new ScenarioFile(c.data).ParsePlayersView() is { Players.Count: > 1 });
+        var scenario = new ScenarioFile(entry.data);
+        var view = scenario.ParsePlayersView()!;
+        var original = ScenarioFile.WritePlayersView(view);
+
+        var pl = view.Players[1];
+        var fields = CryBar.Scenario.Editor.Commands.PlayerFields.From(pl) with
+        {
+            Name = "EditTest",
+            God = 7,
+            StartAge = 2,
+            PopLimit = 333,
+            Gold = 1234.5f,
+            ResTotal = 1234.5f + pl.Wood + pl.Food + pl.Favor,
+        };
+        var cmd = CryBar.Scenario.Editor.Commands.SetPlayerFields.Create(pl, fields);
+        Assert.NotNull(cmd);
+        cmd.Apply(null!, null!);
+
+        var diplomacySlot = pl.Diplomacy.Count > 0 ? 0 : -1;
+        CryBar.Scenario.Editor.Commands.SetPlayerDiplomacy? dipCmd = null;
+        if (diplomacySlot >= 0)
+        {
+            var newStance = pl.Diplomacy[diplomacySlot] == 3 ? 1 : 3;
+            dipCmd = CryBar.Scenario.Editor.Commands.SetPlayerDiplomacy.Create(pl, diplomacySlot, newStance);
+            Assert.NotNull(dipCmd);
+            dipCmd.Apply(null!, null!);
+        }
+
+        var edited = ScenarioFile.WritePlayersView(view);
+        var reparsed = ScenarioFile.ParsePlayersView(edited);
+        var rpl = reparsed.Players[1];
+        Assert.Equal("EditTest", rpl.Name);
+        Assert.Equal(7u, rpl.God);
+        Assert.Equal(2u, rpl.StartAge);
+        Assert.Equal(333, rpl.PopLimit);
+        Assert.Equal(1234.5f, rpl.Gold);
+        Assert.Equal(fields.ResTotal, rpl.ResTotal);
+        Assert.Equal(view.Players[0].Name, reparsed.Players[0].Name);
+
+        dipCmd?.Undo(null!, null!);
+        cmd.Undo(null!, null!);
+        Assert.True(original.AsSpan().SequenceEqual(ScenarioFile.WritePlayersView(view)),
+            "Undo did not restore byte-identical PL section");
+    }
+
+    [SkippableFact]
     public async Task ScenarioFile_J1_Roundtrip()
     {
         var cached = CachedScenarioData.Value;

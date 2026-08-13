@@ -610,10 +610,18 @@ public partial class ScenarioInspectorPanel : UserControl
     // Pass null to detach. sourcePath shows when editor.SavePath is null (never saved).
     public void BindEditor(ScenarioEditor? editor, string? sourcePath)
     {
-        if (_boundEditor is not null) _boundEditor.Changed -= RefreshSaveBar;
+        if (_boundEditor is not null)
+        {
+            _boundEditor.Changed -= RefreshSaveBar;
+            _boundEditor.Changed -= RefreshWorldOnEditorChange;
+        }
         _boundEditor = editor;
         _boundSourcePath = sourcePath;
-        if (_boundEditor is not null) _boundEditor.Changed += RefreshSaveBar;
+        if (_boundEditor is not null)
+        {
+            _boundEditor.Changed += RefreshSaveBar;
+            _boundEditor.Changed += RefreshWorldOnEditorChange;
+        }
         RefreshSaveBar();
     }
 

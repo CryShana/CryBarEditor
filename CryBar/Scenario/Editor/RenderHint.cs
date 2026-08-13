@@ -9,4 +9,5 @@ public enum RenderHint
     TerrainGeometry  = 1 << 2,
     EntityList       = 1 << 3,
     EntityField      = 1 << 4,
+    Players          = 1 << 5,
 }

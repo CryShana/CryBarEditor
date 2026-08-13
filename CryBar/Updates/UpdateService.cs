@@ -5,6 +5,7 @@ using System.IO.Compression;
 using System.Net;
 using System.Net.Http;
 using System.Reflection;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -31,6 +32,7 @@ public sealed class UpdateException : Exception
 public static partial class UpdateService
 {
     const string OwnerRepo = "CryShana/CryBarEditor";
+    const string AssetNamePrefix = "CryBarEditor-";
 
     [GeneratedRegex(@"(?<major>\d+)\.(?<minor>\d+)\.(?<build>\d+)")]
     private static partial Regex VersionRgx();
@@ -54,36 +56,64 @@ public static partial class UpdateService
     }
 
     public static string BuildAssetUrl(string version)
-        => $"https://github.com/{OwnerRepo}/releases/download/{version}/CryBarEditor-{version}.zip";
+        => $"https://github.com/{OwnerRepo}/releases/download/{version}/{AssetNamePrefix}{version}.zip";
 
     public static string BuildReleasePageUrl(string version)
         => $"https://github.com/{OwnerRepo}/releases/tag/{version}";
 
-    [GeneratedRegex(@"href=""(?<link>[^""]+tag/(?<version>\d+\.\d+\.\d+))""")]
-    private static partial Regex ReleasesVersionRgx();
-
     public static async Task<UpdateInfo?> TryGetLatestVersionAsync(HttpClient http, CancellationToken ct = default)
     {
-        var releasesUrl = $"https://github.com/{OwnerRepo}/releases";
+        // GitHub API instead of scraping the releases HTML page - the HTML is served
+        // to anonymous clients from a CDN cache that can lag behind a fresh release
+        var apiUrl = $"https://api.github.com/repos/{OwnerRepo}/releases/latest";
         try
         {
-            var response = await http.GetAsync(releasesUrl, ct);
+            using var request = new HttpRequestMessage(HttpMethod.Get, apiUrl);
+            request.Headers.UserAgent.ParseAdd("CryBarEditor");
+            request.Headers.Accept.ParseAdd("application/vnd.github+json");
+
+            using var response = await http.SendAsync(request, ct);
             response.EnsureSuccessStatusCode();
             var content = await response.Content.ReadAsStringAsync(ct);
 
-            foreach (Match match in ReleasesVersionRgx().Matches(content))
+            using var doc = JsonDocument.Parse(content);
+            var root = doc.RootElement;
+
+            var tag = root.GetProperty("tag_name").GetString() ?? "";
+            var match = VersionRgx().Match(tag);
+            if (!match.Success) return null;
+            var version = match.Value;
+
+            string? pageUrl = null;
+            if (root.TryGetProperty("html_url", out var htmlUrl))
+                pageUrl = htmlUrl.GetString();
+
+            return new UpdateInfo
             {
-                var version = match.Groups["version"].Value;
-                return new UpdateInfo
-                {
-                    LatestVersion = version,
-                    ReleasePageUrl = "https://github.com" + match.Groups["link"].Value,
-                    AssetUrl = BuildAssetUrl(version),
-                };
-            }
+                LatestVersion = version,
+                ReleasePageUrl = pageUrl ?? BuildReleasePageUrl(tag),
+                AssetUrl = FindEditorAssetUrl(root) ?? BuildAssetUrl(tag),
+            };
         }
         catch (OperationCanceledException) { throw; }   // don't swallow cancellation
         catch { }
+        return null;
+    }
+
+    static string? FindEditorAssetUrl(JsonElement root)
+    {
+        if (!root.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
+            return null;
+
+        foreach (var asset in assets.EnumerateArray())
+        {
+            if (asset.TryGetProperty("name", out var name)
+                && name.GetString() is string n
+                && n.StartsWith(AssetNamePrefix, StringComparison.OrdinalIgnoreCase)
+                && n.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
+                && asset.TryGetProperty("browser_download_url", out var dl))
+                return dl.GetString();
+        }
         return null;
     }
 

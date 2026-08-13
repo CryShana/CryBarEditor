@@ -60,10 +60,19 @@ public class UpdateServiceTests
     }
 
     [Fact]
-    public async Task TryGetLatestVersionAsync_ParsesFirstVersionLink()
+    public async Task TryGetLatestVersionAsync_ParsesLatestReleaseJson()
     {
-        var html = """<a href="/CryShana/CryBarEditor/releases/tag/1.5.0">1.5.0</a>""";
-        var handler = new StubHandler(html);
+        var json = """
+            {
+                "tag_name": "1.5.0",
+                "html_url": "https://github.com/CryShana/CryBarEditor/releases/tag/1.5.0",
+                "assets": [
+                    { "name": "CryBar.Cli-1.5.0.zip", "browser_download_url": "https://github.com/CryShana/CryBarEditor/releases/download/1.5.0/CryBar.Cli-1.5.0.zip" },
+                    { "name": "CryBarEditor-1.5.0.zip", "browser_download_url": "https://github.com/CryShana/CryBarEditor/releases/download/1.5.0/CryBarEditor-1.5.0.zip" }
+                ]
+            }
+            """;
+        var handler = new StubHandler(json);
         using var http = new HttpClient(handler);
         var info = await UpdateService.TryGetLatestVersionAsync(http);
         Assert.NotNull(info);
@@ -73,18 +82,36 @@ public class UpdateServiceTests
     }
 
     [Fact]
-    public async Task TryGetLatestVersionAsync_ReturnsFirstWhenMultipleVersionsPresent()
+    public async Task TryGetLatestVersionAsync_FallsBackToBuiltUrlsWhenAssetsMissing()
     {
-        var html = """
-            <a href="/CryShana/CryBarEditor/releases/tag/2.0.0">2.0.0</a>
-            <a href="/CryShana/CryBarEditor/releases/tag/1.5.0">1.5.0</a>
-            """;
-        var handler = new StubHandler(html);
+        var json = """{ "tag_name": "2.0.0" }""";
+        var handler = new StubHandler(json);
         using var http = new HttpClient(handler);
         var info = await UpdateService.TryGetLatestVersionAsync(http);
         Assert.NotNull(info);
         Assert.Equal("2.0.0", info!.LatestVersion);
+        Assert.Equal("https://github.com/CryShana/CryBarEditor/releases/tag/2.0.0", info.ReleasePageUrl);
         Assert.Equal("https://github.com/CryShana/CryBarEditor/releases/download/2.0.0/CryBarEditor-2.0.0.zip", info.AssetUrl);
+    }
+
+    [Fact]
+    public async Task TryGetLatestVersionAsync_ReturnsNullOnUnparseableTag()
+    {
+        var json = """{ "tag_name": "nightly" }""";
+        var handler = new StubHandler(json);
+        using var http = new HttpClient(handler);
+        var info = await UpdateService.TryGetLatestVersionAsync(http);
+        Assert.Null(info);
+    }
+
+    [Fact]
+    public async Task TryGetLatestVersionAsync_CallsApiEndpointWithUserAgent()
+    {
+        var handler = new StubHandler("""{ "tag_name": "1.5.0" }""");
+        using var http = new HttpClient(handler);
+        _ = await UpdateService.TryGetLatestVersionAsync(http);
+        Assert.Equal("https://api.github.com/repos/CryShana/CryBarEditor/releases/latest", handler.LastRequest?.RequestUri?.ToString());
+        Assert.NotEmpty(handler.LastRequest!.Headers.UserAgent);
     }
 
     [Fact]
@@ -149,11 +176,15 @@ public class UpdateServiceTests
     sealed class StubHandler : HttpMessageHandler
     {
         readonly string _body;
+        public HttpRequestMessage? LastRequest { get; private set; }
         public StubHandler(string body) { _body = body; }
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
-            => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            LastRequest = request;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(_body),
             });
+        }
     }
 }
