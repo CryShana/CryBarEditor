@@ -158,7 +158,7 @@ public partial class ScenarioInspectorPanel
         var nameBox = new TextBox
         {
             Text = pl.Name,
-            Watermark = index == 0 ? "Player 0 (Nature)" : $"Player {index}",
+            PlaceholderText = index == 0 ? "Player 0 (Nature)" : $"Player {index}",
             FontSize = 12,
             Padding = new Avalonia.Thickness(6, 3),
             MinHeight = 0,
