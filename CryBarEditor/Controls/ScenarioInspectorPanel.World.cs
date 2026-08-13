@@ -180,22 +180,22 @@ public partial class ScenarioInspectorPanel
         if (godNames is not null)
         {
             var combo = CompactCombo();
-            int selected = (int)pl.God - 1;
-            if (selected < 0 || selected >= godNames.Count)
+            // Index 0 = "(None)" (god 0 = no major god, common on Mother Nature);
+            // real gods follow at their 1-based ids.
+            var items = new List<string>(godNames.Count + 2) { "(None)" };
+            items.AddRange(godNames);
+            int selected = (int)pl.God;
+            if (selected < 0 || selected >= items.Count)
             {
-                var items = new List<string>(godNames) { $"(unknown {pl.God})" };
-                combo.ItemsSource = items;
+                items.Add($"(unknown {pl.God})");
                 selected = items.Count - 1;
             }
-            else
-            {
-                combo.ItemsSource = godNames;
-            }
+            combo.ItemsSource = items;
             combo.SelectedIndex = selected;
             combo.SelectionChanged += (_, _) =>
             {
-                if (combo.SelectedIndex < 0 || combo.SelectedIndex >= godNames.Count) return;
-                CommitPlayer(pl, f => f with { God = (uint)(combo.SelectedIndex + 1) });
+                if (combo.SelectedIndex < 0 || combo.SelectedIndex > godNames.Count) return;
+                CommitPlayer(pl, f => f with { God = (uint)combo.SelectedIndex });
             };
             Place(combo, row, 1, span: 3);
         }
