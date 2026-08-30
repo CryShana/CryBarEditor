@@ -11,6 +11,74 @@ namespace CryBar.Bar;
 
 public static class BarFormatConverter
 {
+    const int MAX_NODE_DEPTH = 512;
+    const int MAX_NAME_LENGTH = 1024;
+
+    // smallest valid encoding of each record
+    const int MIN_NAME_SIZE = 6;    // length prefix + 1 char
+    const int MIN_ATTRIB_SIZE = 8;  // name index + empty length prefix
+    const int MIN_NODE_SIZE = 26;   // XN + 6 int32 fields
+
+    static bool TryReadInt32(ReadOnlySpan<byte> data, ref int offset, out int value)
+    {
+        if (offset < 0 || offset > data.Length - 4)
+        {
+            value = 0;
+            return false;
+        }
+
+        value = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
+        offset += 4;
+        return true;
+    }
+
+    /// <summary>Character-count prefixed UTF-16 LE, bounded by remaining data so a corrupt count cannot overflow the byte length.</summary>
+    static bool TryReadString(ReadOnlySpan<byte> data, ref int offset, out string text, int max_chars)
+    {
+        text = "";
+
+        if (!TryReadInt32(data, ref offset, out var char_count))
+            return false;
+
+        if (char_count < 0 || char_count > max_chars || char_count > (data.Length - offset) / 2)
+            return false;
+
+        if (char_count == 0)
+            return true;
+
+        text = Encoding.Unicode.GetString(data.Slice(offset, char_count * 2));
+        offset += char_count * 2;
+        return true;
+    }
+
+    static bool TryReadCount(ReadOnlySpan<byte> data, ref int offset, int min_item_size, int max_count, out int count)
+    {
+        if (!TryReadInt32(data, ref offset, out count))
+            return false;
+
+        return count >= 0 && count <= max_count && count <= (data.Length - offset) / min_item_size;
+    }
+
+    static bool TryReadNames(ReadOnlySpan<byte> data, ref int offset, int count, out List<string> names)
+    {
+        names = new(count);
+        for (int i = 0; i < count; i++)
+        {
+            if (!TryReadString(data, ref offset, out var name, MAX_NAME_LENGTH))
+                return false;
+
+            try
+            {
+                XmlConvert.VerifyName(name);
+            }
+            catch (XmlException) { return false; }
+
+            names.Add(name);
+        }
+
+        return true;
+    }
+
     static bool TryParseXmbHeader(
         ReadOnlySpan<byte> xmb_data,
         out List<string> elements,
@@ -25,9 +93,8 @@ public static class BarFormatConverter
             return false;
 
         var offset = 2;
-        var data_length = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4)); offset += 4;
-
-        if (data_length < 0 || data_length > xmb_data.Length - 6)
+        if (!TryReadInt32(xmb_data, ref offset, out var data_length) ||
+            data_length < 0 || data_length > xmb_data.Length - 6)
             return false;
 
         xmb_data = xmb_data.Slice(0, 6 + data_length);
@@ -35,46 +102,55 @@ public static class BarFormatConverter
             return false;
         offset += 2;
 
-        var id1 = BinaryPrimitives.ReadUInt32LittleEndian(xmb_data.Slice(offset, 4)); offset += 4;
-        if (id1 != 4)
+        if (!TryReadInt32(xmb_data, ref offset, out var id1) || id1 != 4)
             return false;
 
-        var version = BinaryPrimitives.ReadUInt32LittleEndian(xmb_data.Slice(offset, 4)); offset += 4;
-        if (version != 8)
+        if (!TryReadInt32(xmb_data, ref offset, out var version) || version != 8)
             return false;
 
-        var element_count = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4)); offset += 4;
-        if (element_count <= 0 || element_count > BarFile.MAX_ENTRY_COUNT)
+        if (!TryReadCount(xmb_data, ref offset, MIN_NAME_SIZE, BarFile.MAX_ENTRY_COUNT, out var element_count) ||
+            element_count == 0 ||
+            !TryReadNames(xmb_data, ref offset, element_count, out elements))
             return false;
 
-        elements = new(element_count);
-        for (int i = 0; i < element_count; i++)
-        {
-            var name_length = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4)) * 2; offset += 4;
-            if (name_length <= 0 || name_length > BarFile.MAX_TEXT_LENGTH)
-                return false;
-
-            var name = Encoding.Unicode.GetString(xmb_data.Slice(offset, name_length)); offset += name_length;
-            elements.Add(name);
-        }
-
-        var attrib_count = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4)); offset += 4;
-        if (attrib_count < 0 || attrib_count > BarFile.MAX_ENTRY_COUNT)
+        if (!TryReadCount(xmb_data, ref offset, MIN_NAME_SIZE, BarFile.MAX_ENTRY_COUNT, out var attrib_count) ||
+            !TryReadNames(xmb_data, ref offset, attrib_count, out attributes))
             return false;
-
-        attributes = new(attrib_count);
-        for (int i = 0; i < attrib_count; i++)
-        {
-            var name_length = BinaryPrimitives.ReadInt32LittleEndian(xmb_data.Slice(offset, 4)) * 2; offset += 4;
-            if (name_length <= 0 || name_length > BarFile.MAX_TEXT_LENGTH)
-                return false;
-
-            var name = Encoding.Unicode.GetString(xmb_data.Slice(offset, name_length)); offset += name_length;
-            attributes.Add(name);
-        }
 
         nodeData = xmb_data.Slice(offset);
         return true;
+    }
+
+    static bool TryReadNodeHeader(ReadOnlySpan<byte> data, ref int offset,
+        List<string> elements, List<string> attributes,
+        out string text, out int element_idx, out int attrib_count)
+    {
+        text = "";
+        element_idx = 0;
+        attrib_count = 0;
+
+        if (offset + 2 > data.Length || data[offset] != 88 || data[offset + 1] != 78)
+            return false;
+
+        offset += 2;
+
+        // node length (unused)
+        if (!TryReadInt32(data, ref offset, out _))
+            return false;
+
+        if (!TryReadString(data, ref offset, out text, int.MaxValue))
+            return false;
+
+        if (!TryReadInt32(data, ref offset, out element_idx) ||
+            element_idx < 0 || element_idx >= elements.Count)
+            return false;
+
+        // line number (unused)
+        if (!TryReadInt32(data, ref offset, out _))
+            return false;
+
+        // a well-formed element cannot repeat an attribute name
+        return TryReadCount(data, ref offset, MIN_ATTRIB_SIZE, attributes.Count, out attrib_count);
     }
 
     public static XmlDocument? XMBtoXML(ReadOnlySpan<byte> xmb_data)
@@ -90,55 +166,42 @@ public static class BarFormatConverter
             return null;
 
         document.AppendChild(root);
+        return document;
 
-        static XmlElement? GetNextNode(XmlDocument doc, ReadOnlySpan<byte> data, ref int offset, List<string> elements, List<string> attributes)
+        static XmlElement? GetNextNode(XmlDocument doc, ReadOnlySpan<byte> data, ref int offset, List<string> elements, List<string> attributes, int depth = 0)
         {
-            // node is marked by XN header
-            if (offset + 2 > data.Length || data[offset] != 88 || data[offset + 1] != 78)
+            if (depth > MAX_NODE_DEPTH)
                 return null;
 
-            offset += 2;
-            //var node_length = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
-            offset += 4;
-
-            var text_length = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)) * 2; offset += 4;
-            if (text_length < 0 || text_length > BarFile.MAX_TEXT_LENGTH)
-                return null;
-
-            var text = text_length == 0 ? "" : Encoding.Unicode.GetString(data.Slice(offset, text_length)); offset += text_length;
-            var element_idx = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
-            if (element_idx < 0 || element_idx >= elements.Count)
+            if (!TryReadNodeHeader(data, ref offset, elements, attributes, out var text, out var element_idx, out var attrib_count))
                 return null;
 
             var node = doc.CreateElement(elements[element_idx]);
+
+            // assigned even when empty: the text node it creates is what makes empty
+            // elements serialize the same way XMBtoFormattedXmlString writes them
             node.InnerText = text;
 
-            //int line_number = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4));
-            offset += 4;
-
-            // ATTRIBUTES
-            int attrib_count = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
             for (int i = 0; i < attrib_count; i++)
             {
-                int attrib_idx = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
-                if (attrib_idx < 0 || attrib_idx >= attributes.Count)
+                if (!TryReadInt32(data, ref offset, out var attrib_idx) ||
+                    attrib_idx < 0 || attrib_idx >= attributes.Count)
+                    return null;
+
+                if (!TryReadString(data, ref offset, out var attrib_text, int.MaxValue))
                     return null;
 
                 var attrib = doc.CreateAttribute(attributes[attrib_idx]);
-                var attrib_text_length = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)) * 2; offset += 4;
-                if (attrib_text_length < 0 || attrib_text_length > BarFile.MAX_TEXT_LENGTH)
-                    return null;
-
-                var attrib_text = attrib_text_length == 0 ? "" : Encoding.Unicode.GetString(data.Slice(offset, attrib_text_length)); offset += attrib_text_length;
                 attrib.InnerText = attrib_text;
                 node.Attributes.Append(attrib);
             }
 
-            // CHILD NODES
-            int child_count = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
+            if (!TryReadCount(data, ref offset, MIN_NODE_SIZE, int.MaxValue, out var child_count))
+                return null;
+
             for (int i = 0; i < child_count; i++)
             {
-                var child = GetNextNode(doc, data, ref offset, elements, attributes);
+                var child = GetNextNode(doc, data, ref offset, elements, attributes, depth + 1);
                 if (child == null)
                     return null;
 
@@ -147,8 +210,6 @@ public static class BarFormatConverter
 
             return node;
         }
-
-        return document;
     }
 
     /// <summary>
@@ -159,66 +220,53 @@ public static class BarFormatConverter
         if (!TryParseXmbHeader(xmb_data, out var elements, out var attributes, out var nodeData))
             return null;
 
-        var sb = new StringBuilder(nodeData.Length * 3);
+        var sb = new StringBuilder(Math.Min(nodeData.Length, 1024 * 1024));
         var settings = new XmlWriterSettings
         {
             Indent = true,
-            IndentChars = "\t",
+            IndentChars = "	",
             OmitXmlDeclaration = true
         };
 
         using (var writer = XmlWriter.Create(sb, settings))
         {
             var node_offset = 0;
-            if (!WriteNextNode(writer, nodeData, ref node_offset, elements, attributes))
-                return null;
+
+            // corrupt values may hold characters XML cannot represent
+            try
+            {
+                if (!WriteNextNode(writer, nodeData, ref node_offset, elements, attributes))
+                    return null;
+            }
+            catch (ArgumentException) { return null; }
         }
 
         return sb.ToString();
 
-        static bool WriteNextNode(XmlWriter writer, ReadOnlySpan<byte> data, ref int offset, List<string> elements, List<string> attributes)
+        static bool WriteNextNode(XmlWriter writer, ReadOnlySpan<byte> data, ref int offset, List<string> elements, List<string> attributes, int depth = 0)
         {
-            if (offset + 2 > data.Length || data[offset] != 88 || data[offset + 1] != 78)
+            if (depth > MAX_NODE_DEPTH)
                 return false;
 
-            offset += 2;
-            // node_length (skip)
-            offset += 4;
-
-            var text_length = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)) * 2; offset += 4;
-            if (text_length < 0 || text_length > BarFile.MAX_TEXT_LENGTH)
-                return false;
-
-            var text = text_length == 0 ? "" : Encoding.Unicode.GetString(data.Slice(offset, text_length)); offset += text_length;
-            var element_idx = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
-            if (element_idx < 0 || element_idx >= elements.Count)
+            if (!TryReadNodeHeader(data, ref offset, elements, attributes, out var text, out var element_idx, out var attrib_count))
                 return false;
 
             writer.WriteStartElement(elements[element_idx]);
 
-            // line number (skip)
-            offset += 4;
-
-            // ATTRIBUTES
-            // Read all attributes first, letting later duplicates overwrite earlier ones
+            // read all attributes first, letting later duplicates overwrite earlier ones
             // (matches XmlDocument.Attributes.Append behavior for malformed XMB data)
-            int attrib_count = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
-            var attribs = new (int idx, string text)[attrib_count];
+            var attribs = attrib_count == 0 ? [] : new (int idx, string text)[attrib_count];
             int attrib_write_count = 0;
 
             for (int i = 0; i < attrib_count; i++)
             {
-                int attrib_idx = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
-                if (attrib_idx < 0 || attrib_idx >= attributes.Count)
+                if (!TryReadInt32(data, ref offset, out var attrib_idx) ||
+                    attrib_idx < 0 || attrib_idx >= attributes.Count)
                     return false;
 
-                var attrib_text_length = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)) * 2; offset += 4;
-                if (attrib_text_length < 0 || attrib_text_length > BarFile.MAX_TEXT_LENGTH)
+                if (!TryReadString(data, ref offset, out var attrib_text, int.MaxValue))
                     return false;
 
-                var attrib_text = attrib_text_length == 0 ? "" : Encoding.Unicode.GetString(data.Slice(offset, attrib_text_length)); offset += attrib_text_length;
-
-                // Overwrite if duplicate
                 bool found = false;
                 for (int j = 0; j < attrib_write_count; j++)
                 {
@@ -230,15 +278,16 @@ public static class BarFormatConverter
             for (int i = 0; i < attrib_write_count; i++)
                 writer.WriteAttributeString(attributes[attribs[i].idx], attribs[i].text);
 
-            // INNER TEXT (after attributes, before children)
+            // must follow the attributes and precede the children
             if (text.Length > 0)
                 writer.WriteString(text);
 
-            // CHILD NODES
-            int child_count = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
+            if (!TryReadCount(data, ref offset, MIN_NODE_SIZE, int.MaxValue, out var child_count))
+                return false;
+
             for (int i = 0; i < child_count; i++)
             {
-                if (!WriteNextNode(writer, data, ref offset, elements, attributes))
+                if (!WriteNextNode(writer, data, ref offset, elements, attributes, depth + 1))
                     return false;
             }
 
