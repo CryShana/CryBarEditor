@@ -8,7 +8,7 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ApplicationIcon>crybar.ico</ApplicationIcon>
-    <Version>1.3.18</Version>
+    <Version>1.3.19</Version>
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
