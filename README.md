@@ -132,6 +132,7 @@ Otherwise I recommend you check out the official documentation in game's folder.
 ![CryBarEditor_12](https://assets.cryshana.me/bZcCeQUDcW4H.avif)
 ### Scenario editor
 ![CryBarEditor_13](https://assets.cryshana.me/R87lot9tUxkj.avif)
+![CryBarEditor_14](https://cryshana.me/f/t3vbyKJ4M8)
 ### Extra CLI tool
 Not part of editor, but a separate tool download. The CLI `crybar.exe` implements most of the functions that the editor supports. Can be used for scripting.
 
