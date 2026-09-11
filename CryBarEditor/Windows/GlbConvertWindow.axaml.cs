@@ -273,7 +273,7 @@ public partial class GlbConvertWindow : SimpleWindow
             var enabledNames = new HashSet<string>(
                 PlannedRows.Where(r => r.Enabled).Select(r => r.Name),
                 StringComparer.Ordinal);
-            var written = await WriteFilesAtomicAsync(
+            var written = await GlbConverter.WriteFilesAsync(
                 result.Files.Where(f => enabledNames.Contains(f.Name)).ToList(),
                 _outputDir,
                 progress);
@@ -292,33 +292,6 @@ public partial class GlbConvertWindow : SimpleWindow
             OnPropertyChanged(nameof(CanConvertAndNotBusy));
             OnPropertyChanged(nameof(IsConverting));
             OnPropertyChanged(nameof(HasWarnings));
-        }
-    }
-
-    static async Task<int> WriteFilesAtomicAsync(
-        IReadOnlyList<GlbConverter.OutputFile> files, string outputDir,
-        IProgress<string>? progress)
-    {
-        Directory.CreateDirectory(outputDir);
-        var written = new List<string>();
-        try
-        {
-            foreach (var f in files)
-            {
-                progress?.Report($"Writing {f.Name}");
-                var path = Path.Combine(outputDir, f.Name);
-                await File.WriteAllBytesAsync(path, f.Bytes);
-                written.Add(path);
-            }
-            return files.Count;
-        }
-        catch
-        {
-            foreach (var p in written)
-            {
-                try { File.Delete(p); } catch { }
-            }
-            throw;
         }
     }
 

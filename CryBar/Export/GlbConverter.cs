@@ -59,7 +59,8 @@ public static class GlbConverter
         IReadOnlyDictionary<string, DdtMaterialParams> ddtParams,
         IProgress<string>? progress = null,
         CancellationToken token = default,
-        IReadOnlyDictionary<string, byte[]>? fbximportByAnimName = null)
+        IReadOnlyDictionary<string, byte[]>? fbximportByAnimName = null,
+        bool includeTextures = true)
     {
         var files = new List<OutputFile>();
         var warnings = new List<string>();
@@ -141,7 +142,7 @@ public static class GlbConverter
         }
 
         var workItems = new List<(string DdtName, byte[] Png, DdtMaterialParams P)>();
-        foreach (var mat in model.Materials)
+        foreach (var mat in includeTextures ? model.Materials : [])
         {
             foreach (var (ddtName, png) in EnumerateMaterialPngs(mat))
             {
@@ -172,6 +173,37 @@ public static class GlbConverter
         }
 
         return new ConversionResult(files, warnings);
+    }
+
+    /// Writes a conversion result to disk, deleting anything it already wrote if a
+    /// later file fails, so a half-converted model is not left behind.
+    public static async Task<int> WriteFilesAsync(
+        IReadOnlyList<OutputFile> files, string outputDir,
+        IProgress<string>? progress = null)
+    {
+        Directory.CreateDirectory(outputDir);
+
+        var written = new List<string>();
+        try
+        {
+            foreach (var f in files)
+            {
+                progress?.Report($"Writing {f.Name}");
+                var path = Path.Combine(outputDir, f.Name);
+                await File.WriteAllBytesAsync(path, f.Bytes);
+                written.Add(path);
+            }
+
+            return files.Count;
+        }
+        catch
+        {
+            foreach (var path in written)
+            {
+                try { File.Delete(path); } catch { }
+            }
+            throw;
+        }
     }
 
     static IEnumerable<(string DdtName, byte[] Png)> EnumerateMaterialPngs(GlbMaterial mat)
