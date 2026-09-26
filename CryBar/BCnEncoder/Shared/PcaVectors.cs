@@ -208,13 +208,13 @@ namespace CryBar.BCnEncoder.Shared
             var maxG = (int)(maxVec.Y * 255);
             var maxB = (int)(maxVec.Z * 255);
 
-            minR = minR >= 0 ? minR : 0;
-            minG = minG >= 0 ? minG : 0;
-            minB = minB >= 0 ? minB : 0;
+            minR = Math.Clamp(minR, 0, 255);
+            minG = Math.Clamp(minG, 0, 255);
+            minB = Math.Clamp(minB, 0, 255);
 
-            maxR = maxR <= 255 ? maxR : 255;
-            maxG = maxG <= 255 ? maxG : 255;
-            maxB = maxB <= 255 ? maxB : 255;
+            maxR = Math.Clamp(maxR, 0, 255);
+            maxG = Math.Clamp(maxG, 0, 255);
+            maxB = Math.Clamp(maxB, 0, 255);
 
             min = new ColorRgb24((byte)minR, (byte)minG, (byte)minB);
             max = new ColorRgb24((byte)maxR, (byte)maxG, (byte)maxB);
