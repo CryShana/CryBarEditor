@@ -16,29 +16,37 @@ namespace CryBar.Scenario.Writers;
 ///   old format: inline at suffix[0..8]
 public static class Z1Writer
 {
-    public static byte[] Write(IReadOnlyList<ScenarioEntity> entities)
-        => Write(entities, version: 0, entityFlags: null);
-
-    public static byte[] Write(IReadOnlyList<ScenarioEntity> entities, byte version)
-        => Write(entities, version, entityFlags: null);
-
     /// entityFlags lets callers preserve non-zero flag words on round-trip
     /// (ScenarioEntity doesn't model them). null = all zero (vanilla).
+    /// rawEnvelopes are written verbatim right after their After entity (first when
+    /// After is null, last when After is no longer in entities); tail is written last.
     public static byte[] Write(
         IReadOnlyList<ScenarioEntity> entities,
-        byte version,
-        IReadOnlyList<ushort>? entityFlags)
+        byte version = 0,
+        IReadOnlyList<ushort>? entityFlags = null,
+        IReadOnlyList<(ScenarioEntity? After, byte[] Envelope)>? rawEnvelopes = null,
+        byte[]? tail = null)
     {
         ArgumentNullException.ThrowIfNull(entities);
         if (entityFlags is not null && entityFlags.Count != entities.Count)
             throw new ArgumentException("entityFlags length must match entities length", nameof(entityFlags));
 
-        long estimate = 5;
+        rawEnvelopes ??= [];
+        tail ??= [];
+
+        var present = entities.ToHashSet();
+        var anchored = rawEnvelopes
+            .Where(r => r.After is not null && present.Contains(r.After))
+            .ToLookup(r => r.After!, r => r.Envelope);
+
+        long estimate = 5 + tail.Length;
         for (int i = 0; i < entities.Count; i++)
         {
             var e = entities[i];
-            estimate += 4 + 6 + 6 + e.H1Prefix.Length + 12 + 36 + e.H1EnTail.Length + e.H1Suffix.Length;
+            estimate += 4 + e.EnvelopeLeading.Length + 6 + 6 + e.H1Prefix.Length + 12 + 36 + e.H1EnTail.Length + e.H1Suffix.Length + e.EnvelopeTrailing.Length;
         }
+        foreach (var raw in rawEnvelopes)
+            estimate += raw.Envelope.Length;
 
         using var ms = new MemoryStream(checked((int)estimate));
 
@@ -48,9 +56,13 @@ public static class Z1Writer
         h1Header[0] = (byte)'H';
         h1Header[1] = (byte)'1';
 
-        BinaryPrimitives.WriteUInt32LittleEndian(u32, (uint)entities.Count);
+        BinaryPrimitives.WriteUInt32LittleEndian(u32, (uint)(entities.Count + rawEnvelopes.Count));
         ms.Write(u32);
         ms.WriteByte(version);
+
+        foreach (var raw in rawEnvelopes)
+            if (raw.After is null)
+                ms.Write(raw.Envelope);
 
         for (int i = 0; i < entities.Count; i++)
         {
@@ -60,13 +72,24 @@ public static class Z1Writer
             BinaryPrimitives.WriteUInt16LittleEndian(envelope, checked((ushort)e.EntityId));
             BinaryPrimitives.WriteUInt16LittleEndian(envelope.Slice(2), entityFlags is null ? (ushort)0 : entityFlags[i]);
             ms.Write(envelope);
+            ms.Write(e.EnvelopeLeading);
 
             var h1 = BuildH1Body(e);
             BinaryPrimitives.WriteUInt32LittleEndian(h1Header.Slice(2), (uint)h1.Length);
             ms.Write(h1Header);
             ms.Write(h1, 0, h1.Length);
+
+            ms.Write(e.EnvelopeTrailing);
+
+            foreach (var raw in anchored[e])
+                ms.Write(raw);
         }
 
+        foreach (var raw in rawEnvelopes)
+            if (raw.After is not null && !present.Contains(raw.After))
+                ms.Write(raw.Envelope);
+
+        ms.Write(tail);
         return ms.ToArray();
     }
 

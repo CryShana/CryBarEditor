@@ -98,6 +98,6 @@ namespace CryBar.BCnEncoder.Shared
         /// <param name="den">The divisor.</param>
         /// <returns>The interpolated component.</returns>
         private static int InterpolateAtc(int a, int b, int num, int den) =>
-            (int)(a - num / (float)den * b);
+            System.Math.Clamp((int)(a - num / (float)den * b), 0, 255);
     }
 }

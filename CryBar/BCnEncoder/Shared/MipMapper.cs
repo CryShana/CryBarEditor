@@ -187,12 +187,16 @@ namespace CryBar.BCnEncoder.Shared
                     var srcX0 = Math.Min(maxX, x2 * 2);
                     var srcX1 = Math.Min(maxX, x2 * 2 + 1);
 
-                    var ul = pixelsRgba[srcY0, srcX0].ToFloat();
-                    var ur = pixelsRgba[srcY0, srcX1].ToFloat();
-                    var ll = pixelsRgba[srcY1, srcX0].ToFloat();
-                    var lr = pixelsRgba[srcY1, srcX1].ToFloat();
+                    var ul = pixelsRgba[srcY0, srcX0];
+                    var ur = pixelsRgba[srcY0, srcX1];
+                    var ll = pixelsRgba[srcY1, srcX0];
+                    var lr = pixelsRgba[srcY1, srcX1];
 
-                    result[y2, x2] = ((ul + ur + ll + lr) / 4).ToRgba32();
+                    result[y2, x2] = new ColorRgba32(
+                        (byte)((ul.r + ur.r + ll.r + lr.r + 2) >> 2),
+                        (byte)((ul.g + ur.g + ll.g + lr.g + 2) >> 2),
+                        (byte)((ul.b + ur.b + ll.b + lr.b + 2) >> 2),
+                        (byte)((ul.a + ur.a + ll.a + lr.a + 2) >> 2));
                 }
             }
 

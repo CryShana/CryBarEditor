@@ -493,7 +493,7 @@ public partial class ScenarioFile
             // Decode current bytes (we will overwrite with XML attributes if present).
             byte playerId = header[14];
             if (!string.IsNullOrEmpty(playerAttr))
-                playerId = (byte)int.Parse(playerAttr);
+                playerId = byte.Parse(playerAttr);
 
             // File order: (gameZ, gameY, gameX). Position.X = gameX, .Y = gameY, .Z = gameZ.
             float gameZ = BitConverter.ToSingle(header, posOff);
@@ -784,19 +784,14 @@ public partial class ScenarioFile
     /// and <paramref name="resourceOff"/> to the start of the resource block (UnitIdCopy2), or -1 if none.
     /// P1 tail layout: hasBd(1) [BD section] unk9(4) hasRes(1) [UnitIdCopy2(4)+ResourceBlock(24)+zeros(1)+pad(12)] unk14(4)
     /// </summary>
-    static bool WalkP1Tail(ReadOnlySpan<byte> p1, out int p1End, out int resourceOff)
+    internal static bool WalkP1Tail(ReadOnlySpan<byte> p1, out int p1End, out int resourceOff)
     {
         p1End = -1;
         resourceOff = -1;
         if (p1.Length < 77) return false;
         int off = 77;
         var hasBd = p1[76] != 0;
-        if (hasBd)
-        {
-            if (off + 6 > p1.Length) return false;
-            var bdSize = (int)BinaryPrimitives.ReadUInt32LittleEndian(p1.Slice(off + 2));
-            off += 6 + bdSize;
-        }
+        if (hasBd && !TryReadSized(p1, ref off, out _)) return false;
         if (off + 5 > p1.Length) return false;
         off += 4; // _unk9
         var hasRes = p1[off++] != 0;

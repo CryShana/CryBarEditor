@@ -104,54 +104,63 @@ public class DDTImage
 
         var rts4 = data is [0x52, 0x54, 0x53, 0x34, ..];
         var rts3 = data is [0x52, 0x54, 0x53, 0x33, ..];
-
-        if (rts4) Version = DDTVersion.RTS4;
-        else if (rts3) Version = DDTVersion.RTS3;
-        else return false;
+        if (!rts4 && !rts3) return false;
 
         var offset = 4;
 
         // image info
         var usage = data[offset++];
         var alpha = data[offset++];
-        var format = data[offset++]; 
-        var mipmap_levels = data[offset++]; 
+        var format = data[offset++];
+        var mipmap_levels = data[offset++];
+        if (mipmap_levels == 0) return false;
 
-        var width = (ushort)BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
-        var height = (ushort)BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
-
-        UsageFlag = (DDTUsage)usage;
-        AlphaFlag = (DDTAlpha)alpha;
-        FormatFlag = (DDTFormat)format;
-        MipmapLevels = mipmap_levels;
-        BaseWidth = width;
-        BaseHeight = height;
+        var width = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
+        var height = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
+        if (width <= 0 || width > ushort.MaxValue || height <= 0 || height > ushort.MaxValue) return false;
 
         // color table (RTS4 only):
+        ReadOnlyMemory<byte>? color_table = null;
         if (rts4)
         {
+            if (data.Length - offset < 4) return false;
             int color_table_size = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
-            var color_table = _data.Slice(offset, color_table_size); offset += color_table_size;
-            ColorTable = color_table;
+            if (color_table_size < 0 || color_table_size > data.Length - offset) return false;
+            color_table = _data.Slice(offset, color_table_size); offset += color_table_size;
         }
 
         // read mipmaps
         int images_per_level = 1; // (usage & 8) == 8 ? 6 : 1; // there's more images when usage is 8 = [Cube] - I HAVE NOT ENCOUNTERED THIS YET, let's assume 1 for now
         var mipmap_image_count = mipmap_levels * images_per_level;
+        if ((long)mipmap_image_count * 8 > data.Length - offset) return false;
+
         var mipmap_offsets = new (int, int, ushort, ushort)[mipmap_image_count];
         for (int i = 0; i < mipmap_image_count; i++)
         {
             var level = i / images_per_level;
-            var image_width = (ushort)Math.Max(1, width >> level);
-            var image_height = (ushort)Math.Max(1, height >> level);
+            var image_width = MipDimension(width, level);
+            var image_height = MipDimension(height, level);
             var image_offset = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
             var image_length = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, 4)); offset += 4;
+            if (image_offset < 0 || image_length < 0 || image_offset > data.Length - image_length) return false;
             mipmap_offsets[i] = (image_offset, image_length, image_width, image_height);
         }
+
+        Version = rts4 ? DDTVersion.RTS4 : DDTVersion.RTS3;
+        UsageFlag = (DDTUsage)usage;
+        AlphaFlag = (DDTAlpha)alpha;
+        FormatFlag = (DDTFormat)format;
+        MipmapLevels = mipmap_levels;
+        BaseWidth = (ushort)width;
+        BaseHeight = (ushort)height;
+        ColorTable = color_table;
         MipmapOffsets = mipmap_offsets;
         HeaderParsed = true;
         return true;
     }
+
+    static ushort MipDimension(int base_size, int level) =>
+        level >= 16 ? (ushort)1 : (ushort)Math.Max(1, base_size >> level);
 
     public ReadOnlyMemory<byte> ReadMipmap(int index, out ushort width, out ushort height)
     {
@@ -168,7 +177,8 @@ public class DDTImage
 
     /// Zero-alloc BC1/BC1Alpha decode into a caller-supplied buffer. Returns
     /// false (without writing) for non-BC1 formats or when SIMD is unavailable;
-    /// callers should fall back to DecodeMipmap. width/height are populated
+    /// callers should fall back to DecodeMipmap. Also returns false when the mip
+    /// payload is too short for its dimensions. width/height are populated
     /// regardless so the caller can size a pooled scratch buffer.
     public bool TryDecodeMipmapInto(int mipmap_index, Span<byte> output, out int width, out int height)
     {
@@ -178,6 +188,7 @@ public class DDTImage
 
         if (!UseSimd || !SimdBc1Decoder.IsHardwareAccelerated) return false;
         if (!IsBc1Format(FormatFlag)) return false;
+        if (mipmap_data.Length < RequiredMipBytes(FormatFlag, w, h)) return false;
 
         SimdBc1Decoder.DecodeImage(mipmap_data.Span, output, w, h, FormatFlag == DDTFormat.DXT1Alpha);
         return true;
@@ -193,6 +204,12 @@ public class DDTImage
 
         var mipmap_data = ReadMipmap(mipmap_index, out var width, out var height);
 
+        var required = RequiredMipBytes(FormatFlag, width, height);
+        if (mipmap_data.Length < required)
+            return Task.FromResult<Memory2D<ColorRgba32>?>(null);
+
+        mipmap_data = mipmap_data.Slice(0, (int)required);
+
         // NOTE:
         // - RTS3 files are rare (ex: "cloudshadows.ddt" in "ArtEffects.bar")
         // - Most RST4 DDT files use format 4 = DXT1
@@ -207,6 +224,18 @@ public class DDTImage
         }
 
         return DecodeMipmapVendored(mipmap_data, width, height, token);
+    }
+
+    static long RequiredMipBytes(DDTFormat format, int width, int height)
+    {
+        long blocks = (long)((width + 3) >> 2) * ((height + 3) >> 2);
+        return format switch
+        {
+            DDTFormat.DXT1 or DDTFormat.DXT1Alpha => blocks * 8,
+            DDTFormat.DXT3 or DDTFormat.DXT5 => blocks * 16,
+            DDTFormat.Grey => (long)width * height,
+            _ => (long)width * height * 4,
+        };
     }
 
     async Task<Memory2D<ColorRgba32>?> DecodeMipmapVendored(ReadOnlyMemory<byte> mipmap_data, ushort width, ushort height, CancellationToken token)
@@ -305,6 +334,8 @@ public class DDTImage
     {
         int base_width = image.Width;
         int base_height = image.Height;
+        if (base_width > ushort.MaxValue || base_height > ushort.MaxValue)
+            throw new ArgumentException($"DDT dimensions are limited to {ushort.MaxValue}x{ushort.MaxValue}, got {base_width}x{base_height}", nameof(image));
 
         byte max_levels = GetMaxMinmapLevels(base_width, base_height);
         byte mipmap_levels = minmap_levels == 0 ? max_levels : Math.Min(max_levels, minmap_levels);
@@ -324,6 +355,7 @@ public class DDTImage
             _=> CompressionFormat.Bgra,
         };
         encoder.OutputOptions.MaxMipMapLevel = mipmap_levels;
+        encoder.InputOptions.LuminanceAsRed = format == DDTFormat.Grey;
 
         byte[][] mipmaps = await encoder.EncodeToRawBytesAsync(ImageToPixels(image), token);
 
@@ -467,6 +499,7 @@ public class DDTImage
         }
 
         var (_, _, mipW, mipH) = img.MipmapOffsets[chosen];
+        if ((long)mipW * mipH * 4 > int.MaxValue) return false;
 
         if (UseSimd && SimdBc1Decoder.IsHardwareAccelerated && IsBc1Format(img.FormatFlag))
         {
@@ -532,8 +565,26 @@ public class DDTImage
         ResampleBilinearRgba8Scalar(pooled.Span.Slice(0, byteCount), src.Width, src.Height, dst, dstW, dstH);
     }
 
+    static void ValidateResampleArgs(ReadOnlySpan<byte> src, int srcW, int srcH, Span<byte> dst, int dstW, int dstH)
+    {
+        if (srcW <= 0 || srcH <= 0)
+            throw new ArgumentException($"Invalid source size {srcW}x{srcH}", nameof(src));
+        if (dstW <= 0 || dstH <= 0)
+            throw new ArgumentException($"Invalid destination size {dstW}x{dstH}", nameof(dst));
+
+        long src_bytes = (long)srcW * srcH * 4;
+        if (src.Length < src_bytes)
+            throw new ArgumentException($"Source too small: have {src.Length}, need {src_bytes} for {srcW}x{srcH}", nameof(src));
+
+        long dst_bytes = (long)dstW * dstH * 4;
+        if (dst.Length < dst_bytes)
+            throw new ArgumentException($"Destination too small: have {dst.Length}, need {dst_bytes} for {dstW}x{dstH}", nameof(dst));
+    }
+
     internal static void ResampleBilinearRgba8Scalar(ReadOnlySpan<byte> src, int srcW, int srcH, Span<byte> dst, int dstW, int dstH)
     {
+        ValidateResampleArgs(src, srcW, srcH, dst, dstW, dstH);
+
         int strideBytes = srcW * 4;
         float scaleX = (float)srcW / dstW;
         float scaleY = (float)srcH / dstH;
@@ -565,10 +616,10 @@ public class DDTImage
                 float b = (row0[p0 + 2] * iwx + row0[p1 + 2] * wx) * iwy + (row1[p0 + 2] * iwx + row1[p1 + 2] * wx) * wy;
                 float a = (row0[p0 + 3] * iwx + row0[p1 + 3] * wx) * iwy + (row1[p0 + 3] * iwx + row1[p1 + 3] * wx) * wy;
 
-                dst[dp]     = (byte)Math.Clamp(r, 0, 255);
-                dst[dp + 1] = (byte)Math.Clamp(g, 0, 255);
-                dst[dp + 2] = (byte)Math.Clamp(b, 0, 255);
-                dst[dp + 3] = (byte)Math.Clamp(a, 0, 255);
+                dst[dp]     = ByteHelper.ClampToByte(r);
+                dst[dp + 1] = ByteHelper.ClampToByte(g);
+                dst[dp + 2] = ByteHelper.ClampToByte(b);
+                dst[dp + 3] = ByteHelper.ClampToByte(a);
             }
         }
     }
@@ -606,12 +657,15 @@ public class DDTImage
     /// / PackUnsignedSaturate is identity for in-range values.
     internal static void ResampleBilinearRgba8Simd(ReadOnlySpan<byte> src, int srcW, int srcH, Span<byte> dst, int dstW, int dstH)
     {
+        ValidateResampleArgs(src, srcW, srcH, dst, dstW, dstH);
+
         int strideBytes = srcW * 4;
         float scaleX = (float)srcW / dstW;
         float scaleY = (float)srcH / dstH;
 
         var vMax = Vector128.Create(255f);
         var vZero = Vector128<float>.Zero;
+        var vHalf = Vector128.Create(0.5f);
 
         for (int y = 0; y < dstH; y++)
         {
@@ -648,7 +702,7 @@ public class DDTImage
                 var blended = Vector128.Add(Vector128.Multiply(top, vIwy), Vector128.Multiply(bot, vWy));
 
                 var clamped = Vector128.Min(Vector128.Max(blended, vZero), vMax);
-                var asInt32 = Sse2.ConvertToVector128Int32WithTruncation(clamped);
+                var asInt32 = Sse2.ConvertToVector128Int32WithTruncation(Vector128.Add(clamped, vHalf));
                 var asInt16 = Sse2.PackSignedSaturate(asInt32, asInt32);
                 var asByte = Sse2.PackUnsignedSaturate(asInt16, asInt16);
                 uint packed = asByte.AsUInt32().GetElement(0);

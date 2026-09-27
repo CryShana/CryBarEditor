@@ -10,7 +10,7 @@
         }
 
         public static byte ClampToByte(float f)
-            => ClampToByte((int)f);
+            => ClampToByte((int)(f + 0.5f));
 
         public static byte Extract1(ulong source, int index)
         {

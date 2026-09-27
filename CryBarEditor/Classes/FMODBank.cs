@@ -427,6 +427,16 @@ public class FMODEvent : BankItemBase, IBankItem
         {
             var chunkId = System.Text.Encoding.ASCII.GetString(data, pos, 4);
             int chunkSize = BitConverter.ToInt32(data, pos + 4);
+            int remaining = data.Length - pos - 8;
+
+            if (chunkId == "data")
+            {
+                dataOffset = pos + 8;
+                dataSize = chunkSize < 0 ? remaining : Math.Min(chunkSize, remaining);
+                break;
+            }
+
+            if (chunkSize < 0 || chunkSize > remaining) break;
 
             if (chunkId == "fmt ")
             {
@@ -437,12 +447,6 @@ public class FMODEvent : BankItemBase, IBankItem
                     bitsPerSample = BitConverter.ToInt16(data, pos + 8 + 14);
                 }
             }
-            else if (chunkId == "data")
-            {
-                dataOffset = pos + 8;
-                dataSize = chunkSize;
-                break;
-            }
 
             pos += 8 + chunkSize;
             if (pos % 2 != 0) pos++; // chunks are word-aligned
@@ -450,6 +454,7 @@ public class FMODEvent : BankItemBase, IBankItem
 
         if (dataOffset < 0 || dataSize <= 0) return;
         if (bitsPerSample != 16) return; // only handle 16-bit PCM for trimming
+        if (channels <= 0) return;
 
         int bytesPerSample = channels * (bitsPerSample / 8);
 
@@ -459,7 +464,7 @@ public class FMODEvent : BankItemBase, IBankItem
             {
                 int off = dataOffset + byteOffset + ch * 2;
                 if (off + 1 >= data.Length) continue;
-                if (Math.Abs(BitConverter.ToInt16(data, off)) > threshold)
+                if (Math.Abs((int)BitConverter.ToInt16(data, off)) > threshold)
                     return false;
             }
             return true;

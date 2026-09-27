@@ -2,6 +2,8 @@ using System.Buffers.Binary;
 
 using CryBar;
 
+using static CryBar.Tests.DdtTestHelpers;
+
 namespace CryBar.Tests;
 
 /// <summary>
@@ -12,26 +14,6 @@ namespace CryBar.Tests;
 /// </summary>
 public class DDTImageDecodeParityTests
 {
-    static byte[] BuildRTS4DXT1(byte[] mipmapData, ushort width, ushort height, DDTFormat format)
-    {
-        // Header: signature (4) + flags (4) + width (4) + height (4) + colorTableSize (4) + 1 mipmap entry (8)
-        const int headerSize = 4 + 4 + 4 + 4 + 4 + 8;
-        var data = new byte[headerSize + mipmapData.Length];
-        var offset = 0;
-        data[offset++] = 0x52; data[offset++] = 0x54; data[offset++] = 0x53; data[offset++] = 0x34;
-        data[offset++] = 0;                  // usage
-        data[offset++] = 0;                  // alpha
-        data[offset++] = (byte)format;       // format
-        data[offset++] = 1;                  // mipmap levels
-        BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(offset), width); offset += 4;
-        BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(offset), height); offset += 4;
-        BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(offset), 0); offset += 4; // colorTableSize
-        BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(offset), headerSize); offset += 4;
-        BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(offset), mipmapData.Length); offset += 4;
-        Array.Copy(mipmapData, 0, data, headerSize, mipmapData.Length);
-        return data;
-    }
-
     static byte[] MakeBc1BlockBytes(ushort c0, ushort c1, uint indices)
     {
         var b = new byte[8];
@@ -111,7 +93,7 @@ public class DDTImageDecodeParityTests
         int blocksWidth = (width + 3) >> 2;
         int blocksHeight = (height + 3) >> 2;
         var mipmapBytes = HandCraftedBc1Mipmap(blocksWidth, blocksHeight, seed);
-        var ddtBytes = BuildRTS4DXT1(mipmapBytes, (ushort)width, (ushort)height, format);
+        var ddtBytes = BuildRts4(width, height, 1, format: format, payload: mipmapBytes);
         await AssertSimdMatchesVendored(ddtBytes);
     }
 
@@ -125,7 +107,7 @@ public class DDTImageDecodeParityTests
         int blocksWidth = (width + 3) >> 2;
         int blocksHeight = (height + 3) >> 2;
         var mipmapBytes = HandCraftedBc1Mipmap(blocksWidth, blocksHeight, seed);
-        var ddtBytes = BuildRTS4DXT1(mipmapBytes, (ushort)width, (ushort)height, format);
+        var ddtBytes = BuildRts4(width, height, 1, format: format, payload: mipmapBytes);
 
         var prev = DDTImage.UseSimd;
         try

@@ -49,17 +49,32 @@ public static class BarCompression
 
     public static int DecompressAlz4(Span<byte> data, Span<byte> output_data)
     {
+        const int HEADER_SIZE = 16;
+        if (data.Length < HEADER_SIZE)
+        {
+            throw new InvalidDataException("Alz4 data is too short: " + data.Length);
+        }
+
         int size_uncompressed = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(4, 4));
         int size_compressed = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(8, 4));
-        int version = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(12, 4));
 
         if (size_uncompressed > output_data.Length || size_uncompressed <= 0)
         {
             throw new InvalidDataException("Size is invalid: " + size_uncompressed);
         }
 
-        Span<byte> compressed_data = data.Slice(16, size_compressed);
-        LZ4Codec.Decode(compressed_data, output_data);
+        if (size_compressed < 0 || size_compressed > data.Length - HEADER_SIZE)
+        {
+            throw new InvalidDataException("Compressed size is invalid: " + size_compressed);
+        }
+
+        Span<byte> compressed_data = data.Slice(HEADER_SIZE, size_compressed);
+        var decoded = LZ4Codec.Decode(compressed_data, output_data.Slice(0, size_uncompressed));
+        if (decoded != size_uncompressed)
+        {
+            throw new InvalidDataException($"Alz4 decode produced {decoded} bytes, expected {size_uncompressed}");
+        }
+
         return size_uncompressed;
     }
 

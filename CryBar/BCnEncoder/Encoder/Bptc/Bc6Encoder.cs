@@ -79,7 +79,16 @@ namespace CryBar.BCnEncoder.Encoder.Bptc
             {
                 RgbBoundingBox.CreateFloat(block.AsSpan, out var min, out var max);
 
-                LeastSquares.OptimizeEndpoints1Sub(block, ref min, ref max);
+                LeastSquares.OptimizeEndpoints1Sub(block, ref min, ref max, signed);
+
+                min.ClampToHalf();
+                max.ClampToHalf();
+
+                if (!signed)
+                {
+                    min.ClampToPositive();
+                    max.ClampToPositive();
+                }
 
                 return Bc6ModeEncoder.EncodeBlock1Sub(Bc6BlockType.Type3, block, min, max, signed, out _);
             }
@@ -98,7 +107,7 @@ namespace CryBar.BCnEncoder.Encoder.Bptc
 
                 if (!signed)
                 {
-                    LeastSquares.OptimizeEndpoints1Sub(block, ref ep0Sub1, ref ep1Sub1);
+                    LeastSquares.OptimizeEndpoints1Sub(block, ref ep0Sub1, ref ep1Sub1, signed);
                 }
 
                 ep0Sub1.ClampToHalf();
@@ -134,8 +143,8 @@ namespace CryBar.BCnEncoder.Encoder.Bptc
 
                         if (!signed)
                         {
-                            LeastSquares.OptimizeEndpoints2Sub(block, ref ep0, ref ep1, subsetPartition, 0);
-                            LeastSquares.OptimizeEndpoints2Sub(block, ref ep2, ref ep3, subsetPartition, 1);
+                            LeastSquares.OptimizeEndpoints2Sub(block, ref ep0, ref ep1, subsetPartition, 0, signed);
+                            LeastSquares.OptimizeEndpoints2Sub(block, ref ep2, ref ep3, subsetPartition, 1, signed);
                         }
 
                         ep0.ClampToHalf();
@@ -223,7 +232,7 @@ namespace CryBar.BCnEncoder.Encoder.Bptc
 
                 if (!signed)
                 {
-                    LeastSquares.OptimizeEndpoints1Sub(block, ref ep0Sub1, ref ep1Sub1);
+                    LeastSquares.OptimizeEndpoints1Sub(block, ref ep0Sub1, ref ep1Sub1, signed);
                 }
 
                 ep0Sub1.ClampToHalf();
@@ -280,8 +289,8 @@ namespace CryBar.BCnEncoder.Encoder.Bptc
 
                     if (!signed)
                     {
-                        LeastSquares.OptimizeEndpoints2Sub(block, ref ep0, ref ep1, subsetPartition, 0);
-                        LeastSquares.OptimizeEndpoints2Sub(block, ref ep2, ref ep3, subsetPartition, 1);
+                        LeastSquares.OptimizeEndpoints2Sub(block, ref ep0, ref ep1, subsetPartition, 0, signed);
+                        LeastSquares.OptimizeEndpoints2Sub(block, ref ep2, ref ep3, subsetPartition, 1, signed);
                     }
 
                     ep0.ClampToHalf();

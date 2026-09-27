@@ -260,12 +260,12 @@ public partial class ScenarioFile
             var groupId = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
             var priority = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
 
-            if (!TryReadUTF16(span, off, out var name, out off)) break;
+            var name = ReadString16Checked(span, ref off);
             var unkS32 = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(off)); off += 4;
             byte fLoop = span[off], fActive = span[off + 1], fRunImm = span[off + 2];
             byte flag3 = span[off + 3], flag4 = span[off + 4];
             off += 5;
-            if (!TryReadUTF16(span, off, out var note, out off)) break;
+            var note = ReadString16Checked(span, ref off);
 
             writer.WriteStartElement("Trigger");
             writer.WriteAttributeString("name", name);
@@ -428,7 +428,7 @@ public partial class ScenarioFile
                 var values = new string[count];
                 for (uint i = 0; i < count; i++)
                 {
-                    TryReadUTF16(span, off, out values[i], out off);
+                    values[i] = ReadString16Checked(span, ref off);
                 }
                 (uint id, uint magic, string name)[]? protos = null;
                 if (trVersion >= 12)
@@ -439,7 +439,7 @@ public partial class ScenarioFile
                     {
                         var pid = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
                         var pmagic = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
-                        TryReadUTF16(span, off, out var pname, out off);
+                        var pname = ReadString16Checked(span, ref off);
                         protos[i] = (pid, pmagic, pname);
                     }
                 }
@@ -469,7 +469,7 @@ public partial class ScenarioFile
                 var sCount = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(off)); off += 4;
                 for (uint i = 0; i < sCount; i++)
                 {
-                    TryReadUTF16(span, off, out var s, out off);
+                    var s = ReadString16Checked(span, ref off);
                     writer.WriteStartElement("V");
                     writer.WriteString(s);
                     writer.WriteEndElement();
@@ -483,7 +483,7 @@ public partial class ScenarioFile
                 if (magic != 0) writer.WriteAttributeString("magic", magic.ToString());
                 for (uint i = 0; i < valCount; i++)
                 {
-                    TryReadUTF16(span, off, out var v, out off);
+                    var v = ReadString16Checked(span, ref off);
                     writer.WriteStartElement("V");
                     writer.WriteString(v);
                     writer.WriteEndElement();
@@ -497,7 +497,7 @@ public partial class ScenarioFile
                 if (magic != 1) writer.WriteAttributeString("magic", magic.ToString());
                 for (int i = 0; i < n; i++)
                 {
-                    TryReadUTF16(span, off, out var v, out off);
+                    var v = ReadString16Checked(span, ref off);
                     writer.WriteStartElement("V");
                     writer.WriteString(v);
                     writer.WriteEndElement();
@@ -508,7 +508,7 @@ public partial class ScenarioFile
             {
                 var magic = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(off)); off += 4;
                 if (magic != 1) writer.WriteAttributeString("magic", magic.ToString());
-                TryReadUTF16(span, off, out var v, out off);
+                var v = ReadString16Checked(span, ref off);
                 writer.WriteAttributeString("flag", span[off].ToString());
                 off += 1;
                 writer.WriteString(v);
@@ -518,11 +518,20 @@ public partial class ScenarioFile
             {
                 var magic = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(off)); off += 4;
                 if (magic != 1) writer.WriteAttributeString("magic", magic.ToString());
-                TryReadUTF16(span, off, out var v, out off);
+                var v = ReadString16Checked(span, ref off);
                 writer.WriteString(v);
                 return off;
             }
         }
+    }
+
+    static string ReadString16Checked(ReadOnlySpan<byte> span, ref int off)
+    {
+        if (!TryReadUTF16(span, off, out var value, out var newOff))
+            throw new InvalidDataException($"Invalid UTF-16 string at offset {off}");
+
+        off = newOff;
+        return value;
     }
 
     static int SkipXsArgValue(ReadOnlySpan<byte> span, int off, uint valueType, int trVersion)

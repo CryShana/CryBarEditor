@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using CryBar;
 using CryBar.Bar;
 
@@ -283,6 +284,64 @@ public class BarCompressionTests
         var tooSmall = new byte[10];
         Assert.Throws<InvalidDataException>(() =>
             BarCompression.DecompressL33t(compressed, tooSmall));
+    }
+
+    [Fact]
+    public void DecompressAlz4_DeclaredSizeLargerThanDecoded_ThrowsInvalidDataException()
+    {
+        var original = new byte[256];
+        for (int i = 0; i < original.Length; i++) original[i] = (byte)(i % 7);
+        var compressed = BarCompression.CompressAlz4(original).ToArray();
+        BinaryPrimitives.WriteInt32LittleEndian(compressed.AsSpan(4), original.Length + 100);
+
+        Assert.Throws<InvalidDataException>(() => BarCompression.DecompressAlz4(compressed));
+        Assert.Throws<InvalidDataException>(() => BarCompression.DecompressAlz4Pooled(compressed));
+    }
+
+    [Fact]
+    public void DecompressAlz4_GarbagePayload_ThrowsInvalidDataException()
+    {
+        var data = new byte[16 + 32];
+        "alz4"u8.CopyTo(data);
+        BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(4), 64);
+        BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(8), 32);
+        BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(12), 1);
+        data.AsSpan(16).Fill(0xFF);
+
+        Assert.Throws<InvalidDataException>(() => BarCompression.DecompressAlz4(data));
+    }
+
+    [Fact]
+    public void DecompressAlz4_CompressedSizeOutOfRange_ThrowsInvalidDataException()
+    {
+        var compressed = BarCompression.CompressAlz4(new byte[64]).ToArray();
+
+        BinaryPrimitives.WriteInt32LittleEndian(compressed.AsSpan(8), compressed.Length);
+        Assert.Throws<InvalidDataException>(() => BarCompression.DecompressAlz4(compressed));
+
+        BinaryPrimitives.WriteInt32LittleEndian(compressed.AsSpan(8), -1);
+        Assert.Throws<InvalidDataException>(() => BarCompression.DecompressAlz4(compressed));
+    }
+
+    [Fact]
+    public void DecompressAlz4_TruncatedHeader_ThrowsInvalidDataException()
+    {
+        byte[] data = [97, 108, 122, 52, 8, 0, 0, 0, 4, 0];
+
+        Assert.Throws<InvalidDataException>(() => BarCompression.DecompressAlz4(data, new byte[8]));
+    }
+
+    [Fact]
+    public void L33t_Roundtrip_IncompressibleData_FitsOutputBound()
+    {
+        var original = new byte[200_000];
+        new Random(7).NextBytes(original);
+
+        var compressed = BarCompression.CompressL33t(original);
+        var decompressed = BarCompression.DecompressL33t(compressed);
+
+        Assert.Equal(original, decompressed);
+        Assert.True(BarCompression.VerifyL33tChecksum(compressed.Span));
     }
 
     #endregion

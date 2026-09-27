@@ -134,12 +134,12 @@ namespace CryBar.BCnEncoder.Shared
             return rawYcbcr;
         }
 
-        public bool HasTransparentPixels()
+        public bool HasTransparentPixels(byte cutoff = 255)
         {
             var pixels = AsSpan;
             for (var i = 0; i < pixels.Length; i++)
             {
-                if (pixels[i].a < 255) return true;
+                if (pixels[i].a < cutoff) return true;
             }
             return false;
         }

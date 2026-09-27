@@ -861,7 +861,7 @@ public partial class MainWindow
                     Run = (p, token) =>
                     {
                         p.Report($"Rendering variants of {evBase}...");
-                        ExportEventVariants(ev, targetNames, baseDir, p, token);
+                        ExportEventVariants(ev, targetNames, baseDir, p, token, fallbackPrefix: prefix);
                     },
                 });
             }

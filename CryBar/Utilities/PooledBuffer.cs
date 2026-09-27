@@ -51,7 +51,7 @@ public class PooledBuffer : IDisposable
 		}
 		else
 		{
-			_offset = 0;
+			_offset = existing._offset;
 			_size = existing._size;
 		}
 
@@ -93,7 +93,7 @@ public class PooledBuffer : IDisposable
 	/// <param name="length">Length</param>
 	public PooledBuffer Slice(int start_index, int length)
 	{
-		if (length <= 0 || start_index + length > _size)
+		if (start_index < 0 || length < 0 || start_index > _size - length)
 			throw new IndexOutOfRangeException();
 
 		return new PooledBuffer(this, _offset + start_index, length);

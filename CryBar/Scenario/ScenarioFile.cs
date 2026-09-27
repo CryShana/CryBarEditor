@@ -338,6 +338,21 @@ public partial class ScenarioFile
         return new string(chars);
     }
 
+    /// Reads a [marker(2) + u32 size + body] sub-section at off. On success advances
+    /// off past it; on failure (header or body out of bounds) leaves off unchanged.
+    internal static bool TryReadSized(ReadOnlySpan<byte> data, ref int off, out ReadOnlySpan<byte> body)
+    {
+        body = default;
+        if (off + 6 > data.Length) return false;
+
+        var size = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(off + 2));
+        if (size > (uint)(data.Length - off - 6)) return false;
+
+        body = data.Slice(off + 6, (int)size);
+        off += 6 + (int)size;
+        return true;
+    }
+
     static string FormatFloat(float f) => f.ToString("R");
 
     static string ReadString8(ReadOnlySpan<byte> span, ref int off)
@@ -386,6 +401,9 @@ public partial class ScenarioFile
     static int SkipString16(ReadOnlySpan<byte> span, int off)
     {
         var charCount = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(off));
+        if (charCount < 0 || charCount > MaxStringLength || charCount * 2 > span.Length - off - 4)
+            throw new InvalidDataException($"Invalid UTF-16 string length {charCount} at offset {off}");
+
         return off + 4 + charCount * 2;
     }
 

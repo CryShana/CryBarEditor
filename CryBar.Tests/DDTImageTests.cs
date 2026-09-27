@@ -2,6 +2,8 @@ using System.Buffers.Binary;
 
 using CryBar;
 
+using static CryBar.Tests.DdtTestHelpers;
+
 namespace CryBar.Tests;
 
 public class DDTImageTests
@@ -75,14 +77,7 @@ public class DDTImageTests
     [Fact]
     public void ParseHeader_ValidRTS4Header_ParsesCorrectly()
     {
-        var data = CreateSyntheticRTS4DDT(
-            usage: DDTUsage.None,
-            alpha: DDTAlpha.None,
-            format: DDTFormat.DXT1,
-            mipmapLevels: 3,
-            width: 256,
-            height: 128,
-            colorTableSize: 0);
+        var data = BuildRts4(256, 128, 3);
 
         var ddt = new DDTImage(data);
         var result = ddt.ParseHeader();
@@ -129,14 +124,7 @@ public class DDTImageTests
     public void ParseHeader_RTS4WithColorTable_ParsesColorTable()
     {
         int colorTableSize = 64;
-        var data = CreateSyntheticRTS4DDT(
-            usage: DDTUsage.None,
-            alpha: DDTAlpha.None,
-            format: DDTFormat.DXT1,
-            mipmapLevels: 1,
-            width: 16,
-            height: 16,
-            colorTableSize: colorTableSize);
+        var data = BuildRts4(16, 16, 1, colorTableSize: colorTableSize);
 
         var ddt = new DDTImage(data);
         var result = ddt.ParseHeader();
@@ -151,14 +139,7 @@ public class DDTImageTests
     {
         // 3 mipmap levels for 128x64:
         // level 0: 128x64, level 1: 64x32, level 2: 32x16
-        var data = CreateSyntheticRTS4DDT(
-            usage: DDTUsage.None,
-            alpha: DDTAlpha.None,
-            format: DDTFormat.DXT1,
-            mipmapLevels: 3,
-            width: 128,
-            height: 64,
-            colorTableSize: 0);
+        var data = BuildRts4(128, 64, 3);
 
         var ddt = new DDTImage(data);
         ddt.ParseHeader();
@@ -180,54 +161,6 @@ public class DDTImageTests
     #endregion
 
     #region Helper Methods
-
-    static byte[] CreateSyntheticRTS4DDT(DDTUsage usage, DDTAlpha alpha, DDTFormat format,
-        byte mipmapLevels, ushort width, ushort height, int colorTableSize)
-    {
-        // Calculate size needed
-        int headerSize = 4 + 4 + 4 + 4; // signature + usage/alpha/format/mipmap + width + height
-        headerSize += 4 + colorTableSize; // color table size + color table data (RTS4 only)
-        headerSize += mipmapLevels * 8; // mipmap offset+length pairs
-        int dataOffset = headerSize;
-
-        // Add some dummy mipmap data
-        int totalMipmapData = 0;
-        for (int i = 0; i < mipmapLevels; i++)
-            totalMipmapData += 16; // 16 bytes per mipmap (dummy)
-
-        var data = new byte[headerSize + totalMipmapData];
-        var offset = 0;
-
-        // RTS4 signature
-        data[offset++] = 0x52; data[offset++] = 0x54;
-        data[offset++] = 0x53; data[offset++] = 0x34;
-
-        // Usage, Alpha, Format, MipmapLevels
-        data[offset++] = (byte)usage;
-        data[offset++] = (byte)alpha;
-        data[offset++] = (byte)format;
-        data[offset++] = mipmapLevels;
-
-        // Width (int32)
-        BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(offset), width); offset += 4;
-        // Height (int32)
-        BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(offset), height); offset += 4;
-
-        // Color table
-        BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(offset), colorTableSize); offset += 4;
-        offset += colorTableSize; // skip color table bytes (zeroed)
-
-        // Mipmap offset/length pairs
-        int mipmapDataPos = headerSize;
-        for (int i = 0; i < mipmapLevels; i++)
-        {
-            BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(offset), mipmapDataPos); offset += 4;
-            BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(offset), 16); offset += 4;
-            mipmapDataPos += 16;
-        }
-
-        return data;
-    }
 
     static byte[] CreateSyntheticRTS3DDT(DDTUsage usage, DDTAlpha alpha, DDTFormat format,
         byte mipmapLevels, ushort width, ushort height)

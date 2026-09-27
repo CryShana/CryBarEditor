@@ -47,14 +47,28 @@ public class TerrainMeshBuilderTests
         Assert.Equal(1.0f, wA + wB + wC + wD, precision: 5);
     }
 
-    static ScenarioTerrain MakeFlat(int mapX, int mapZ)
+    [Theory]
+    [InlineData(0)]
+    [InlineData(4)]
+    [InlineData(8)]
+    public void Build_HeightsShorterThanGrid_DoesNotThrow(int heightCount)
+    {
+        var terrain = MakeFlat(2, 2, heightCount);
+
+        var mesh = TerrainMeshBuilder.Build(terrain, ScenarioTextureSet.Build(terrain));
+
+        Assert.Equal(9 * TerrainMesh.VertexStrideFloats, mesh.Vertices.Length);
+        Assert.Equal(0f, mesh.Vertices[8 * TerrainMesh.VertexStrideFloats + 1]);
+    }
+
+    static ScenarioTerrain MakeFlat(int mapX, int mapZ, int? heightCount = null)
     {
         int vCount = (mapX + 1) * (mapZ + 1);
         int tCount = mapX * mapZ;
         return new ScenarioTerrain
         {
             MapSizeX = mapX, MapSizeZ = mapZ,
-            Heights = new float[vCount],
+            Heights = new float[heightCount ?? vCount],
             WaterHeights = new float[vCount],
             UnkHeights = new float[vCount],
             TileGroups = new byte[tCount],

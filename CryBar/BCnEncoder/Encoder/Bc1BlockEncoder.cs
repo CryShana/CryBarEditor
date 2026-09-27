@@ -254,6 +254,8 @@ namespace CryBar.BCnEncoder.Encoder
 
         #region Encoding private stuff
 
+        private const int AlphaCutoff = 128;
+
         private static Bc1Block TryColors(RawBlock4X4Rgba32 rawBlock, ColorRgb565 color0, ColorRgb565 color1, out float error, float rWeight = 0.3f, float gWeight = 0.6f, float bWeight = 0.1f)
         {
             var output = new Bc1Block();
@@ -286,7 +288,7 @@ namespace CryBar.BCnEncoder.Encoder
             {
                 var color = pixels[i];
                 output[i] = ColorChooser.ChooseClosestColor4AlphaCutoff(colors, color, rWeight, gWeight, bWeight,
-                    128, hasAlpha, out var e);
+                    AlphaCutoff, hasAlpha, out var e);
                 error += e;
             }
 
@@ -306,9 +308,9 @@ namespace CryBar.BCnEncoder.Encoder
 
                 var pixels = rawBlock.AsSpan;
 
-                var hasAlpha = rawBlock.HasTransparentPixels();
+                var hasAlpha = rawBlock.HasTransparentPixels(AlphaCutoff);
 
-                RgbBoundingBox.Create565AlphaCutoff(pixels, out var min, out var max);
+                RgbBoundingBox.Create565AlphaCutoff(pixels, out var min, out var max, AlphaCutoff);
 
                 var c0 = max;
                 var c1 = min;
@@ -336,7 +338,7 @@ namespace CryBar.BCnEncoder.Encoder
             {
                 var pixels = rawBlock.AsSpan;
 
-                var hasAlpha = rawBlock.HasTransparentPixels();
+                var hasAlpha = rawBlock.HasTransparentPixels(AlphaCutoff);
 
                 PcaVectors.Create(pixels, out var mean, out var pa);
                 PcaVectors.GetMinMaxColor565(pixels, mean, pa, out var min, out var max);
@@ -405,7 +407,7 @@ namespace CryBar.BCnEncoder.Encoder
             {
                 var pixels = rawBlock.AsSpan;
 
-                var hasAlpha = rawBlock.HasTransparentPixels();
+                var hasAlpha = rawBlock.HasTransparentPixels(AlphaCutoff);
 
                 PcaVectors.Create(pixels, out var mean, out var pa);
                 PcaVectors.GetMinMaxColor565(pixels, mean, pa, out var min, out var max);

@@ -8,6 +8,11 @@ namespace CryBarEditor.Classes;
 /// </summary>
 public class OrbitCamera
 {
+    public const float NearPlane = 0.01f;
+    public const float FarPlane = 10000f;
+    public const float MinDistance = 0.01f;
+    public const float MaxDistance = FarPlane * 0.5f;
+
     public float Azimuth { get; set; }
     public float Elevation { get; set; }
     public float Distance { get; set; } = 5f;
@@ -33,7 +38,7 @@ public class OrbitCamera
     public Matrix4x4 GetProjectionMatrix(float aspectRatio)
     {
         float fovRad = Fov * MathF.PI / 180f;
-        return Matrix4x4.CreatePerspectiveFieldOfView(fovRad, aspectRatio, 0.01f, 10000f);
+        return Matrix4x4.CreatePerspectiveFieldOfView(fovRad, aspectRatio, NearPlane, FarPlane);
     }
 
     Vector3 GetEyePosition()
@@ -58,7 +63,10 @@ public class OrbitCamera
     public void Zoom(float delta, float rate = 0.1f)
     {
         float factor = 1f - delta * rate;
-        Distance = MathF.Max(0.01f, Distance * factor);
+        if (!float.IsFinite(factor)) return;
+
+        factor = Math.Clamp(factor, 0.1f, 10f);
+        Distance = Math.Clamp(Distance * factor, MinDistance, MaxDistance);
     }
 
     public void Pan(float dx, float dy)
@@ -99,11 +107,16 @@ public class OrbitCamera
 
     public void FitToSphere(float cx, float cy, float cz, float radius)
     {
-        TargetX = cx;
-        TargetY = cy;
-        TargetZ = cz;
+        TargetX = float.IsFinite(cx) ? cx : 0f;
+        TargetY = float.IsFinite(cy) ? cy : 0f;
+        TargetZ = float.IsFinite(cz) ? cz : 0f;
+
         float fovRad = Fov * System.MathF.PI / 180f;
-        Distance = radius > 0 ? radius / System.MathF.Sin(fovRad / 2f) * 1.1f : 5f;
+        float fit = radius / System.MathF.Sin(fovRad / 2f) * 1.1f;
+        Distance = radius > 0 && float.IsFinite(fit)
+            ? Math.Clamp(fit, MinDistance, MaxDistance)
+            : 5f;
+
         Azimuth = 322f;
         Elevation = 23f;
     }

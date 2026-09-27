@@ -18,6 +18,10 @@ public sealed class ScenarioEntity
     public required byte[] H1Prefix { get; init; }
     public required byte[] H1EnTail { get; init; }
     public required byte[] H1Suffix { get; init; }
+
+    // Non-H1 envelope sub-sections, written back verbatim around the H1.
+    public byte[] EnvelopeLeading { get; init; } = [];
+    public byte[] EnvelopeTrailing { get; init; } = [];
 }
 
 public readonly struct Matrix3x3 : System.IEquatable<Matrix3x3>

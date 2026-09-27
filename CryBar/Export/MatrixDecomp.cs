@@ -28,6 +28,13 @@ public static class MatrixDecomp
         if (scale.Y > 0) col1 /= scale.Y;
         if (scale.Z > 0) col2 /= scale.Z;
 
+        // A reflection can't be a quaternion; fold it into a negative X scale.
+        if (Vector3.Dot(Vector3.Cross(col0, col1), col2) < 0)
+        {
+            scale.X = -scale.X;
+            col0 = -col0;
+        }
+
         // System.Numerics uses row-vector convention (v' = v * M),
         // so column-major columns become rows (transpose)
         var rotMatrix = new Matrix4x4(
@@ -54,16 +61,39 @@ public static class MatrixDecomp
         m.M41, m.M42, m.M43, m.M44,
     ];
 
-    // Walks the joint chain producing world-space matrices. Assumes parents precede
-    // their children in the array (the standard GLB joint ordering).
+    // An out-of-range ParentIndex is treated as a root.
     public static Matrix4x4[] ComputeBoneWorldMatrices(GlbBone[] bones)
     {
+        const byte Pending = 0, Visiting = 1, Done = 2;
+
         var world = new Matrix4x4[bones.Length];
+        var state = new byte[bones.Length];
+        var chain = new List<int>();
+
         for (int i = 0; i < bones.Length; i++)
         {
-            var local = ColMajorToMatrix(bones[i].LocalMatrix);
-            int parent = bones[i].ParentIndex;
-            world[i] = parent < 0 ? local : local * world[parent];
+            if (state[i] == Done) continue;
+
+            chain.Clear();
+            int cur = i;
+            while ((uint)cur < (uint)bones.Length && state[cur] == Pending)
+            {
+                state[cur] = Visiting;
+                chain.Add(cur);
+                cur = bones[cur].ParentIndex;
+            }
+
+            if ((uint)cur < (uint)bones.Length && state[cur] == Visiting)
+                throw new InvalidDataException($"Bone hierarchy contains a cycle through '{bones[cur].Name}'.");
+
+            for (int k = chain.Count - 1; k >= 0; k--)
+            {
+                int b = chain[k];
+                var local = ColMajorToMatrix(bones[b].LocalMatrix);
+                int parent = bones[b].ParentIndex;
+                world[b] = (uint)parent < (uint)bones.Length ? local * world[parent] : local;
+                state[b] = Done;
+            }
         }
         return world;
     }

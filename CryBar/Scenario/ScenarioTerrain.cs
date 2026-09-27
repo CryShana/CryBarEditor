@@ -63,20 +63,14 @@ public sealed class ScenarioTerrain
         return ParseTn(tn.Data.AsSpan());
     }
 
-    static ScenarioTerrain? ParseTn(ReadOnlySpan<byte> data)
+    internal static ScenarioTerrain? ParseTn(ReadOnlySpan<byte> data)
     {
         if (data.Length < 2) return null;
         int off = 0;
         var hasT3 = data[off++];
         if (hasT3 == 0) return null; // hasT3 must be set
 
-        if (off + 6 > data.Length) return null;
-        off += 2; // 'T3'
-        var t3Size = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(off));
-        off += 4;
-        if (off + (int)t3Size > data.Length) return null;
-        var t3 = data.Slice(off, (int)t3Size);
-        off += (int)t3Size;
+        if (!ScenarioFile.TryReadSized(data, ref off, out var t3)) return null;
 
         // Outer TN tail: optional hasTm flag + optional TM sub-section + opaque trail.
         byte hasTm = 0;
@@ -88,14 +82,9 @@ public sealed class ScenarioTerrain
         }
         if (hasTm != 0 && off + 6 <= data.Length)
         {
-            off += 2; // 'TM'
-            var tmSize = (int)BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(off));
-            off += 4;
-            if (off + tmSize <= data.Length)
-            {
-                tmSection = data.Slice(off, tmSize).ToArray();
-                off += tmSize;
-            }
+            if (!ScenarioFile.TryReadSized(data, ref off, out var tm)) return null;
+
+            tmSection = tm.ToArray();
         }
         if (off < data.Length)
             tnTrail = data[off..].ToArray();
@@ -111,15 +100,9 @@ public sealed class ScenarioTerrain
         off += 4;
 
         // TT terrain groups sub-section
-        if (off + 6 > t3.Length) return null;
-        off += 2; // 'TT'
-        var ttSize = (int)BinaryPrimitives.ReadUInt32LittleEndian(t3.Slice(off));
-        off += 4;
-        if (off + ttSize > t3.Length) return null;
-        var ttBody = t3.Slice(off, ttSize);
+        if (!ScenarioFile.TryReadSized(t3, ref off, out var ttBody)) return null;
         var ttMagic = ttBody.Length >= 4 ? BinaryPrimitives.ReadUInt32LittleEndian(ttBody) : 1u;
         var groups = ParseTerrainGroups(ttBody);
-        off += ttSize;
 
         // The two map-size u32s are stored as (gameZ, gameX) -- the file's first
         // dimension is the game's Z (north-south) axis and the second is X. Loading
@@ -130,31 +113,30 @@ public sealed class ScenarioTerrain
         var mapZ = (int)BinaryPrimitives.ReadUInt32LittleEndian(t3.Slice(off));
         var mapX = (int)BinaryPrimitives.ReadUInt32LittleEndian(t3.Slice(off + 4));
         off += 8;
+        if (mapZ < 0 || mapX < 0) return null;
 
         if (off + 8 > t3.Length) return null;
         var unkF0 = BitConverter.ToSingle(t3.Slice(off, 4));
         var unkF1 = BitConverter.ToSingle(t3.Slice(off + 4, 4));
         off += 8;
 
-        var tileGroupsMarker = ScenarioFile.ReadMarker(t3, off);
-        var tileGroups = ReadList<byte>(t3, ref off);
-        var tileSubsMarker = ScenarioFile.ReadMarker(t3, off);
-        var tileSubs = ReadList<ushort>(t3, ref off);
-        var tilePtMarker = ScenarioFile.ReadMarker(t3, off);
-        var tilePt = ReadList<byte>(t3, ref off);
+        if (!TryReadList<byte>(t3, ref off, out var tileGroupsMarker, out var tileGroups)) return null;
+        if (!TryReadList<ushort>(t3, ref off, out var tileSubsMarker, out var tileSubs)) return null;
+        if (!TryReadList<byte>(t3, ref off, out var tilePtMarker, out var tilePt)) return null;
 
-        var waterColorsSection = ReadFullSizeSection(t3, ref off);
-        var waterNamesSection = ReadFullSizeSection(t3, ref off);
+        if (!TryReadFullSizeSection(t3, ref off, out var waterColorsSection)) return null;
+        if (!TryReadFullSizeSection(t3, ref off, out var waterNamesSection)) return null;
 
-        var waterTypeMarker = ScenarioFile.ReadMarker(t3, off);
-        var waterType = ReadList<byte>(t3, ref off);
+        if (!TryReadList<byte>(t3, ref off, out var waterTypeMarker, out var waterType)) return null;
 
         if (off + 4 > t3.Length) return null;
-        var heightCount = (int)BinaryPrimitives.ReadUInt32LittleEndian(t3.Slice(off));
+        var heightCount = BinaryPrimitives.ReadUInt32LittleEndian(t3.Slice(off));
         off += 4;
-        var heights = ReadFloats(t3, ref off, heightCount);
-        var waterHeights = ReadFloats(t3, ref off, heightCount);
-        var unkHeights = ReadFloats(t3, ref off, heightCount);
+        if ((long)heightCount * 3 * sizeof(float) > t3.Length - off) return null;
+
+        var heights = ReadFloats(t3, ref off, (int)heightCount);
+        var waterHeights = ReadFloats(t3, ref off, (int)heightCount);
+        var unkHeights = ReadFloats(t3, ref off, (int)heightCount);
 
         var t3Tail = off < t3.Length ? t3.Slice(off).ToArray() : [];
 
@@ -195,54 +177,42 @@ public sealed class ScenarioTerrain
         var count = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(off));
         off += 4;
 
-        var result = new TerrainTextureGroup[count];
+        var result = new List<TerrainTextureGroup>();
         for (uint g = 0; g < count; g++)
         {
             if (!ScenarioFile.TryReadUTF16(data, off, out var name, out off))
-                return result.AsSpan(0, (int)g).ToArray();
+                break;
             if (off + 4 > data.Length)
-                return result.AsSpan(0, (int)g).ToArray();
+                break;
             var texCount = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(off));
             off += 4;
 
-            var textures = new string[texCount];
-            uint actualTex = 0;
+            var textures = new List<string>();
             for (uint t = 0; t < texCount; t++)
             {
                 if (!ScenarioFile.TryReadUTF16(data, off, out var tex, out off)) break;
-                textures[t] = tex;
-                actualTex++;
+                textures.Add(tex);
             }
-            if (actualTex < texCount)
-                textures = textures.AsSpan(0, (int)actualTex).ToArray();
 
-            result[g] = new TerrainTextureGroup { Name = name, Textures = textures };
+            result.Add(new TerrainTextureGroup { Name = name, Textures = textures.ToArray() });
         }
-        return result;
+        return result.ToArray();
     }
 
-    static unsafe T[] ReadList<T>(ReadOnlySpan<byte> data, ref int off) where T : unmanaged
+    static unsafe bool TryReadList<T>(ReadOnlySpan<byte> data, ref int off, out string marker, out T[] result) where T : unmanaged
     {
-        if (off + 6 > data.Length) return [];
-        off += 2;
-        var size = (int)BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(off));
-        off += 4;
-        if (off + size > data.Length || size < 4) return [];
-        var count = (int)BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(off));
-        int payloadBytes = Math.Min(count * sizeof(T), size - 4);
-        var src = MemoryMarshal.Cast<byte, T>(data.Slice(off + 4, payloadBytes));
-        var result = new T[count];
-        src.Slice(0, Math.Min(src.Length, count)).CopyTo(result);
-        off += size;
-        return result;
-    }
+        marker = "";
+        result = [];
+        int start = off;
+        if (!ScenarioFile.TryReadSized(data, ref off, out var body) || body.Length < 4) return false;
 
-    static void SkipSizeSection(ReadOnlySpan<byte> data, ref int off)
-    {
-        if (off + 6 > data.Length) return;
-        off += 2;
-        var size = (int)BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(off));
-        off += 4 + size;
+        var count = BinaryPrimitives.ReadUInt32LittleEndian(body);
+        if ((long)count * sizeof(T) > body.Length - 4) return false;
+
+        marker = ScenarioFile.ReadMarker(data, start);
+        result = new T[count];
+        MemoryMarshal.Cast<byte, T>(body.Slice(4, (int)count * sizeof(T))).CopyTo(result);
+        return true;
     }
 
     /// <summary>
@@ -250,27 +220,21 @@ public sealed class ScenarioTerrain
     /// Returns the full sub-section bytes (marker + size + body) and advances the offset.
     /// Used to round-trip cosmetic sub-sections we don't model semantically.
     /// </summary>
-    static byte[] ReadFullSizeSection(ReadOnlySpan<byte> data, ref int off)
+    static bool TryReadFullSizeSection(ReadOnlySpan<byte> data, ref int off, out byte[] bytes)
     {
-        if (off + 6 > data.Length) return [];
-        var size = (int)BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(off + 2));
-        var total = 6 + size;
-        if (off + total > data.Length) return [];
-        var bytes = data.Slice(off, total).ToArray();
-        off += total;
-        return bytes;
+        bytes = [];
+        int start = off;
+        if (!ScenarioFile.TryReadSized(data, ref off, out _)) return false;
+
+        bytes = data[start..off].ToArray();
+        return true;
     }
 
     static float[] ReadFloats(ReadOnlySpan<byte> data, ref int off, int count)
     {
         var result = new float[count];
-        var available = Math.Min(count * 4, data.Length - off);
-        if (available >= 4)
-        {
-            var src = MemoryMarshal.Cast<byte, float>(data.Slice(off, available & ~3));
-            src.CopyTo(result);
-        }
-        off += available;
+        MemoryMarshal.Cast<byte, float>(data.Slice(off, count * sizeof(float))).CopyTo(result);
+        off += count * sizeof(float);
         return result;
     }
 

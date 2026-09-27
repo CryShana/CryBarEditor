@@ -11,7 +11,7 @@ public partial class ScenarioFile
     static void WriteTnXml(XmlWriter writer, ScenarioSection section)
     {
         var data = section.Data.AsSpan();
-        if (data.Length < 2) { WriteSectionXml(writer, section); return; }
+        if (!IsTnWellFormed(data)) { WriteSectionXml(writer, section); return; }
 
         writer.WriteStartElement("Terrain");
         int off = 0;
@@ -19,21 +19,14 @@ public partial class ScenarioFile
         byte hasT3 = data[off++];
         writer.WriteAttributeString("hasT3", hasT3.ToString());
 
-        if (hasT3 != 0 && off + 6 <= data.Length)
+        if (hasT3 != 0 && TryReadSized(data, ref off, out var t3))
         {
-            var t3Size = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(off + 2));
-            off += 6;
-            if (off + (int)t3Size <= data.Length)
-            {
-                var t3 = data.Slice(off, (int)t3Size);
-                // Write T3 magic as attribute on TN (must come before child elements)
-                if (t3.Length >= 4)
-                    writer.WriteAttributeString("t3Magic", BinaryPrimitives.ReadUInt32LittleEndian(t3).ToString());
-                byte hasTm2 = (off + (int)t3Size < data.Length) ? data[off + (int)t3Size] : (byte)0;
-                writer.WriteAttributeString("hasTm", hasTm2.ToString());
-                WriteTnT3Xml(writer, t3);
-                off += (int)t3Size;
-            }
+            // Write T3 magic as attribute on TN (must come before child elements)
+            if (t3.Length >= 4)
+                writer.WriteAttributeString("t3Magic", BinaryPrimitives.ReadUInt32LittleEndian(t3).ToString());
+            byte hasTm2 = off < data.Length ? data[off] : (byte)0;
+            writer.WriteAttributeString("hasTm", hasTm2.ToString());
+            WriteTnT3Xml(writer, t3);
         }
 
         byte hasTm = 0;
@@ -43,29 +36,22 @@ public partial class ScenarioFile
             // hasTm already written above as attribute
         }
 
-        if (hasTm != 0 && off + 6 <= data.Length)
+        if (hasTm != 0 && TryReadSized(data, ref off, out var tmData))
         {
-            var tmSize = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(off + 2));
-            off += 6;
-            if (off + (int)tmSize <= data.Length)
+            writer.WriteStartElement("TnTM");
+            // Decode lighting preset: unk1(4) + unk2(4) + String16(preset)
+            if (tmData.Length >= 12)
             {
-                var tmData = data.Slice(off, (int)tmSize);
-                writer.WriteStartElement("TnTM");
-                // Decode lighting preset: unk1(4) + unk2(4) + String16(preset)
-                if (tmData.Length >= 12)
+                int tmOff = 8; // skip unk1, unk2
+                var charCount = BinaryPrimitives.ReadInt32LittleEndian(tmData.Slice(tmOff));
+                if (charCount > 0 && charCount < 1000 && tmOff + 4 + charCount * 2 <= tmData.Length)
                 {
-                    int tmOff = 8; // skip unk1, unk2
-                    var charCount = BinaryPrimitives.ReadInt32LittleEndian(tmData.Slice(tmOff));
-                    if (charCount > 0 && charCount < 1000 && tmOff + 4 + charCount * 2 <= tmData.Length)
-                    {
-                        var preset = Encoding.Unicode.GetString(tmData.Slice(tmOff + 4, charCount * 2));
-                        writer.WriteAttributeString("lightingPreset", preset);
-                    }
+                    var preset = Encoding.Unicode.GetString(tmData.Slice(tmOff + 4, charCount * 2));
+                    writer.WriteAttributeString("lightingPreset", preset);
                 }
-                writer.WriteString(Convert.ToBase64String(tmData));
-                writer.WriteEndElement();
-                off += (int)tmSize;
             }
+            writer.WriteString(Convert.ToBase64String(tmData));
+            writer.WriteEndElement();
         }
 
         if (off < data.Length)
@@ -78,6 +64,16 @@ public partial class ScenarioFile
         writer.WriteEndElement();
     }
 
+    // Malformed TN falls back to a raw section instead of throwing mid-XML.
+    static bool IsTnWellFormed(ReadOnlySpan<byte> data)
+    {
+        if (data.Length < 2) return false;
+        if (data[0] != 0) return ScenarioTerrain.ParseTn(data) is not null;
+
+        int off = 2;
+        return data[1] == 0 || off + 6 > data.Length || TryReadSized(data, ref off, out _);
+    }
+
     static void WriteTnT3Xml(XmlWriter writer, ReadOnlySpan<byte> t3)
     {
         int off = 0;
@@ -86,14 +82,8 @@ public partial class ScenarioFile
         off += 4;
 
         // TT terrain groups sub-section
-        if (off + 6 > t3.Length) return;
-        var ttGroupSize = BinaryPrimitives.ReadUInt32LittleEndian(t3.Slice(off + 2));
-        off += 6;
-        if (off + (int)ttGroupSize <= t3.Length)
-        {
-            WriteTnTerrainGroupsXml(writer, t3.Slice(off, (int)ttGroupSize));
-            off += (int)ttGroupSize;
-        }
+        if (!TryReadSized(t3, ref off, out var ttGroups)) return;
+        WriteTnTerrainGroupsXml(writer, ttGroups);
 
         // File stores (gameZ, gameX); XML attributes use game-axis names so x/z
         // line up with ScenarioTerrain.MapSizeX / MapSizeZ downstream.
@@ -131,9 +121,7 @@ public partial class ScenarioFile
         if (off + 6 > t3.Length) return;
         {
             var wiMarker = ReadMarker(t3, off);
-            var wiSize = BinaryPrimitives.ReadUInt32LittleEndian(t3.Slice(off + 2));
-            var wiData = t3.Slice(off + 6, (int)wiSize);
-            off += 6 + (int)wiSize;
+            if (!TryReadSized(t3, ref off, out var wiData)) return;
 
             writer.WriteComment("WaterNames");
             writer.WriteStartElement(wiMarker);

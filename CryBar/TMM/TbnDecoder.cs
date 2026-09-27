@@ -14,7 +14,11 @@ public static class TbnDecoder
     /// <summary>
     /// Maps signed float (-1..+1) to unsigned 15-bit value (0..32767).
     /// </summary>
-    public static int FloatToU15(float f) => (int)MathF.Round(((f + 1.0f) * 0.5f) * 32767.0f) & 0x7FFF;
+    public static int FloatToU15(float f)
+    {
+        f = float.IsNaN(f) ? 0f : Math.Clamp(f, -1f, 1f);
+        return Math.Clamp((int)MathF.Round(((f + 1.0f) * 0.5f) * 32767.0f), 0, 32767);
+    }
 
     /// <summary>
     /// Unpacks a TBN quaternion from three u16 values.

@@ -165,7 +165,7 @@ public partial class ScenarioInspectorPanel : UserControl
         _suppressWaterChange = false;
 
         _suppressHeightChange = true;
-        _tileHeightNum.Value = heightMixed ? null : (avgHeight is null ? null : (decimal?)avgHeight.Value);
+        _tileHeightNum.Value = heightMixed || avgHeight is null ? null : ToDecimalOrNull(avgHeight.Value);
         _suppressHeightChange = false;
 
         _selectedListButton.IsVisible = count > 1;
@@ -239,20 +239,23 @@ public partial class ScenarioInspectorPanel : UserControl
         }
         else
         {
-            _entityPosX.Value = (decimal)position.Value.X;
-            _entityPosY.Value = (decimal)position.Value.Y;
-            _entityPosZ.Value = (decimal)position.Value.Z;
+            _entityPosX.Value = ToDecimalOrNull(position.Value.X);
+            _entityPosY.Value = ToDecimalOrNull(position.Value.Y);
+            _entityPosZ.Value = ToDecimalOrNull(position.Value.Z);
         }
 
         if (yawMixed || yaw is null)
             _entityYaw.Value = null;
         else
-            _entityYaw.Value = (decimal)yaw.Value;
+            _entityYaw.Value = ToDecimalOrNull(yaw.Value);
         _suppressEntityChange = false;
 
         _selectedListButton.IsVisible = count > 1;
         if (count > 1) _selectedListText.Text = lines.ToString().TrimEnd();
     }
+
+    static decimal? ToDecimalOrNull(float v) =>
+        float.IsFinite(v) && System.MathF.Abs(v) < 7.9e28f ? (decimal)v : null;
 
     static List<PlayerOption> BuildPlayerOptions()
     {

@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using CryBar.Bar;
 using CryBar.Scenario;
 
@@ -113,5 +114,71 @@ public class ScenarioEntityListBuilderTests
             var prefixPlayerId = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(e.H1Prefix.AsSpan(8, 4));
             Assert.Equal((uint)e.PlayerId, prefixPlayerId);
         }
+    }
+
+    [Fact]
+    public void FlushParsedViews_PreservesUnparsedEnvelopesExtraSubSectionsAndTail()
+    {
+        var scenario = LoadFixtureScenario();
+        var j1 = scenario.GetJ1()!;
+        var z1 = j1.FindSection("Z1")!;
+        var original = z1.Data;
+
+        var firstH1Size = (int)BinaryPrimitives.ReadUInt32LittleEndian(original.AsSpan(5 + 4 + 2));
+        int firstEnvelopeEnd = 5 + 4 + 6 + firstH1Size;
+
+        byte[] extraSub = [(byte)'Z', (byte)'Z', 2, 0, 0, 0, 0xAB, 0xCD];
+        byte[] rawEnvelope =
+        [
+            0x00, 0x0F, 0x00, 0x00,
+            (byte)'H', (byte)'1', 10, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+            (byte)'X', (byte)'X', 3, 0, 0, 0, 7, 7, 7,
+        ];
+        byte[] tail = [0x01, 0x02, 0x03];
+
+        byte[] modified = [.. original.AsSpan(0, firstEnvelopeEnd), .. extraSub, .. original.AsSpan(firstEnvelopeEnd), .. rawEnvelope, .. tail];
+        var originalCount = BinaryPrimitives.ReadUInt32LittleEndian(modified);
+        BinaryPrimitives.WriteUInt32LittleEndian(modified, originalCount + 1);
+
+        z1.Data = modified;
+        scenario.FindSection("J1")!.Data = j1.ToBytes();
+
+        var entities = ScenarioEntityListBuilder.Build(scenario);
+        Assert.Equal((int)originalCount, entities.Length);
+        Assert.Equal(extraSub, entities[0].EnvelopeTrailing);
+        Assert.Empty(entities[0].EnvelopeLeading);
+
+        var terrain = ScenarioTerrain.TryParse(scenario);
+        Assert.NotNull(terrain);
+
+        scenario.FlushParsedViews(terrain!, entities);
+
+        var flushedZ1 = scenario.GetJ1()!.FindSection("Z1")!.Data;
+        Assert.Equal(modified, flushedZ1);
+    }
+
+    [Fact]
+    public void FlushParsedViews_DeletedEntity_KeepsUnparsedEnvelope()
+    {
+        var scenario = LoadFixtureScenario();
+        var j1 = scenario.GetJ1()!;
+        var z1 = j1.FindSection("Z1")!;
+
+        byte[] rawEnvelope = [0x00, 0x0F, 0x00, 0x00, (byte)'H', (byte)'1', 4, 0, 0, 0, 9, 9, 9, 9];
+        byte[] modified = [.. z1.Data, .. rawEnvelope];
+        var originalCount = BinaryPrimitives.ReadUInt32LittleEndian(modified);
+        BinaryPrimitives.WriteUInt32LittleEndian(modified, originalCount + 1);
+
+        z1.Data = modified;
+        scenario.FindSection("J1")!.Data = j1.ToBytes();
+
+        var entities = ScenarioEntityListBuilder.Build(scenario);
+        var kept = entities.Skip(1).ToArray();
+
+        scenario.FlushParsedViews(ScenarioTerrain.TryParse(scenario)!, kept);
+
+        var flushedZ1 = scenario.GetJ1()!.FindSection("Z1")!.Data;
+        Assert.Equal(originalCount, BinaryPrimitives.ReadUInt32LittleEndian(flushedZ1));
+        Assert.True(flushedZ1.AsSpan().EndsWith(rawEnvelope));
     }
 }

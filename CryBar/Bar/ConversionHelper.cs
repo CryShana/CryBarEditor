@@ -266,7 +266,6 @@ public static class ConversionHelper
         sb.AppendLine();
 
         // Write faces grouped by mesh group
-        int globalVertexOffset = 0;
         for (int g = 0; g < meshGroups.Length; g++)
         {
             var mg = meshGroups[g];
@@ -276,24 +275,22 @@ public static class ConversionHelper
             sb.AppendLine($"g mesh_group_{g}");
             sb.AppendLine($"usemtl {matName}");
 
+            // OBJ indices are 1-based
+            long vertexBase = (long)mg.VertexStart + 1;
             var triCount = mg.IndexCount / 3;
             for (uint t = 0; t < triCount; t++)
             {
                 var baseIdx = mg.IndexStart + t * 3;
                 if (baseIdx + 2 >= indices.Length) break;
 
-                // OBJ indices are 1-based; add global vertex offset for this mesh group
-                var a = indices[baseIdx] + globalVertexOffset + 1;
-                var b = indices[baseIdx + 1] + globalVertexOffset + 1;
-                var c = indices[baseIdx + 2] + globalVertexOffset + 1;
+                var a = indices[baseIdx] + vertexBase;
+                var b = indices[baseIdx + 1] + vertexBase;
+                var c = indices[baseIdx + 2] + vertexBase;
 
                 sb.AppendLine($"f {a}/{a}/{a} {b}/{b}/{b} {c}/{c}/{c}");
             }
             sb.AppendLine();
-
-            globalVertexOffset += (int)mg.VertexCount;
         }
-        
 
         return Encoding.UTF8.GetBytes(sb.ToString());
     }

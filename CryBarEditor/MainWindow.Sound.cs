@@ -432,13 +432,18 @@ public partial class MainWindow
     /// Renders every distinct soundset variant of one event into <paramref name="outputDir"/> (best-effort).
     /// A variant is picked at random per play, so we render repeatedly and dedup by trimmed size, then map
     /// size-sorted renders to the length-sorted soundset filenames. Returns the number of variants written.
+    /// Falls back to <c>{fallbackPrefix}-{n}.wav</c> names when fewer renders than names were found. Throws when every attempt failed.
     /// Runs synchronously (blocking FMOD work) - call from a background task.
     /// </summary>
     static int ExportEventVariants(FMODEvent ev, IReadOnlyList<string> sortedVariantNames,
-        string outputDir, IProgress<string?> p, CancellationToken token, IProgress<double>? progress = null)
+        string outputDir, IProgress<string?> p, CancellationToken token, IProgress<double>? progress = null,
+        string? fallbackPrefix = null)
     {
         var targetCount = sortedVariantNames.Count;
         var maxAttempts = targetCount * 20;
+
+        int failedAttempts = 0;
+        Exception? lastError = null;
 
         var uniqueSounds = new Dictionary<long, byte[]>(); // key = trimmed file size (duration proxy)
         for (int attempt = 0; attempt < maxAttempts && uniqueSounds.Count < targetCount; attempt++)
@@ -462,23 +467,39 @@ public partial class MainWindow
                 }
             }
             catch (OperationCanceledException) { throw; }
-            catch { /* single attempt failed, continue */ }
+            catch (Exception ex)
+            {
+                failedAttempts++;
+                lastError = ex;
+            }
             finally
             {
                 try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
             }
         }
 
+        if (uniqueSounds.Count == 0 && lastError != null)
+            throw new InvalidOperationException($"{ev.DisplayName}: all {failedAttempts} render attempt(s) failed: {lastError.Message}", lastError);
+
+        if (failedAttempts > 0)
+            p.Report($"{ev.DisplayName}: {failedAttempts} render attempt(s) failed (last: {lastError!.Message})");
+
         // Trimmed durations differ from manifest durations in absolute value, but their relative
         // ordering is preserved - so sort both sides and match positionally.
         var sortedExports = uniqueSounds.OrderBy(kv => kv.Key).Select(kv => kv.Value).ToList();
 
+        bool namesMatch = sortedExports.Count == targetCount;
+        if (!namesMatch)
+            p.Report($"{ev.DisplayName}: found {sortedExports.Count}/{targetCount} distinct variants, using generic names");
+
+        var genericPrefix = fallbackPrefix ?? SoundsetParser.ExtractEventName(ev.Path) ?? "sound";
+
         int exported = 0;
         for (int i = 0; i < sortedExports.Count; i++)
         {
-            string outName = i < sortedVariantNames.Count
+            string outName = namesMatch
                 ? sortedVariantNames[i]
-                : $"{SoundsetParser.ExtractEventName(ev.Path) ?? "sound"}_{i + 1}.wav";
+                : $"{genericPrefix}-{i + 1}.wav";
 
             var outPath = Path.Combine(outputDir, outName);
             p.Report($"Writing {outName}...");

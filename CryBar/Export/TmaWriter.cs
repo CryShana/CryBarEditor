@@ -78,7 +78,7 @@ public static class TmaWriter
     // Tolerances for Constant-track detection. Translation is in metres (1e-5 = 0.01 mm,
     // well below visual precision); rotation tolerance is far tighter than Quat64's
     // quantisation step (1/524287 ~= 2e-6).
-    const float ConstantTranslationTol = 1e-5f;
+    const float ConstantVec3Tol = 1e-5f;
     const float ConstantRotationTol = 1e-5f;
 
     static void WriteTracks(BinaryWriter w, GlbAnimation anim, GlbBone[] bones, List<string> warnings)
@@ -95,8 +95,10 @@ public static class TmaWriter
             }
         }
 
-        var tmaT = new Vector3[Math.Max(1, frameCount)];
-        var tmaR = new Quaternion[Math.Max(1, frameCount)];
+        int sampleCount = Math.Max(1, frameCount);
+        var tmaT = new Vector3[sampleCount];
+        var tmaR = new Quaternion[sampleCount];
+        var tmaS = new Vector3[sampleCount];
 
         for (int i = 0; i < bones.Length; i++)
         {
@@ -106,7 +108,7 @@ public static class TmaWriter
             // is mirror(bindT_orig) and mirror_quat(bindR_orig). The forward composition in
             // GlbExporter uses bindT_orig / bindR_orig (the original game-space pose), so we must
             // unmirror back before subtracting/inverting to recover the original delta.
-            MatrixDecomp.Decompose(bones[i].LocalMatrix, out var bindT_glb, out var bindR_glb, out _);
+            MatrixDecomp.Decompose(bones[i].LocalMatrix, out var bindT_glb, out var bindR_glb, out var bindS);
             var bindT = new Vector3(-bindT_glb.X, bindT_glb.Y, bindT_glb.Z);
             var bindR = new Quaternion(bindR_glb.X, -bindR_glb.Y, -bindR_glb.Z, bindR_glb.W);
             var invBindR = Quaternion.Inverse(bindR);
@@ -114,9 +116,9 @@ public static class TmaWriter
             var track = tracksByBone[i];
 
             // Pre-compute all per-frame TMA-space values, then choose the most compact encoding.
-            for (int f = 0; f < frameCount; f++)
+            for (int f = 0; f < sampleCount; f++)
             {
-                var glbT = SampleTrackTranslation(track, f, frameCount, anim.Duration, bindT);
+                var glbT = SampleVec3(track?.Translations, f, frameCount, anim.Duration, bindT_glb);
                 // Forward: glbT = mirror(bindT + bindR * tmaT). Reverse: tmaT = invBindR * (unmirror(glbT) - bindT).
                 var deltaParent = new Vector3(-glbT.X, glbT.Y, glbT.Z) - bindT;
                 tmaT[f] = Vector3.Transform(deltaParent, invBindR);
@@ -127,29 +129,37 @@ public static class TmaWriter
                 tmaR[f] = Quaternion.Conjugate(invBindR * unmirrored);
             }
 
+            // glbS = bindS * tmaS; an empty scale track is the rest scale, i.e. tmaS = 1.
+            var scales = track?.Scales;
+            bool hasScale = scales is { Length: > 0 };
+            if (hasScale)
+            {
+                for (int f = 0; f < sampleCount; f++)
+                {
+                    var glbS = SampleVec3(scales, f, frameCount, anim.Duration, bindS);
+                    tmaS[f] = new Vector3(
+                        bindS.X != 0f ? glbS.X / bindS.X : 1f,
+                        bindS.Y != 0f ? glbS.Y / bindS.Y : 1f,
+                        bindS.Z != 0f ? glbS.Z / bindS.Z : 1f);
+                }
+            }
+            else
+            {
+                tmaS[0] = Vector3.One;
+            }
+
             bool tConst = IsConstantVec3(tmaT, frameCount);
             bool rConst = IsConstantQuat(tmaR, frameCount);
+            bool sConst = !hasScale || IsConstantVec3(tmaS, frameCount);
 
             // Track header: version + 3 encoding bytes + keyframeCount
             w.Write((byte)1); // trackVersion
             w.Write((byte)(tConst ? TmaEncoding.Constant : TmaEncoding.Raw));      // translation
             w.Write((byte)(rConst ? TmaEncoding.Constant : TmaEncoding.Quat64));   // rotation
-            w.Write((byte)TmaEncoding.Constant);                                    // scale
+            w.Write((byte)(sConst ? TmaEncoding.Constant : TmaEncoding.Raw));      // scale
             w.Write(frameCount);
 
-            // Translation: Constant = 16 bytes inline (X, Y, Z, padding); Raw = 4-byte size prefix + frameCount * 12.
-            if (tConst)
-            {
-                w.Write(tmaT[0].X); w.Write(tmaT[0].Y); w.Write(tmaT[0].Z); w.Write(0f);
-            }
-            else
-            {
-                w.Write(frameCount * 12);
-                for (int f = 0; f < frameCount; f++)
-                {
-                    w.Write(tmaT[f].X); w.Write(tmaT[f].Y); w.Write(tmaT[f].Z);
-                }
-            }
+            WriteVec3Channel(w, tmaT, tConst, frameCount);
 
             // Rotation: Constant = 16 bytes inline (X, Y, Z, W); Quat64 = 4-byte size prefix + frameCount * 8.
             if (rConst)
@@ -163,8 +173,23 @@ public static class TmaWriter
                     w.Write(EncodeQuat64(tmaR[f]));
             }
 
-            // Scale: Constant = 16 bytes inline (__m128), uniform scale 1,1,1
-            w.Write(1f); w.Write(1f); w.Write(1f); w.Write(0f); // XYZ scale + padding
+            WriteVec3Channel(w, tmaS, sConst, frameCount);
+        }
+    }
+
+    // Constant = 16 bytes inline (X, Y, Z, padding); Raw = 4-byte size prefix + frameCount * 12.
+    static void WriteVec3Channel(BinaryWriter w, Vector3[] values, bool isConst, int frameCount)
+    {
+        if (isConst)
+        {
+            w.Write(values[0].X); w.Write(values[0].Y); w.Write(values[0].Z); w.Write(0f);
+            return;
+        }
+
+        w.Write(frameCount * 12);
+        for (int f = 0; f < frameCount; f++)
+        {
+            w.Write(values[f].X); w.Write(values[f].Y); w.Write(values[f].Z);
         }
     }
 
@@ -175,9 +200,9 @@ public static class TmaWriter
         for (int i = 1; i < count; i++)
         {
             var v = values[i];
-            if (MathF.Abs(v.X - first.X) > ConstantTranslationTol) return false;
-            if (MathF.Abs(v.Y - first.Y) > ConstantTranslationTol) return false;
-            if (MathF.Abs(v.Z - first.Z) > ConstantTranslationTol) return false;
+            if (MathF.Abs(v.X - first.X) > ConstantVec3Tol) return false;
+            if (MathF.Abs(v.Y - first.Y) > ConstantVec3Tol) return false;
+            if (MathF.Abs(v.Z - first.Z) > ConstantVec3Tol) return false;
         }
         return true;
     }
@@ -231,16 +256,15 @@ public static class TmaWriter
         }
     }
 
-    // Returns the glTF-space translation for frame f.
-    // If no track or empty track: rest pose = mirror(bindT) = (-bindT.X, bindT.Y, bindT.Z).
+    // Returns the glTF-space value for frame f.
+    // If no or empty samples: the glTF-space rest value.
     // If sample count matches frameCount: direct lookup.
     // Otherwise: LERP resample at uniform time t = f * duration / (frameCount - 1).
-    static Vector3 SampleTrackTranslation(GlbBoneTrack? track, int f, int frameCount, float duration, Vector3 bindT)
+    static Vector3 SampleVec3(Vector3[]? samples, int f, int frameCount, float duration, Vector3 rest)
     {
-        if (track == null || track.Translations.Length == 0)
-            return new Vector3(-bindT.X, bindT.Y, bindT.Z);
+        if (samples == null || samples.Length == 0)
+            return rest;
 
-        var samples = track.Translations;
         if (samples.Length == frameCount)
             return samples[f];
 

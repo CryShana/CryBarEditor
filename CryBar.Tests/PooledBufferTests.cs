@@ -129,6 +129,62 @@ public class PooledBufferTests
 
     #endregion
 
+    #region Slice
+
+    [Fact]
+    public void MoveFrom_SlicedBuffer_PreservesOffset()
+    {
+        var original = new PooledBuffer(16);
+        for (int i = 0; i < 16; i++) original.Span[i] = (byte)i;
+        var slice = original.Slice(4, 8);
+
+        using var moved = PooledBuffer.MoveFrom(slice);
+
+        Assert.Equal(8, moved.Length);
+        Assert.Equal(4, moved.Span[0]);
+        Assert.Equal(11, moved.Span[7]);
+        Assert.Equal(4, moved.Memory.Span[0]);
+
+        slice.Dispose();
+        original.Dispose();
+    }
+
+    [Fact]
+    public void Slice_ZeroLength_ReturnsEmptyBuffer()
+    {
+        var original = new PooledBuffer(8);
+
+        using var slice = original.Slice(0, 0);
+
+        Assert.Equal(0, slice.Length);
+        Assert.Equal(0, slice.Span.Length);
+        original.Dispose();
+    }
+
+    [Fact]
+    public void Slice_ZeroLengthOfEmptyBuffer_Works()
+    {
+        var original = new PooledBuffer(0);
+
+        using var slice = original.Slice(0, 0);
+
+        Assert.Equal(0, slice.Length);
+        original.Dispose();
+    }
+
+    [Fact]
+    public void Slice_OutOfRange_Throws()
+    {
+        using var buffer = new PooledBuffer(8);
+
+        Assert.Throws<IndexOutOfRangeException>(() => buffer.Slice(-1, 2));
+        Assert.Throws<IndexOutOfRangeException>(() => buffer.Slice(0, -1));
+        Assert.Throws<IndexOutOfRangeException>(() => buffer.Slice(4, 5));
+        Assert.Throws<IndexOutOfRangeException>(() => buffer.Slice(9, 0));
+    }
+
+    #endregion
+
     #region FromFile
 
     [Fact]

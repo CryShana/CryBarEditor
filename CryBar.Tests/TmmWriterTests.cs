@@ -300,26 +300,6 @@ public class TmmWriterTests
         var directLikeTangents = new float[] { -1, 0, 0, -1,  -1, 0, 0, -1,  -1, 0, 0, -1 };
         var blenderLikeTangents = new float[] { -1, 0, 0, +1,  -1, 0, 0, +1,  -1, 0, 0, +1 };
 
-        static GlbModel MakeModel(float[] positions, float[] normals, float[] tangents, float[] texcoords) => new()
-        {
-            Mesh = new GlbMesh
-            {
-                Primitives =
-                [
-                    new GlbMeshPrimitive
-                    {
-                        MaterialName = "m",
-                        Positions = positions,
-                        Normals = normals,
-                        Tangents = tangents,
-                        TexCoords = texcoords,
-                        Indices = [0, 1, 2],
-                    }
-                ]
-            },
-            Materials = [new GlbMaterial { Name = "m" }],
-        };
-
         var (directTmm, directData, _) = TmmWriter.Write(MakeModel(positions, normals, directLikeTangents, texcoords));
         var (_, blenderData, _) = TmmWriter.Write(MakeModel(positions, normals, blenderLikeTangents, texcoords));
 
@@ -341,6 +321,150 @@ public class TmmWriterTests
             Assert.Equal(0, dTbnX & 0x8000);
             Assert.Equal(0, bTbnX & 0x8000);
         }
+    }
+
+    static GlbModel MakeModel(float[] positions, float[] normals, float[] tangents, float[] texcoords, uint[]? indices = null) => new()
+    {
+        Mesh = new GlbMesh
+        {
+            Primitives =
+            [
+                new GlbMeshPrimitive
+                {
+                    MaterialName = "m",
+                    Positions = positions,
+                    Normals = normals,
+                    Tangents = tangents,
+                    TexCoords = texcoords,
+                    Indices = indices ?? [0, 1, 2],
+                }
+            ]
+        },
+        Materials = [new GlbMaterial { Name = "m" }],
+    };
+
+    static TmmSkinWeight WriteSingleVertexWeights(float[] weights, byte[] joints)
+    {
+        var model = MakeMinimalSkinnedModel(firstVertexWeights: weights, firstVertexJoints: joints, boneCount: 4);
+
+        var (tmm, data, _) = TmmWriter.Write(model);
+        var dataFile = new TmmDataFile(data, new TmmFile(tmm));
+        Assert.True(dataFile.Parsed);
+        return dataFile.SkinWeights![0];
+    }
+
+    static int WeightSum(TmmSkinWeight sw) => sw.Weight0 + sw.Weight1 + sw.Weight2 + sw.Weight3;
+
+    [Fact]
+    public void Write_SkinWeights_UnnormalizedEqualWeights_SumTo255WithoutWrap()
+    {
+        var sw = WriteSingleVertexWeights([0.5f, 0.5f, 0.5f, 0.5f], [0, 1, 2, 3]);
+
+        Assert.Equal(255, WeightSum(sw));
+        foreach (var b in new[] { sw.Weight0, sw.Weight1, sw.Weight2, sw.Weight3 })
+            Assert.InRange(b, 63, 64);
+        Assert.True(sw.Weight0 <= sw.Weight1 && sw.Weight1 <= sw.Weight2 && sw.Weight2 <= sw.Weight3);
+    }
+
+    [Fact]
+    public void Write_SkinWeights_WeightAboveOne_ClampedAndNormalized()
+    {
+        var sw = WriteSingleVertexWeights([1.2f, 0, 0, 0], [2, 0, 0, 0]);
+
+        Assert.Equal(255, WeightSum(sw));
+        Assert.Equal(255, sw.Weight3);
+        Assert.Equal(2, sw.BoneIndex3);
+    }
+
+    [Fact]
+    public void Write_SkinWeights_NegativeAndNaN_TreatedAsZero()
+    {
+        var sw = WriteSingleVertexWeights([-0.5f, float.NaN, 0.25f, 0.25f], [1, 2, 3, 0]);
+
+        Assert.Equal(255, WeightSum(sw));
+        Assert.Equal(0, sw.Weight0);
+        Assert.Equal(0, sw.Weight1);
+        Assert.InRange(sw.Weight2, 127, 128);
+        Assert.InRange(sw.Weight3, 127, 128);
+    }
+
+    [Fact]
+    public void Write_SkinWeights_DroppedInfluences_RenormalizedTo255()
+    {
+        // The first four influences of an 8-influence vertex sum to less than 1.
+        var sw = WriteSingleVertexWeights([0.3f, 0.2f, 0.1f, 0.1f], [0, 1, 2, 3]);
+
+        Assert.Equal(255, WeightSum(sw));
+        Assert.Equal(0, sw.BoneIndex3);
+        Assert.InRange(sw.Weight3, 108, 110);
+    }
+
+    [Fact]
+    public void QuantizeWeights_AlwaysSumsTo255AndPreservesOrder()
+    {
+        var rng = new Random(1234);
+        Span<(float w, byte b)> pairs = stackalloc (float, byte)[4];
+        Span<byte> bytes = stackalloc byte[4];
+
+        for (int iter = 0; iter < 5000; iter++)
+        {
+            var ws = new float[4];
+            for (int s = 0; s < 4; s++) ws[s] = rng.Next(4) == 0 ? 0f : (float)rng.NextDouble();
+            Array.Sort(ws);
+
+            float sum = 0f;
+            for (int s = 0; s < 4; s++) { pairs[s] = (ws[s], (byte)s); sum += ws[s]; }
+
+            TmmWriter.QuantizeWeights(pairs, bytes);
+
+            int total = bytes[0] + bytes[1] + bytes[2] + bytes[3];
+            Assert.Equal(sum > 0f ? 255 : 0, total);
+            for (int s = 1; s < 4; s++) Assert.True(bytes[s - 1] <= bytes[s]);
+        }
+    }
+
+    static GlbModel SinglePrimitiveModel(float[] positions, uint[] indices)
+    {
+        int vc = positions.Length / 3;
+        var normals = new float[vc * 3];
+        var tangents = new float[vc * 4];
+        for (int i = 0; i < vc; i++)
+        {
+            normals[i * 3 + 2] = 1;
+            tangents[i * 4] = 1;
+            tangents[i * 4 + 3] = 1;
+        }
+
+        return MakeModel(positions, normals, tangents, new float[vc * 2], indices);
+    }
+
+    [Fact]
+    public void Write_PrimitiveWithMoreThan65536Vertices_Throws()
+    {
+        var model = SinglePrimitiveModel(new float[65537 * 3], [0, 1, 65536]);
+
+        var ex = Assert.Throws<InvalidDataException>(() => TmmWriter.Write(model));
+        Assert.Contains("65537", ex.Message);
+    }
+
+    [Fact]
+    public void Write_IndexOutOfRange_Throws()
+    {
+        var model = SinglePrimitiveModel([0, 0, 0,  1, 0, 0,  1, 1, 0], [0, 1, 3]);
+
+        var ex = Assert.Throws<InvalidDataException>(() => TmmWriter.Write(model));
+        Assert.Contains("out of range", ex.Message);
+    }
+
+    [Fact]
+    public void Write_AttributeLengthMismatch_Throws()
+    {
+        var model = SinglePrimitiveModel([0, 0, 0,  1, 0, 0,  1, 1, 0], [0, 1, 2]);
+        var prim = model.Mesh.Primitives[0];
+        var broken = MakeModel(prim.Positions, [0, 0, 1], prim.Tangents, prim.TexCoords);
+
+        var ex = Assert.Throws<InvalidDataException>(() => TmmWriter.Write(broken));
+        Assert.Contains("NORMAL", ex.Message);
     }
 
     static float[] Identity16() => [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];
@@ -539,7 +663,8 @@ public class TmmWriterTests
         Assert.InRange(parsed.BoundsRadius, 1.4f, 1.5f);
     }
 
-    static GlbModel MakeMinimalSkinnedModel(GlbExtras? extras = null) => new GlbModel
+    static GlbModel MakeMinimalSkinnedModel(GlbExtras? extras = null,
+        float[]? firstVertexWeights = null, byte[]? firstVertexJoints = null, int boneCount = 1) => new GlbModel
     {
         Mesh = new GlbMesh
         {
@@ -553,15 +678,14 @@ public class TmmWriterTests
                     Tangents = [1, 0, 0, 1,  1, 0, 0, 1,  1, 0, 0, 1],
                     TexCoords = [0, 0,  1, 0,  1, 1],
                     Indices = [0, 1, 2],
-                    JointIndices = [0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0],
-                    JointWeights = [1, 0, 0, 0,  1, 0, 0, 0,  1, 0, 0, 0],
+                    JointIndices = [.. firstVertexJoints ?? [0, 0, 0, 0],  0, 0, 0, 0,  0, 0, 0, 0],
+                    JointWeights = [.. firstVertexWeights ?? [1, 0, 0, 0],  1, 0, 0, 0,  1, 0, 0, 0],
                 }
             ]
         },
-        Bones =
-        [
-            new GlbBone { Name = "root", ParentIndex = -1, LocalMatrix = Identity16(), InverseBindMatrix = Identity16() },
-        ],
+        Bones = Enumerable.Range(0, boneCount)
+            .Select(i => new GlbBone { Name = i == 0 ? "root" : $"b{i}", ParentIndex = i == 0 ? -1 : 0, LocalMatrix = Identity16(), InverseBindMatrix = Identity16() })
+            .ToArray(),
         Materials = [new GlbMaterial { Name = "m" }],
         Extras = extras,
     };

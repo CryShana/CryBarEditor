@@ -5,6 +5,9 @@ namespace CryBar.Scenario;
 
 public partial class ScenarioFile
 {
+    // Set by ScenarioEntityListBuilder.Build: the Z1 pieces the entity list does not model.
+    internal ScenarioEntityListBuilder.Z1Contents? LoadedZ1 { get; set; }
+
     /// Replaces the J1.TN and J1.Z1 section bytes from parsed views.
     /// Throws if J1 / TN / Z1 are missing or unparseable -- silently dropping
     /// edits would corrupt user work.
@@ -57,7 +60,9 @@ public partial class ScenarioFile
             for (int i = 0; i < entities.Count; i++)
                 flagsById.TryGetValue(checked((ushort)entities[i].EntityId), out flags[i]);
         }
-        z1.Data = Z1Writer.Write(entities, version, flags);
+
+        var loaded = LoadedZ1 ?? ScenarioEntityListBuilder.ParseZ1(z1.Data, []);
+        z1.Data = Z1Writer.Write(entities, version, flags, loaded.RawEnvelopes, loaded.Tail);
 
         j1Section.Data = j1.ToBytes();
     }

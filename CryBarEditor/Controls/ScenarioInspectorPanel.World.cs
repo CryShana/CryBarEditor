@@ -278,7 +278,7 @@ public partial class ScenarioInspectorPanel
 
     NumericUpDown ResourceNumeric(float value, System.Func<PlayerFields, float, PlayerFields> mutate, ScenarioPlayer pl)
     {
-        var num = SmallNumeric((decimal)value, 0, 10000000);
+        var num = SmallNumeric(ToDecimalOrNull(value) ?? 0, 0, 10000000);
         num.ValueChanged += (_, _) =>
         {
             if (num.Value is not { } v) return;

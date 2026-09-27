@@ -34,7 +34,7 @@ namespace CryBar.BCnEncoder.Encoder
             {
                 if (useLuminance)
                 {
-                    output[i] = (byte)(new ColorYCbCr(span[i]).y * 255);
+                    output[i] = ByteHelper.ClampToByte(new ColorYCbCr(span[i]).y * 255);
                 }
                 else
                 {

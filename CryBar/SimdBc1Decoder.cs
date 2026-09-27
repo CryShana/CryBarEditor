@@ -176,10 +176,13 @@ internal static class SimdBc1Decoder
     /// </summary>
     public static void DecodeImage(ReadOnlySpan<byte> blocks, Span<byte> outputRgba, int pixelWidth, int pixelHeight, bool useAlpha)
     {
+        if (pixelWidth < 0 || pixelHeight < 0)
+            throw new ArgumentException($"Invalid BC1 image size {pixelWidth}x{pixelHeight}");
+
         int blocksWidth = (pixelWidth + 3) >> 2;
         int blocksHeight = (pixelHeight + 3) >> 2;
-        int requiredBlockBytes = blocksWidth * blocksHeight * BlockBytes;
-        int requiredOutputBytes = pixelWidth * pixelHeight * 4;
+        long requiredBlockBytes = (long)blocksWidth * blocksHeight * BlockBytes;
+        long requiredOutputBytes = (long)pixelWidth * pixelHeight * 4;
         if (blocks.Length < requiredBlockBytes)
             throw new ArgumentException($"BC1 input too short: have {blocks.Length}, need {requiredBlockBytes} for {pixelWidth}x{pixelHeight}", nameof(blocks));
         if (outputRgba.Length < requiredOutputBytes)
@@ -261,7 +264,11 @@ internal static class SimdBc1Decoder
     /// </summary>
     public static ColorRgba32[] DecodeImage(ReadOnlySpan<byte> blocks, int pixelWidth, int pixelHeight, bool useAlpha)
     {
-        var output = new ColorRgba32[pixelWidth * pixelHeight];
+        long pixelCount = (long)pixelWidth * pixelHeight;
+        if (pixelCount * 4 > int.MaxValue)
+            throw new ArgumentException($"Invalid BC1 image size {pixelWidth}x{pixelHeight}");
+
+        var output = new ColorRgba32[pixelCount];
         DecodeImage(blocks, MemoryMarshal.AsBytes(output.AsSpan()), pixelWidth, pixelHeight, useAlpha);
         return output;
     }

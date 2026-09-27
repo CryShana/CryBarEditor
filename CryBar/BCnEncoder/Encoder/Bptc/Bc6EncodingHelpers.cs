@@ -12,26 +12,8 @@ namespace CryBar.BCnEncoder.Encoder.Bptc
         /// </summary>
         internal static int PreQuantize(float value, bool signed)
         {
-            var half = new Half(value);
-            var bits = (int)Half.GetBits(half);
-            if (!signed)
-            {
-
-                return (bits << 6) / 31;
-            }
-            else
-            {
-                const int signMask = ~0x8000;
-
-                if (half < new Half(0))
-                {
-                    var component = -(bits & signMask);
-
-                    return -((-component << 5) / 31); //-(((-component) * 31) >> 5)
-                }
-
-                return (bits << 5) / 31;
-            }
+            var bits = Half.GetSanitizedSignedBits(value, signed);
+            return signed ? (bits << 5) / 31 : (bits << 6) / 31;
         }
 
         /// <summary>
@@ -41,40 +23,47 @@ namespace CryBar.BCnEncoder.Encoder.Bptc
         {
             if (!signed)
             {
+                component = Math.Clamp(component, 0, 0xFFFF);
+                var max = (1 << endpointBits) - 1;
+
                 if (endpointBits >= 15)
-                    return component;
+                    return Math.Min(component, max);
                 if (component == 0)
                     return 0;
                 if (component == 0xFFFF)
-                    return (1 << endpointBits) - 1;
+                    return max;
                 else
-                    return (component << endpointBits) - 0x8000 >> 16;
+                    return Math.Clamp((component << endpointBits) - 0x8000 >> 16, 0, max);
 
             }
             else
             {
+                component = Math.Clamp(component, -0x7FFF, 0x7FFF);
+
                 if (endpointBits >= 16)
                     return component;
                 else
                 {
+                    var max = (1 << endpointBits - 1) - 1;
+
                     if (component == 0) return 0;
                     if (component > 0)
                     {
                         if (component == 0x7FFF)
                         {
-                            return (1 << endpointBits - 1) - 1;
+                            return max;
                         }
 
-                        return (component << endpointBits - 1) - 0x4000 >> 15;
+                        return Math.Clamp((component << endpointBits - 1) - 0x4000 >> 15, 0, max);
                     }
                     else
                     {
                         if (-component == 0x7FFF)
                         {
-                            return -((1 << endpointBits - 1) - 1);
+                            return -max;
                         }
 
-                        return -((-component << endpointBits - 1) + 0x4000 >> 15);
+                        return -Math.Clamp((-component << endpointBits - 1) + 0x4000 >> 15, 0, max);
                     }
                 }
             }

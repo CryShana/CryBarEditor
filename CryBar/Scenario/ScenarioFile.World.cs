@@ -941,7 +941,7 @@ public partial class ScenarioFile
 
         bw.Write(uint.Parse(reader.GetAttribute("magic") ?? "1"));
         bw.Write(byte.Parse(reader.GetAttribute("pad0") ?? "0"));
-        var sepVal = int.Parse(reader.GetAttribute("sep") ?? "1");
+        var sepVal = byte.Parse(reader.GetAttribute("sep") ?? "1");
         var cmVal = reader.GetAttribute("cm");
 
         var fpList = new List<(uint magic, List<string> vals, byte[]? pad)>();
@@ -1056,7 +1056,7 @@ public partial class ScenarioFile
             else for (int i = 0; i < 12; i++) bw.Write((byte)0);
         }
 
-        bw.Write((byte)sepVal);
+        bw.Write(sepVal);
 
         // cm sub-section
         if (cmVal != null)

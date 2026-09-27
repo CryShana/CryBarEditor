@@ -451,18 +451,18 @@ namespace CryBar.BCnEncoder.Shared
 
         internal void ClampToPositive()
         {
-            if (r < 0) r = 0;
-            if (g < 0) g = 0;
-            if (b < 0) b = 0;
+            if (!(r > 0)) r = 0;
+            if (!(g > 0)) g = 0;
+            if (!(b > 0)) b = 0;
         }
 
         internal void ClampToHalf()
         {
             if (r < Half.MinValue) r = Half.MinValue;
-            else if (g > Half.MaxValue) g = Half.MaxValue;
-            if (b < Half.MinValue) b = Half.MinValue;
             else if (r > Half.MaxValue) r = Half.MaxValue;
             if (g < Half.MinValue) g = Half.MinValue;
+            else if (g > Half.MaxValue) g = Half.MaxValue;
+            if (b < Half.MinValue) b = Half.MinValue;
             else if (b > Half.MaxValue) b = Half.MaxValue;
         }
     }
@@ -1265,7 +1265,11 @@ namespace CryBar.BCnEncoder.Shared
 
         public ColorRgbe(ColorRgbFloat color)
         {
-            var max = MathF.Max(color.b, MathF.Max(color.g, color.r));
+            var cr = SanitizeComponent(color.r);
+            var cg = SanitizeComponent(color.g);
+            var cb = SanitizeComponent(color.b);
+
+            var max = MathF.Max(cb, MathF.Max(cg, cr));
             if (max <= 1e-32f)
             {
                 r = g = b = e = 0;
@@ -1273,13 +1277,17 @@ namespace CryBar.BCnEncoder.Shared
             else
             {
                 MathHelper.FrExp(max, out var exponent);
+                exponent = Math.Min(exponent, 127);
+
                 var scale = MathHelper.LdExp(1f, -exponent + 8);
-                r = (byte)(scale * color.r);
-                g = (byte)(scale * color.g);
-                b = (byte)(scale * color.b);
+                r = (byte)MathF.Min(scale * cr, 255f);
+                g = (byte)MathF.Min(scale * cg, 255f);
+                b = (byte)MathF.Min(scale * cb, 255f);
                 e = (byte)(exponent + 128);
             }
         }
+
+        private static float SanitizeComponent(float value) => value > 0 ? MathF.Min(value, float.MaxValue) : 0;
 
         public ColorRgbFloat ToColorRgbFloat(float exposure = 1.0f)
         {

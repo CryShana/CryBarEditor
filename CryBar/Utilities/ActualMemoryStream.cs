@@ -23,21 +23,21 @@ public class ActualMemoryStream : Stream
         if (offset > int.MaxValue || offset < int.MinValue)
             throw new NotSupportedException("Only valid Int32 offsets are accepted");
 
-        var o = (int)offset;
-
-        switch (origin)
+        long target = origin switch
         {
-            case SeekOrigin.Begin:
-                _position = o;
-                break;
-            case SeekOrigin.Current:
-                _position += o;
-                break;
-            case SeekOrigin.End:
-                _position = _buffer.Length - o;
-                break;
-        }
+            SeekOrigin.Begin => offset,
+            SeekOrigin.Current => (long)_position + offset,
+            SeekOrigin.End => (long)_buffer.Length + offset,
+            _ => throw new ArgumentOutOfRangeException(nameof(origin))
+        };
 
+        if (target < 0)
+            throw new IOException("An attempt was made to move the position before the beginning of the stream");
+
+        if (target > int.MaxValue)
+            throw new NotSupportedException("Only valid Int32 positions are accepted");
+
+        _position = (int)target;
         return _position;
     }
 
@@ -48,18 +48,7 @@ public class ActualMemoryStream : Stream
 
     public override void Write(byte[] buffer, int offset, int count)
     {
-        var bfr = _buffer;
-        var pos = _position;
-
-        if (bfr.Length - pos < count)
-            count = bfr.Length - pos;
-
-        if (count <= 0)
-            return;
-
-        buffer.AsMemory(offset, count).CopyTo(bfr.Slice(pos));
-
-        _position += count;
+        Write(buffer.AsSpan(offset, count));
     }
 
     public override int Read(byte[] buffer, int offset, int count)
@@ -96,15 +85,16 @@ public class ActualMemoryStream : Stream
 
     public override void Write(ReadOnlySpan<byte> buffer)
     {
-        var bfr = _buffer;
-        var pos = _position;
-        var count = Math.Min(bfr.Length - pos, buffer.Length);
-
-        if (count <= 0)
+        if (buffer.Length == 0)
             return;
 
-        buffer.Slice(0, count).CopyTo(bfr.Span.Slice(pos));
+        var bfr = _buffer;
+        var pos = _position;
+        if (pos > bfr.Length - buffer.Length)
+            throw new NotSupportedException($"Write of {buffer.Length} bytes at position {pos} exceeds fixed buffer capacity of {bfr.Length} bytes");
 
-        _position += count;
+        buffer.CopyTo(bfr.Span.Slice(pos));
+
+        _position += buffer.Length;
     }
 }

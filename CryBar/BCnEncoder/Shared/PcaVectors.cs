@@ -291,8 +291,8 @@ namespace CryBar.BCnEncoder.Shared
                 if (d > maxD) maxD = d;
             }
 
-            min = mean + principalAxis * minD;
-            max = mean + principalAxis * maxD;
+            min = Vector4.Clamp(mean + principalAxis * minD, Vector4.Zero, Vector4.One);
+            max = Vector4.Clamp(mean + principalAxis * maxD, Vector4.Zero, Vector4.One);
         }
 
         public static void GetExtremePoints(Span<ColorRgbFloat> colors, Vector3 mean, Vector3 principalAxis, out Vector3 min,

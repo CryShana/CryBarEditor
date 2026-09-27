@@ -80,7 +80,7 @@ public partial class DDSCreateDialogue : SimpleWindow
                 1 => CompressionFormat.Bc3,
                 _ => CompressionFormat.Bc7
             };
-            byte mipmaps = (byte)_txtMipmapNumber.Value!;
+            byte mipmaps = (byte)(_txtMipmapNumber.Value ?? _txtMipmapNumber.Maximum);
 
             var ddsBytes = await ConversionHelper.EncodeImageToDdsBytes(_image, format, _lastSrgb, mipmaps);
             await File.WriteAllBytesAsync(OutputFile, ddsBytes);

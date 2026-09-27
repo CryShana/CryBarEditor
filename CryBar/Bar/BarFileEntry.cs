@@ -56,7 +56,7 @@ public class BarFileEntry
         var span = buffer.Span;
 
         var copied_bytes = 0;
-        do
+        while (copied_bytes < size)
         {
             var r = from.Read(span);
             if (r <= 0)
@@ -69,7 +69,7 @@ public class BarFileEntry
 
             to.Write(span.Slice(0, relevant_read_bytes));
             copied_bytes += relevant_read_bytes;
-        } while (copied_bytes < size);
+        }
     }
 
     /// <summary>

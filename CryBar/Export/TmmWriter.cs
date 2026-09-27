@@ -11,6 +11,9 @@ public static class TmmWriter
     {
         var warnings = new List<string>();
 
+        for (int p = 0; p < model.Mesh.Primitives.Length; p++)
+            ValidatePrimitive(model.Mesh.Primitives[p], p);
+
         // Build .tmm.data buffer first so we know the offsets for the header.
         var data = BuildDataBuffer(model, out var dataLayout);
 
@@ -22,6 +25,24 @@ public static class TmmWriter
 
         return (tmm, data, warnings);
     }
+
+    const int MaxVerticesPerPrimitive = ushort.MaxValue + 1;
+
+    static void ValidatePrimitive(GlbMeshPrimitive prim, int primIdx)
+    {
+        string? error = MeshPrimitiveValidator.CheckLengths(prim.Positions, prim.Normals, prim.Tangents, prim.TexCoords,
+            prim.JointIndices, prim.JointWeights, prim.Indices.Length);
+        if (error != null)
+            throw PrimitiveError(prim, primIdx, error);
+
+        int vc = prim.Positions.Length / 3;
+        if (vc > MaxVerticesPerPrimitive)
+            throw new InvalidDataException(
+                $"Primitive {primIdx} ('{prim.MaterialName}') has {vc} vertices; TMM uses 16-bit indices so a mesh group can hold at most {MaxVerticesPerPrimitive}. Split the mesh (or its material) into smaller parts.");
+    }
+
+    static InvalidDataException PrimitiveError(GlbMeshPrimitive prim, int primIdx, string error) =>
+        new($"Primitive {primIdx} ('{prim.MaterialName}'): {error}.");
 
     // Offsets and byte lengths for each section inside the .tmm.data buffer.
     readonly struct DataLayout(
@@ -73,9 +94,26 @@ public static class TmmWriter
         int wOff = (int)weightStart;
         int hOff = (int)heightStart;
 
-        foreach (var prim in primitives)
+        for (int p = 0; p < primitives.Length; p++)
         {
+            var prim = primitives[p];
             int vc = prim.Positions.Length / 3;
+
+            // Must run before ShouldFlipTangentWForPrimitive, which dereferences indices unchecked.
+            // Triangle winding: reverse [i0, i1, i2] -> [i0, i2, i1] (RH -> LH)
+            var idx = prim.Indices;
+            for (int t = 0; t < idx.Length; t += 3)
+            {
+                uint i0 = idx[t], i1 = idx[t + 1], i2 = idx[t + 2];
+                if (i0 >= (uint)vc || i1 >= (uint)vc || i2 >= (uint)vc)
+                    throw PrimitiveError(prim, p, MeshPrimitiveValidator.CheckIndexRange(idx, vc)!);
+
+                BinaryPrimitives.WriteUInt16LittleEndian(buf.AsSpan(iOff),     (ushort)i0);
+                BinaryPrimitives.WriteUInt16LittleEndian(buf.AsSpan(iOff + 2), (ushort)i2);
+                BinaryPrimitives.WriteUInt16LittleEndian(buf.AsSpan(iOff + 4), (ushort)i1);
+                iOff += 6;
+            }
+
             // Blender's glTF exporter writes tangent.w with the opposite sign of MikkTSpace
             // for our X-mirrored meshes; without correction the per-vertex handedness bit
             // ends up inverted and normal-map sampling reads the wrong bitangent direction.
@@ -120,16 +158,6 @@ public static class TmmWriter
                 hOff += 2;
             }
 
-            // Triangle winding: reverse [i0, i1, i2] -> [i0, i2, i1] (RH -> LH)
-            var idx = prim.Indices;
-            for (int t = 0; t < idx.Length; t += 3)
-            {
-                BinaryPrimitives.WriteUInt16LittleEndian(buf.AsSpan(iOff),     (ushort)idx[t]);
-                BinaryPrimitives.WriteUInt16LittleEndian(buf.AsSpan(iOff + 2), (ushort)idx[t + 2]);
-                BinaryPrimitives.WriteUInt16LittleEndian(buf.AsSpan(iOff + 4), (ushort)idx[t + 1]);
-                iOff += 6;
-            }
-
             if (hasSkin)
                 WritePrimitiveSkinWeights(buf, ref wOff, prim);
         }
@@ -153,13 +181,12 @@ public static class TmmWriter
             // even where weight=0, and the engine appears to read them for non-skinning
             // purposes (material/lookup), so dropping zero-weight pairs visibly breaks
             // textures on units like the chimera.
-            int nonzero = 0;
             for (int s = 0; s < 4; s++)
             {
                 float wt = weights != null ? weights[i * 4 + s] : 0f;
+                wt = float.IsNaN(wt) ? 0f : Math.Clamp(wt, 0f, 1f);
                 byte  bi = joints  != null ? joints [i * 4 + s] : (byte)0;
                 pairs[s] = (wt, bi);
-                if (wt > 0f) nonzero++;
             }
 
             // Sort ascending by weight (min..max). Zero-weight entries sort first,
@@ -172,15 +199,7 @@ public static class TmmWriter
                 pairs[b + 1] = tmp;
             }
 
-            int total = 0;
-            for (int s = 0; s < 4; s++)
-            {
-                wBytes[s] = (byte)MathF.Round(pairs[s].w * 255f);
-                total += wBytes[s];
-            }
-            // Absorb rounding error into slot 3 (largest after ascending sort).
-            if (nonzero > 0)
-                wBytes[3] = (byte)(wBytes[3] + (255 - total));
+            QuantizeWeights(pairs, wBytes);
 
             for (int s = 0; s < 4; s++)
             {
@@ -189,6 +208,37 @@ public static class TmmWriter
             }
 
             wOff += TmmSkinWeight.SizeInBytes;
+        }
+    }
+
+    // Largest-remainder quantization so bytes sum to exactly 255; ties go to the higher slot to keep ascending order.
+    internal static void QuantizeWeights(ReadOnlySpan<(float w, byte b)> pairs, Span<byte> wBytes)
+    {
+        wBytes.Clear();
+
+        float sum = 0f;
+        for (int s = 0; s < 4; s++) sum += pairs[s].w;
+        if (!(sum > 0f)) return;
+
+        Span<float> frac = stackalloc float[4];
+        int total = 0;
+        for (int s = 0; s < 4; s++)
+        {
+            float scaled = pairs[s].w / sum * 255f;
+            int q = (int)MathF.Floor(scaled);
+            wBytes[s] = (byte)q;
+            frac[s] = scaled - q;
+            total += q;
+        }
+
+        for (int remaining = 255 - total; remaining > 0; remaining--)
+        {
+            int best = 3;
+            for (int s = 2; s >= 0; s--)
+                if (frac[s] > frac[best]) best = s;
+
+            wBytes[best]++;
+            frac[best] = float.NegativeInfinity;
         }
     }
 

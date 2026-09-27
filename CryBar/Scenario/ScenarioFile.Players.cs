@@ -574,8 +574,7 @@ public partial class ScenarioFile
                 case "P9":
                 {
                     var rawAttr = reader.GetAttribute("raw");
-                    if (rawAttr != null)
-                        WriteSubSection(bw, "P9", Convert.FromBase64String(rawAttr));
+                    WriteSubSection(bw, "P9", string.IsNullOrEmpty(rawAttr) ? [] : Convert.FromBase64String(rawAttr));
                     reader.Skip();
                     break;
                 }

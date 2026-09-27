@@ -31,7 +31,7 @@ public static class TerrainMeshBuilder
             int vIdx = vz * vCols + vx;
             int off = vIdx * TerrainMesh.VertexStrideFloats;
 
-            float y = vIdx < heights.Length ? heights[vIdx] : 0f;
+            float y = HeightAt(heights, vIdx);
             verts[off + 0] = vx;
             verts[off + 1] = y;
             verts[off + 2] = vz;
@@ -114,6 +114,14 @@ public static class TerrainMeshBuilder
         int z1 = Math.Min(vRows - 1, vz + dz);
         int span = (x1 - x0) + (z1 - z0);
         if (span == 0) return 0f;
-        return (heights[z1 * vCols + x1] - heights[z0 * vCols + x0]) / span;
+
+        float h0 = HeightAt(heights, z0 * vCols + x0);
+        float h1 = HeightAt(heights, z1 * vCols + x1);
+        return (h1 - h0) / span;
+    }
+
+    static float HeightAt(float[] heights, int idx)
+    {
+        return (uint)idx < (uint)heights.Length ? heights[idx] : 0f;
     }
 }

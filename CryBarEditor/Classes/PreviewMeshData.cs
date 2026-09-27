@@ -50,11 +50,9 @@ public static class MeshDataBuilder
 
         var dataFile = new TmmDataFile(tmmDataBytes, tmm);
         if (!dataFile.Parsed) return null;
+        if (dataFile.Vertices is not { } srcVerts || dataFile.Indices is not { } srcIndices) return null;
 
-        var srcVerts = dataFile.Vertices!;
-        var srcIndices = dataFile.Indices!;
-        var meshGroups = tmm.MeshGroups!;
-
+        var meshGroups = tmm.MeshGroups ?? [];
         int vertexCount = srcVerts.Length;
         int indexCount = srcIndices.Length;
 
@@ -105,33 +103,46 @@ public static class MeshDataBuilder
         }
 
         var indices = new uint[indexCount];
-        foreach (var mg in meshGroups)
+        var drawGroups = new (int Offset, int Count)[meshGroups.Length];
+        var drawGroupMaterials = new uint[meshGroups.Length];
+        for (int g = 0; g < meshGroups.Length; g++)
         {
-            uint vStart = mg.VertexStart;
+            var mg = meshGroups[g];
+            drawGroupMaterials[g] = mg.MaterialIndex;
+
+            if (vertexCount == 0 || mg.IndexStart >= (uint)indexCount) continue;
+
             int iStart = (int)mg.IndexStart;
-            int iEnd = iStart + (int)mg.IndexCount;
-            for (int i = iStart; i + 2 < iEnd; i += 3)
+            int iCount = (int)Math.Min(mg.IndexCount, (uint)(indexCount - iStart));
+            iCount -= iCount % 3;
+            drawGroups[g] = (iStart, iCount);
+
+            ulong vStart = mg.VertexStart;
+            for (int i = iStart; i < iStart + iCount; i += 3)
             {
-                indices[i]     = srcIndices[i] + vStart;
-                indices[i + 1] = srcIndices[i + 2] + vStart;
-                indices[i + 2] = srcIndices[i + 1] + vStart;
+                ulong a = srcIndices[i] + vStart;
+                ulong b = srcIndices[i + 2] + vStart;
+                ulong c = srcIndices[i + 1] + vStart;
+
+                // Out-of-range triangles stay degenerate (0,0,0) so the GPU never reads past the VBO.
+                if (a >= (ulong)vertexCount || b >= (ulong)vertexCount || c >= (ulong)vertexCount) continue;
+
+                indices[i]     = (uint)a;
+                indices[i + 1] = (uint)b;
+                indices[i + 2] = (uint)c;
             }
         }
 
-        float cx = (minX + maxX) * 0.5f;
-        float cy = (minY + maxY) * 0.5f;
-        float cz = (minZ + maxZ) * 0.5f;
-        float dx = maxX - minX;
-        float dy = maxY - minY;
-        float dz = maxZ - minZ;
-        float radius = MathF.Sqrt(dx * dx + dy * dy + dz * dz) * 0.5f;
-
-        var drawGroups = new (int Offset, int Count)[meshGroups.Length];
-        var drawGroupMaterials = new uint[meshGroups.Length];
-        for (int i = 0; i < meshGroups.Length; i++)
+        float cx = 0f, cy = 0f, cz = 0f, radius = 1f;
+        if (vertexCount > 0)
         {
-            drawGroups[i] = ((int)meshGroups[i].IndexStart, (int)meshGroups[i].IndexCount);
-            drawGroupMaterials[i] = meshGroups[i].MaterialIndex;
+            cx = (minX + maxX) * 0.5f;
+            cy = (minY + maxY) * 0.5f;
+            cz = (minZ + maxZ) * 0.5f;
+            float dx = maxX - minX;
+            float dy = maxY - minY;
+            float dz = maxZ - minZ;
+            radius = MathF.Sqrt(dx * dx + dy * dy + dz * dz) * 0.5f;
         }
 
         var (attachments, impactPoints) = BuildMarkers(

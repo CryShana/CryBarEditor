@@ -109,6 +109,7 @@
 				<NumericUpDown x:Name="_txtMipmapNumber"
 							   IsEnabled="{Binding !Busy}"
 							   Minimum="1"
+							   Maximum="16"
 							   Value="1"
 							   Increment="1"
 							   FormatString="0" />

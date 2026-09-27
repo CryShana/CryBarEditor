@@ -144,7 +144,7 @@ public partial class DDTCreateDialogue : SimpleWindow
             var usage = (DDTUsage)_lastIndexUsage;
             var alpha = (DDTAlpha)_lastIndexAlpha;
             var format = (DDTFormat)_lastIndexFormat;
-            byte mipmaps = (byte)_txtMipmapNumber.Value!;
+            byte mipmaps = (byte)(_txtMipmapNumber.Value ?? _txtMipmapNumber.Maximum);
 
             if (ParamsOnlyMode)
             {

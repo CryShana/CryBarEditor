@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Numerics;
 using System.Runtime.InteropServices;
 
 using CryBar.BCnEncoder.Shared;
@@ -215,9 +216,15 @@ namespace CryBar.BCnEncoder.Encoder.Bptc
             PcaVectors.CreateWithAlpha(originalPixels, out var mean, out var pa);
             PcaVectors.GetExtremePointsWithAlpha(block.AsSpan, mean, pa, out var min, out var max);
 
-            ep0 = new ColorRgba32((byte)(min.X * 255), (byte)(min.Y * 255), (byte)(min.Z * 255), (byte)(min.W * 255));
-            ep1 = new ColorRgba32((byte)(max.X * 255), (byte)(max.Y * 255), (byte)(max.Z * 255), (byte)(max.W * 255));
+            ep0 = ToColorRgba32(min);
+            ep1 = ToColorRgba32(max);
         }
+
+        private static ColorRgba32 ToColorRgba32(Vector4 v) => new ColorRgba32(
+            ByteHelper.ClampToByte(v.X * 255),
+            ByteHelper.ClampToByte(v.Y * 255),
+            ByteHelper.ClampToByte(v.Z * 255),
+            ByteHelper.ClampToByte(v.W * 255));
 
         public static void GetInitialUnscaledEndpointsForSubset(RawBlock4X4Rgba32 block, out ColorRgba32 ep0,
             out ColorRgba32 ep1, ReadOnlySpan<int> partitionTable, int subsetIndex)
@@ -245,10 +252,10 @@ namespace CryBar.BCnEncoder.Encoder.Bptc
             }
 
             PcaVectors.CreateWithAlpha(subsetColors, out var mean, out var pa);
-            PcaVectors.GetExtremePointsWithAlpha(block.AsSpan, mean, pa, out var min, out var max);
+            PcaVectors.GetExtremePointsWithAlpha(subsetColors, mean, pa, out var min, out var max);
 
-            ep0 = new ColorRgba32((byte)(min.X * 255), (byte)(min.Y * 255), (byte)(min.Z * 255), (byte)(min.W * 255));
-            ep1 = new ColorRgba32((byte)(max.X * 255), (byte)(max.Y * 255), (byte)(max.Z * 255), (byte)(max.W * 255));
+            ep0 = ToColorRgba32(min);
+            ep1 = ToColorRgba32(max);
         }
 
         public static ColorRgba32 ScaleDownEndpoint(ColorRgba32 endpoint, Bc7BlockType type, bool ignoreAlpha, out byte pBit)
@@ -264,11 +271,7 @@ namespace CryBar.BCnEncoder.Encoder.Bptc
             if (TypeHasPBits(type))
             {
                 var pBitVotingMask = (1 << 8 - colorPrecision + 1) - 1;
-                float pBitVotes = 0;
-                pBitVotes += endpoint.r & pBitVotingMask;
-                pBitVotes += endpoint.g & pBitVotingMask;
-                pBitVotes += endpoint.b & pBitVotingMask;
-                pBitVotes /= 3;
+                var pBitVotes = PBitVotes(endpoint, pBitVotingMask) / 3f;
 
                 if (pBitVotes >= pBitVotingMask / 2f)
                 {
@@ -299,6 +302,18 @@ namespace CryBar.BCnEncoder.Encoder.Bptc
             }
         }
 
+        public static byte GetSharedPBit(ColorRgba32 endpoint0, ColorRgba32 endpoint1, Bc7BlockType type)
+        {
+            var colorPrecision = GetColorComponentPrecisionWithPBit(type);
+            var pBitVotingMask = (1 << 8 - colorPrecision + 1) - 1;
+            var pBitVotes = (PBitVotes(endpoint0, pBitVotingMask) + PBitVotes(endpoint1, pBitVotingMask)) / 6f;
+
+            return pBitVotes >= pBitVotingMask / 2f ? (byte)1 : (byte)0;
+        }
+
+        private static int PBitVotes(ColorRgba32 endpoint, int mask) =>
+            (endpoint.r & mask) + (endpoint.g & mask) + (endpoint.b & mask);
+
         public static ColorRgba32 InterpolateColor(ColorRgba32 endPointStart, ColorRgba32 endPointEnd,
             int colorIndex, int alphaIndex, int colorBitCount, int alphaBitCount)
         {
@@ -313,12 +328,13 @@ namespace CryBar.BCnEncoder.Encoder.Bptc
             return result;
         }
 
-        public static void ClampEndpoint(ref ColorRgba32 endpoint, byte colorMax, byte alphaMax)
+        private static ColorRgba32 OffsetEndpoint(ColorRgba32 endpoint, int dr, int dg, int db, int da, byte colorMax, byte alphaMax)
         {
-            if (endpoint.r > colorMax) endpoint.r = colorMax;
-            if (endpoint.g > colorMax) endpoint.g = colorMax;
-            if (endpoint.b > colorMax) endpoint.b = colorMax;
-            if (endpoint.a > alphaMax) endpoint.a = alphaMax;
+            return new ColorRgba32(
+                (byte)Math.Clamp(endpoint.r + dr, 0, colorMax),
+                (byte)Math.Clamp(endpoint.g + dg, 0, colorMax),
+                (byte)Math.Clamp(endpoint.b + db, 0, colorMax),
+                (byte)Math.Clamp(endpoint.a + da, 0, alphaMax));
         }
 
         private static int FindClosestColorIndex(ColorYCbCrAlpha color, ReadOnlySpan<ColorYCbCrAlpha> colors, out float bestError)
@@ -559,21 +575,19 @@ namespace CryBar.BCnEncoder.Encoder.Bptc
 
                 for (var i = 0; i < patternR.Length; i++)
                 {
-                    var testEndPoint0 = new ColorRgba32(
-                        (byte)(ep0.r - variation * patternR[i]),
-                        (byte)(ep0.g - variation * patternG[i]),
-                        (byte)(ep0.b - variation * patternB[i]),
-                        (byte)(ep0.a - variation * patternA[i])
-                    );
+                    var testEndPoint0 = OffsetEndpoint(ep0,
+                        -variation * patternR[i],
+                        -variation * patternG[i],
+                        -variation * patternB[i],
+                        -variation * patternA[i],
+                        colorMax, alphaMax);
 
-                    var testEndPoint1 = new ColorRgba32(
-                        (byte)(ep1.r + variation * patternR[i]),
-                        (byte)(ep1.g + variation * patternG[i]),
-                        (byte)(ep1.b + variation * patternB[i]),
-                        (byte)(ep1.a + variation * patternA[i])
-                    );
-                    ClampEndpoint(ref testEndPoint0, colorMax, alphaMax);
-                    ClampEndpoint(ref testEndPoint1, colorMax, alphaMax);
+                    var testEndPoint1 = OffsetEndpoint(ep1,
+                        variation * patternR[i],
+                        variation * patternG[i],
+                        variation * patternB[i],
+                        variation * patternA[i],
+                        colorMax, alphaMax);
 
                     var error = TrySubsetEndpoints(type, raw,
                         ExpandEndpoint(type, testEndPoint0, pBit0),
@@ -590,13 +604,12 @@ namespace CryBar.BCnEncoder.Encoder.Bptc
 
                 for (var i = 0; i < patternR.Length; i++)
                 {
-                    var testEndPoint0 = new ColorRgba32(
-                        (byte)(ep0.r + variation * patternR[i]),
-                        (byte)(ep0.g + variation * patternG[i]),
-                        (byte)(ep0.b + variation * patternB[i]),
-                        (byte)(ep0.a + variation * patternA[i])
-                        );
-                    ClampEndpoint(ref testEndPoint0, colorMax, alphaMax);
+                    var testEndPoint0 = OffsetEndpoint(ep0,
+                        variation * patternR[i],
+                        variation * patternG[i],
+                        variation * patternB[i],
+                        variation * patternA[i],
+                        colorMax, alphaMax);
 
                     var error = TrySubsetEndpoints(type, raw,
                         ExpandEndpoint(type, testEndPoint0, pBit0),
@@ -612,13 +625,12 @@ namespace CryBar.BCnEncoder.Encoder.Bptc
 
                 for (var i = 0; i < patternR.Length; i++)
                 {
-                    var testEndPoint1 = new ColorRgba32(
-                        (byte)(ep1.r + variation * patternR[i]),
-                        (byte)(ep1.g + variation * patternG[i]),
-                        (byte)(ep1.b + variation * patternB[i]),
-                        (byte)(ep1.a + variation * patternA[i])
-                    );
-                    ClampEndpoint(ref testEndPoint1, colorMax, alphaMax);
+                    var testEndPoint1 = OffsetEndpoint(ep1,
+                        variation * patternR[i],
+                        variation * patternG[i],
+                        variation * patternB[i],
+                        variation * patternA[i],
+                        colorMax, alphaMax);
 
                     var error = TrySubsetEndpoints(type, raw,
                         ExpandEndpoint(type, ep0, pBit0),
@@ -632,7 +644,22 @@ namespace CryBar.BCnEncoder.Encoder.Bptc
                     }
                 }
 
-                if (variatePBits)
+                if (variatePBits && TypeHasSharedPBits(type))
+                {
+                    var testPBit = pBit0 == 0 ? (byte)1 : (byte)0;
+                    var error = TrySubsetEndpoints(type, raw,
+                        ExpandEndpoint(type, ep0, testPBit),
+                        ExpandEndpoint(type, ep1, testPBit), partitionTable, subsetIndex, type4IdxMode
+                    );
+                    if (error < bestError)
+                    {
+                        bestError = error;
+                        pBit0 = testPBit;
+                        pBit1 = testPBit;
+                        foundBetter = true;
+                    }
+                }
+                else if (variatePBits)
                 {
                     {
                         var testPBit0 = pBit0 == 0 ? (byte)1 : (byte)0;

@@ -30,9 +30,10 @@ namespace CryBar.BCnEncoder.Encoder.Bptc
                 Bc7EncodingHelpers.GetInitialUnscaledEndpointsForSubset(block, out var ep0, out var ep1,
                     partitionTable, subset);
                 var scaledEp0 =
-                    Bc7EncodingHelpers.ScaleDownEndpoint(ep0, type, true, out var pBit);
+                    Bc7EncodingHelpers.ScaleDownEndpoint(ep0, type, true, out _);
                 var scaledEp1 =
-                    Bc7EncodingHelpers.ScaleDownEndpoint(ep1, type, true, out pBit);
+                    Bc7EncodingHelpers.ScaleDownEndpoint(ep1, type, true, out _);
+                var pBit = Bc7EncodingHelpers.GetSharedPBit(ep0, ep1, type);
 
                 Bc7EncodingHelpers.OptimizeSubsetEndpointsWithPBit(type, block, ref scaledEp0,
                     ref scaledEp1, ref pBit, ref pBit, startingVariation, partitionTable, subset, true, false);

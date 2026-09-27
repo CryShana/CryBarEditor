@@ -35,6 +35,30 @@ public class TbnDecoderTests
     }
 
     [Fact]
+    public void FloatToU15_SlightlyOutOfRange_ClampsInsteadOfWrapping()
+    {
+        Assert.Equal(0, TbnDecoder.FloatToU15(-1.0001f));
+        Assert.Equal(32767, TbnDecoder.FloatToU15(1.0001f));
+        Assert.Equal(0, TbnDecoder.FloatToU15(-5f));
+        Assert.Equal(32767, TbnDecoder.FloatToU15(5f));
+        Assert.Equal(0, TbnDecoder.FloatToU15(float.NegativeInfinity));
+        Assert.Equal(32767, TbnDecoder.FloatToU15(float.PositiveInfinity));
+    }
+
+    [Fact]
+    public void FloatToU15_NaN_MapsToZeroValue()
+    {
+        Assert.Equal(TbnDecoder.FloatToU15(0f), TbnDecoder.FloatToU15(float.NaN));
+    }
+
+    [Fact]
+    public void FloatToU15_ResultNeverTouchesHandednessBit()
+    {
+        foreach (var f in new[] { -2f, -1f, -0.5f, 0f, 0.5f, 1f, 1.00001f, 2f, float.NaN })
+            Assert.Equal(0, TbnDecoder.FloatToU15(f) & ~0x7FFF);
+    }
+
+    [Fact]
     public void QuatFromPacked_ZeroInputs_ProducesUnitW()
     {
         // x=0,y=0,z=0 -> midpoint = 0,0,0 -> w = 1

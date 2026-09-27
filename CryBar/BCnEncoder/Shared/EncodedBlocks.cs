@@ -331,7 +331,7 @@ namespace CryBar.BCnEncoder.Shared
             var mask = 0xFUL << index * 4;
             var shift = index * 4;
             alphas &= ~mask;
-            var a = (byte)(alpha / 17);
+            var a = (byte)((alpha + 8) / 17);
             alphas |= (ulong)(a & 0xF) << shift;
         }
     }

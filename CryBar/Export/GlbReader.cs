@@ -59,6 +59,7 @@ public sealed class GlbBoneTrack
     public required int BoneIndex { get; init; }
     public required System.Numerics.Vector3[] Translations { get; init; } // length = frameCount
     public required System.Numerics.Quaternion[] Rotations { get; init; } // length = frameCount
+    public System.Numerics.Vector3[] Scales { get; init; } = [];          // length = frameCount, or empty = rest scale
 }
 
 public sealed class GlbMaterial
@@ -261,8 +262,10 @@ public static class GlbReader
         var prims = new List<GlbMeshPrimitive>();
         string[] materialNames = ReadMaterialNames(root);
 
+        int primIdx = -1;
         foreach (var p in primsEl.EnumerateArray())
         {
+            primIdx++;
             if (!p.TryGetProperty("attributes", out var attrs))
                 throw new GlbParseException("Mesh primitive has no 'attributes' object.");
 
@@ -298,9 +301,14 @@ public static class GlbReader
             var normalsArr = ReadAccessorFloats(root, bin, normAcc);
             var texCoords = ReadAccessorFloats(root, bin, uvAcc);
             var triIndices = ReadAccessorIndices(root, bin, indicesAcc);
-            var tangents = tanAcc >= 0
-                ? ReadAccessorFloats(root, bin, tanAcc)
-                : MikkTSpace.ComputeTangents(positions, normalsArr, texCoords, triIndices);
+            float[]? tangents = tanAcc >= 0 ? ReadAccessorFloats(root, bin, tanAcc) : null;
+
+            string? error = MeshPrimitiveValidator.CheckLengths(positions, normalsArr, tangents, texCoords, joints, weights, triIndices.Length)
+                ?? MeshPrimitiveValidator.CheckIndexRange(triIndices, positions.Length / 3);
+            if (error != null)
+                throw new GlbParseException($"Mesh primitive {primIdx}: {error}.");
+
+            tangents ??= MikkTSpace.ComputeTangents(positions, normalsArr, texCoords, triIndices);
 
             prims.Add(new GlbMeshPrimitive
             {
@@ -464,44 +472,66 @@ public static class GlbReader
 
     static float[] ReadAccessorFloats(JsonElement root, byte[] bin, int accessorIdx)
     {
-        var (offset, count, _, components) =
+        var (offset, count, _, components, stride) =
             ResolveAccessor(root, accessorIdx, expectFloat: true, bin.Length);
         var result = new float[count * components];
-        System.Runtime.InteropServices.MemoryMarshal.Cast<byte, float>(
-            bin.AsSpan(offset, count * components * 4)).CopyTo(result);
+        CopyElements(bin, offset, count, components * 4, stride,
+            System.Runtime.InteropServices.MemoryMarshal.AsBytes(result.AsSpan()));
         return result;
     }
 
     static byte[] ReadAccessorBytes(JsonElement root, byte[] bin, int accessorIdx)
     {
-        var (offset, count, componentSize, components) =
+        var (offset, count, componentSize, components, stride) =
             ResolveAccessor(root, accessorIdx, expectFloat: false, bin.Length);
         if (componentSize != 1)
             throw new GlbParseException("Expected u8 joint indices.");
-        return bin.AsSpan(offset, count * components).ToArray();
+        var result = new byte[count * components];
+        CopyElements(bin, offset, count, components, stride, result);
+        return result;
     }
 
     static uint[] ReadAccessorIndices(JsonElement root, byte[] bin, int accessorIdx)
     {
-        var (offset, count, componentSize, _) =
+        var (offset, count, componentSize, _, stride) =
             ResolveAccessor(root, accessorIdx, expectFloat: false, bin.Length);
+        if (componentSize != 1 && componentSize != 2 && componentSize != 4)
+            throw new GlbParseException($"Unsupported index component size {componentSize}.");
+        if (stride != componentSize)
+            throw new GlbParseException(
+                $"Accessor {accessorIdx}: index data must be tightly packed scalars (byteStride {stride}, component size {componentSize}).");
+
+        var raw = bin.AsSpan(offset, count * componentSize);
         var result = new uint[count];
-        if (componentSize == 2)
+        if (componentSize == 1)
         {
-            var src = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, ushort>(
-                bin.AsSpan(offset, count * 2));
+            for (int i = 0; i < count; i++) result[i] = raw[i];
+        }
+        else if (componentSize == 2)
+        {
+            var src = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, ushort>(raw);
             for (int i = 0; i < count; i++) result[i] = src[i];
         }
-        else if (componentSize == 4)
+        else
         {
-            System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(
-                bin.AsSpan(offset, count * 4)).CopyTo(result);
+            System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(raw).CopyTo(result);
         }
-        else throw new GlbParseException($"Unsupported index component size {componentSize}.");
         return result;
     }
 
-    static (int Offset, int Count, int ComponentSize, int Components) ResolveAccessor(
+    static void CopyElements(byte[] bin, int offset, int count, int elementSize, int stride, Span<byte> dest)
+    {
+        if (stride == elementSize)
+        {
+            bin.AsSpan(offset, count * elementSize).CopyTo(dest);
+            return;
+        }
+
+        for (int i = 0; i < count; i++)
+            bin.AsSpan(offset + i * stride, elementSize).CopyTo(dest.Slice(i * elementSize, elementSize));
+    }
+
+    static (int Offset, int Count, int ComponentSize, int Components, int Stride) ResolveAccessor(
         JsonElement root, int accessorIdx, bool expectFloat, int binLength)
     {
         if (!root.TryGetProperty("accessors", out var accessors))
@@ -548,11 +578,18 @@ public static class GlbReader
         int accOffset = acc.TryGetProperty("byteOffset", out var ao) ? ao.GetInt32() : 0;
         int offset = bvOffset + accOffset;
 
-        long byteLen = (long)count * components * componentSize;
-        if (count < 0 || offset < 0 || byteLen < 0 || offset + byteLen > binLength)
+        int elementSize = components * componentSize;
+        int stride = bv.TryGetProperty("byteStride", out var bsProp) ? bsProp.GetInt32() : 0;
+        if (stride == 0) stride = elementSize;
+        if (stride < elementSize)
+            throw new GlbParseException(
+                $"Accessor {accessorIdx}: bufferView byteStride {stride} is smaller than the element size {elementSize}.");
+
+        long byteLen = count > 0 ? (long)(count - 1) * stride + elementSize : 0;
+        if (count < 0 || offset < 0 || offset + byteLen > binLength)
             throw new GlbParseException("Accessor extends beyond BIN chunk.");
 
-        return (offset, count, componentSize, components);
+        return (offset, count, componentSize, components, stride);
     }
 
     static GlbAnimation[]? ReadAnimations(JsonElement root, byte[] bin, GlbBone[]? bones, GlbExtras? extras)
@@ -640,37 +677,69 @@ public static class GlbReader
             uint frameCount = SelectFrameCount(samplerData, duration, name, extras);
 
             // Build per-bone tracks by sampling at uniform t = i * duration / (frameCount - 1).
-            var tracks = new GlbBoneTrack[boneCount];
+            // Translation/rotation channels a bone lacks keep its rest pose; scale stays empty (rest) unless targeted.
+            var translations = new System.Numerics.Vector3[boneCount][];
+            var rotations = new System.Numerics.Quaternion[boneCount][];
+            var scales = new System.Numerics.Vector3[]?[boneCount];
             for (int b = 0; b < boneCount; b++)
             {
-                tracks[b] = new GlbBoneTrack
-                {
-                    BoneIndex = b,
-                    Translations = new System.Numerics.Vector3[frameCount],
-                    Rotations = new System.Numerics.Quaternion[frameCount],
-                };
-                for (int f = 0; f < frameCount; f++)
-                    tracks[b].Rotations[f] = System.Numerics.Quaternion.Identity;
+                MatrixDecomp.Decompose(bones[b].LocalMatrix, out var restT, out var restR, out _);
+
+                translations[b] = new System.Numerics.Vector3[frameCount];
+                rotations[b] = new System.Numerics.Quaternion[frameCount];
+                Array.Fill(translations[b], restT);
+                Array.Fill(rotations[b], restR);
             }
 
             for (int c = 0; c < channelInfo.Length; c++)
             {
                 var (samplerIdx, boneIdx, path) = channelInfo[c];
                 if (boneIdx < 0) continue;
+                if (path != "translation" && path != "rotation" && path != "scale") continue;
                 var (times, values, _) = samplerData[samplerIdx];
+                if (times.Length == 0) continue;
+
+                bool isRotation = path == "rotation";
+                int comps = isRotation ? 4 : 3;
+                if (values.Length != times.Length * comps)
+                    throw new GlbParseException(
+                        $"Animation '{name}' channel {c} ({path}): sampler output has {values.Length} floats, expected {times.Length * comps} for {times.Length} keyframes.");
 
                 // Output frames are sampled at strictly increasing times, so the keyframe cursor
                 // only advances forward across the inner loop.
                 int hint = 1;
-                for (int f = 0; f < frameCount; f++)
+                if (isRotation)
                 {
-                    float t = frameCount > 1 ? duration * f / (frameCount - 1) : 0;
-                    if (path == "translation")
-                        tracks[boneIdx].Translations[f] = SampleVec3(times, values, t, ref hint);
-                    else if (path == "rotation")
-                        tracks[boneIdx].Rotations[f] = SampleQuat(times, values, t, ref hint);
-                    // scale ignored (always identity for our exports)
+                    var dst = rotations[boneIdx];
+                    for (int f = 0; f < frameCount; f++)
+                    {
+                        float t = frameCount > 1 ? duration * f / (frameCount - 1) : 0;
+                        dst[f] = SampleQuat(times, values, t, ref hint);
+                    }
                 }
+                else
+                {
+                    var dst = path == "translation"
+                        ? translations[boneIdx]
+                        : (scales[boneIdx] ??= new System.Numerics.Vector3[frameCount]);
+                    for (int f = 0; f < frameCount; f++)
+                    {
+                        float t = frameCount > 1 ? duration * f / (frameCount - 1) : 0;
+                        dst[f] = SampleVec3(times, values, t, ref hint);
+                    }
+                }
+            }
+
+            var tracks = new GlbBoneTrack[boneCount];
+            for (int b = 0; b < boneCount; b++)
+            {
+                tracks[b] = new GlbBoneTrack
+                {
+                    BoneIndex = b,
+                    Translations = translations[b],
+                    Rotations = rotations[b],
+                    Scales = scales[b] ?? [],
+                };
             }
 
             result.Add(new GlbAnimation
@@ -901,6 +970,13 @@ public static class GlbReader
     static GlbMesh BakeRootTransformIntoMesh(GlbMesh mesh, System.Numerics.Matrix4x4 m)
     {
         if (m.IsIdentity) return mesh;
+
+        System.Numerics.Matrix4x4.Invert(m, out var mInv);
+        var nrmMat = System.Numerics.Matrix4x4.Transpose(mInv);
+
+        // A mirroring root transform also flips winding and tangent handedness.
+        bool mirrored = m.GetDeterminant() < 0;
+
         var prims = new GlbMeshPrimitive[mesh.Primitives.Length];
         for (int p = 0; p < mesh.Primitives.Length; p++)
         {
@@ -911,9 +987,6 @@ public static class GlbReader
             var nrm = new float[src.Normals.Length];
             var tan = new float[src.Tangents.Length];
 
-            System.Numerics.Matrix4x4.Invert(m, out var mInv);
-            var nrmMat = System.Numerics.Matrix4x4.Transpose(mInv);
-
             for (int i = 0; i < vc; i++)
             {
                 var v = new System.Numerics.Vector3(src.Positions[i * 3], src.Positions[i * 3 + 1], src.Positions[i * 3 + 2]);
@@ -921,24 +994,45 @@ public static class GlbReader
                 pos[i * 3] = vp.X; pos[i * 3 + 1] = vp.Y; pos[i * 3 + 2] = vp.Z;
 
                 var n = new System.Numerics.Vector3(src.Normals[i * 3], src.Normals[i * 3 + 1], src.Normals[i * 3 + 2]);
-                var np = System.Numerics.Vector3.Normalize(System.Numerics.Vector3.TransformNormal(n, nrmMat));
+                var np = NormalizeOr(System.Numerics.Vector3.TransformNormal(n, nrmMat), n, System.Numerics.Vector3.UnitY);
                 nrm[i * 3] = np.X; nrm[i * 3 + 1] = np.Y; nrm[i * 3 + 2] = np.Z;
 
                 var t = new System.Numerics.Vector3(src.Tangents[i * 4], src.Tangents[i * 4 + 1], src.Tangents[i * 4 + 2]);
-                var tp = System.Numerics.Vector3.Normalize(System.Numerics.Vector3.TransformNormal(t, m));
+                var tp = NormalizeOr(System.Numerics.Vector3.TransformNormal(t, m), t, System.Numerics.Vector3.UnitX);
                 tan[i * 4] = tp.X; tan[i * 4 + 1] = tp.Y; tan[i * 4 + 2] = tp.Z;
-                tan[i * 4 + 3] = src.Tangents[i * 4 + 3];
+                tan[i * 4 + 3] = mirrored ? -src.Tangents[i * 4 + 3] : src.Tangents[i * 4 + 3];
+            }
+
+            var indices = src.Indices;
+            if (mirrored)
+            {
+                indices = new uint[src.Indices.Length];
+                for (int k = 0; k + 2 < indices.Length; k += 3)
+                {
+                    indices[k]     = src.Indices[k];
+                    indices[k + 1] = src.Indices[k + 2];
+                    indices[k + 2] = src.Indices[k + 1];
+                }
             }
 
             prims[p] = new GlbMeshPrimitive
             {
                 MaterialName = src.MaterialName,
                 Positions = pos, Normals = nrm, Tangents = tan,
-                TexCoords = src.TexCoords, Indices = src.Indices,
+                TexCoords = src.TexCoords, Indices = indices,
                 JointIndices = src.JointIndices, JointWeights = src.JointWeights,
             };
         }
         return new GlbMesh { Primitives = prims };
+    }
+
+    static System.Numerics.Vector3 NormalizeOr(System.Numerics.Vector3 v, System.Numerics.Vector3 fallback, System.Numerics.Vector3 lastResort)
+    {
+        float len = v.Length();
+        if (len > 1e-20f && float.IsFinite(len)) return v / len;
+
+        len = fallback.Length();
+        return len > 1e-20f && float.IsFinite(len) ? fallback / len : lastResort;
     }
 
     static GlbBone[]? BakeRootTransformIntoBones(GlbBone[]? bones, System.Numerics.Matrix4x4 m)

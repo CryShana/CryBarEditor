@@ -195,6 +195,41 @@ public class BarFileEntryTests
         Assert.Equal(0xBB, result[4]);
     }
 
+    [Fact]
+    public void CopyData_ZeroLengthEntry_WritesNothing()
+    {
+        var source = new MemoryStream(new byte[] { 1, 2, 3 });
+        var dest = new MemoryStream();
+        var entry = new BarFileEntry("empty.txt")
+        {
+            ContentOffset = 3,
+            SizeInArchive = 0,
+            SizeUncompressed = 0
+        };
+
+        entry.CopyData(source, dest);
+
+        Assert.Equal(0, dest.Length);
+    }
+
+    [Fact]
+    public void ReadDataDecompressedPooled_ZeroLengthEntry_ReturnsEmptyBuffer()
+    {
+        var source = new MemoryStream(new byte[] { 1, 2, 3 });
+        var entry = new BarFileEntry("empty.txt")
+        {
+            ContentOffset = 3,
+            SizeInArchive = 0,
+            SizeUncompressed = 0
+        };
+
+        using var buffer = entry.ReadDataDecompressedPooled(source);
+
+        Assert.NotNull(buffer);
+        Assert.Equal(0, buffer!.Length);
+        Assert.Equal(0, buffer.Span.Length);
+    }
+
     #endregion
 
     #region ToString Tests

@@ -515,6 +515,30 @@ namespace CryBar.BCnEncoder.Shared
         {
             return value.Value;
         }
+
+        /// <summary>
+        /// Converts to half bits as a signed magnitude: NaN becomes 0, infinities clamp to MaxValue,
+        /// and negative values become 0 when <paramref name="signed"/> is false.
+        /// </summary>
+        internal static int GetSanitizedSignedBits(float value, bool signed)
+        {
+            var bits = (int)GetBits(new Half(value));
+            var magnitude = bits & 0x7FFF;
+
+            if (magnitude > 0x7C00)
+            {
+                return 0;
+            }
+
+            magnitude = Math.Min(magnitude, 0x7BFF);
+
+            if ((bits & 0x8000) == 0)
+            {
+                return magnitude;
+            }
+
+            return signed ? -magnitude : 0;
+        }
         /// <summary>
         /// Returns a half-precision floating point number converted from two bytes
         /// at a specified position in a byte array.

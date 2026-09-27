@@ -183,7 +183,7 @@ namespace CryBar.BCnEncoder.Shared
             maxR = Math.Clamp(maxR, 0, 255);
             maxG = Math.Clamp(maxG, 0, 255);
             maxB = Math.Clamp(maxB, 0, 255);
-            maxA = Math.Clamp(maxB, 0, 255);
+            maxA = Math.Clamp(maxA, 0, 255);
 
             minR = minR & c5655Mask | minR >> 5;
             minG = minG & c5656Mask | minG >> 6;

@@ -346,10 +346,8 @@ public static class ConvertCommands
                 _ => CompressionFormat.Bc7
             };
 
-            var mipsStr = parseResult.GetValue(mipsOption) ?? "auto";
-            byte mipmaps;
-            if (mipsStr.Equals("auto", StringComparison.OrdinalIgnoreCase)) mipmaps = 0;
-            else if (!byte.TryParse(mipsStr, out mipmaps)) mipmaps = 0;
+            if (!TryParseMipmaps(parseResult.GetValue(mipsOption) ?? "auto", out var mipmaps))
+                return 1;
 
             var srgb = parseResult.GetValue(srgbOption);
 
@@ -682,16 +680,8 @@ public static class ConvertCommands
             }
         }
 
-        byte mipmaps;
-        if (mipsStr.Equals("auto", StringComparison.OrdinalIgnoreCase))
-        {
-            mipmaps = 0;
-        }
-        else if (!byte.TryParse(mipsStr, out mipmaps))
-        {
-            OutputHelper.Error($"Invalid mipmap count: {mipsStr} (expected auto | N)");
+        if (!TryParseMipmaps(mipsStr, out var mipmaps))
             return null;
-        }
 
         ReadOnlyMemory<byte>? colorTable = null;
         if (colorTablePath is { Length: > 0 })
@@ -707,6 +697,16 @@ public static class ConvertCommands
         }
 
         return new GlbConverter.DdtMaterialParams(version, usage, alpha, format, mipmaps, colorTable);
+    }
+
+    static bool TryParseMipmaps(string mipsStr, out byte mipmaps)
+    {
+        mipmaps = 0;
+        if (mipsStr.Equals("auto", StringComparison.OrdinalIgnoreCase)) return true;
+        if (byte.TryParse(mipsStr, out mipmaps)) return true;
+
+        OutputHelper.Error($"Invalid mipmap count: {mipsStr} (expected auto | N)");
+        return false;
     }
 
     /// A file that does not parse as a DDT is taken as a raw color table dump.
