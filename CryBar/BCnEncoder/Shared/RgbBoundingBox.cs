@@ -109,13 +109,13 @@ namespace CryBar.BCnEncoder.Shared
             maxG = (maxG << colorInsetShift) - insetG >> colorInsetShift;
             maxB = (maxB << colorInsetShift) - insetB >> colorInsetShift;
 
-            minR = minR >= 0 ? minR : 0;
-            minG = minG >= 0 ? minG : 0;
-            minB = minB >= 0 ? minB : 0;
+            minR = Math.Clamp(minR, 0, 255);
+            minG = Math.Clamp(minG, 0, 255);
+            minB = Math.Clamp(minB, 0, 255);
 
-            maxR = maxR <= 255 ? maxR : 255;
-            maxG = maxG <= 255 ? maxG : 255;
-            maxB = maxB <= 255 ? maxB : 255;
+            maxR = Math.Clamp(maxR, 0, 255);
+            maxG = Math.Clamp(maxG, 0, 255);
+            maxB = Math.Clamp(maxB, 0, 255);
 
             minR = minR & c5655Mask | minR >> 5;
             minG = minG & c5656Mask | minG >> 6;
@@ -175,15 +175,15 @@ namespace CryBar.BCnEncoder.Shared
             maxB = (maxB << colorInsetShift) - insetB >> colorInsetShift;
             maxA = (maxA << alphaInsetShift) - insetA >> alphaInsetShift;
 
-            minR = minR >= 0 ? minR : 0;
-            minG = minG >= 0 ? minG : 0;
-            minB = minB >= 0 ? minB : 0;
-            minA = minA >= 0 ? minA : 0;
+            minR = Math.Clamp(minR, 0, 255);
+            minG = Math.Clamp(minG, 0, 255);
+            minB = Math.Clamp(minB, 0, 255);
+            minA = Math.Clamp(minA, 0, 255);
 
-            maxR = maxR <= 255 ? maxR : 255;
-            maxG = maxG <= 255 ? maxG : 255;
-            maxB = maxB <= 255 ? maxB : 255;
-            maxA = maxA <= 255 ? maxA : 255;
+            maxR = Math.Clamp(maxR, 0, 255);
+            maxG = Math.Clamp(maxG, 0, 255);
+            maxB = Math.Clamp(maxB, 0, 255);
+            maxA = Math.Clamp(maxB, 0, 255);
 
             minR = minR & c5655Mask | minR >> 5;
             minG = minG & c5656Mask | minG >> 6;
